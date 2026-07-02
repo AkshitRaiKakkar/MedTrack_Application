@@ -4,6 +4,7 @@ import com.medtrack.model.*;
 import com.medtrack.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -20,6 +21,7 @@ public class DataInitializer implements CommandLineRunner {
     private final EquipmentRepository equipmentRepository;
     private final MaintenanceTaskRepository maintenanceTaskRepository;
     private final EquipmentOrderRepository equipmentOrderRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String... args) {
@@ -28,21 +30,21 @@ public class DataInitializer implements CommandLineRunner {
             userRepository.save(User.builder()
                 .name("Admin User")
                 .email("hospital@medtrack.com")
-                .password("admin123")
+                .password(passwordEncoder.encode("admin123"))
                 .role("hospital")
                 .build());
 
             userRepository.save(User.builder()
                 .name("John Tech")
                 .email("tech@medtrack.com")
-                .password("tech123")
+                .password(passwordEncoder.encode("tech123"))
                 .role("Technician")
                 .build());
 
             userRepository.save(User.builder()
                 .name("Global Supplies")
                 .email("supplier@medtrack.com")
-                .password("supply123")
+                .password(passwordEncoder.encode("supply123"))
                 .role("Supplier")
                 .build());
         }
