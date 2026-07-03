@@ -180,11 +180,65 @@ const styles = {
     backgroundColor: "#fff5e6",
     color: "#e67e22",
   },
+  detailsBtn: {
+    padding: "10px 15px",
+    backgroundColor: "#f5f6f8",
+    color: "#4a5568",
+    border: "1px solid #e2e8f0",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontWeight: "600",
+    fontSize: "14px",
+    transition: "background 0.2s",
+  },
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: "white",
+    borderRadius: "16px",
+    padding: "30px",
+    maxWidth: "500px",
+    width: "90%",
+    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+    border: "1px solid #e2e8f0",
+  },
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "20px",
+  },
+  modalTitle: {
+    fontSize: "20px",
+    fontWeight: "700",
+    color: "#1a202c",
+    margin: 0,
+  },
+  modalCloseBtn: {
+    background: "none",
+    border: "none",
+    fontSize: "24px",
+    cursor: "pointer",
+    color: "#a0aec0",
+    padding: 0,
+  },
 };
 
 import { getAllEquipment, deleteEquipment, getEquipmentById } from "../../services/EquipmentService";
+import { useAuth } from "../../context/AuthContext";
 
 export default function EquipmentList({ onNavigate }) {
+  const { user } = useAuth();
   const [equipment, setEquipment] = useState([]);
   const [search, setSearch] = useState("");
   const [hoveredCard, setHoveredCard] = useState(null);
@@ -277,14 +331,16 @@ export default function EquipmentList({ onNavigate }) {
             onFocus={(e) => e.target.style.border = "1px solid #0056b3"}
             onBlur={(e) => e.target.style.border = "1px solid #e0e0e0"}
           />
-          <button
-            style={styles.addButton}
-            onClick={() => onNavigate("add-equipment")}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#004494"}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#0056b3"}
-          >
-            + Add Equipment
-          </button>
+          {user?.role === "hospital" && (
+            <button
+              style={styles.addButton}
+              onClick={() => onNavigate("add-equipment")}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#004494"}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#0056b3"}
+            >
+              + Add Equipment
+            </button>
+          )}
         </div>
       </div>
 
@@ -337,15 +393,17 @@ export default function EquipmentList({ onNavigate }) {
                   Details
                 </button>
 
-                <button
-                  onClick={() => onNavigate("schedule-maintenance")}
-                  style={styles.primaryBtn}
-                >
-                  Schedule Service
-                </button>
+                {user?.role === "hospital" && (
+                  <button
+                    onClick={() => onNavigate("schedule-maintenance")}
+                    style={styles.primaryBtn}
+                  >
+                    Schedule Service
+                  </button>
+                )}
 
                 {/* Hide delete button for default items */}
-                {!(String(item.id).startsWith("EQ-00")) && (
+                {user?.role === "hospital" && !(String(item.id).startsWith("EQ-00")) && (
                   <button
                     onClick={() => handleDelete(item.id)}
                     style={styles.deleteBtn}

@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { getAllTasks } from "../../services/MaintenanceService";
+import { useAuth } from "../../context/AuthContext";
 
 export default function TaskList({ onNavigate }) {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -118,23 +120,32 @@ export default function TaskList({ onNavigate }) {
                     {new Date(task.deadline).toLocaleDateString()}
                   </span>
                 </div>
-                <button 
-                  onClick={() => onNavigate('update-task', task)}
-                  className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-300 ${
-                    task.status === 'Completed' 
-                      ? 'bg-emerald-50 text-emerald-600 cursor-default'
-                      : 'bg-primary text-white hover:bg-primary/90 hover:scale-105 active:scale-95 shadow-lg shadow-primary/20'
-                  }`}
-                >
-                  {task.status === 'Completed' ? (
-                    <span className="flex items-center gap-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                      Completed
-                    </span>
-                  ) : task.status === 'In Progress' ? 'Update Task' : 'Start Task'}
-                </button>
+                {user?.role === "technician" ? (
+                  <button 
+                    onClick={() => onNavigate('update-task', task)}
+                    className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-300 ${
+                      task.status === 'Completed' 
+                        ? 'bg-emerald-50 text-emerald-600 cursor-default'
+                        : 'bg-primary text-white hover:bg-primary/90 hover:scale-105 active:scale-95 shadow-lg shadow-primary/20'
+                    }`}
+                  >
+                    {task.status === 'Completed' ? (
+                      <span className="flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Completed
+                      </span>
+                    ) : task.status === 'In Progress' ? 'Update Task' : 'Start Task'}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => onNavigate('update-task', task)}
+                    className="px-6 py-2.5 rounded-xl font-bold transition-all duration-300 bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-95 shadow-sm"
+                  >
+                    View Details
+                  </button>
+                )}
               </div>
             </div>
           </div>

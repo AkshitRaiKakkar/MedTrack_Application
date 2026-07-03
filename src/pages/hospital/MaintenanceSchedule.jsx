@@ -1,5 +1,6 @@
 // src/pages/hospital/MaintenanceSchedule.jsx
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 
 /* ===========================
    BIG TEMPORARY DEMO DATA
@@ -45,6 +46,7 @@ const DEMO_TASKS = [
 ];
 
 export default function MaintenanceSchedule({ onNavigate }) {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
@@ -87,12 +89,14 @@ export default function MaintenanceSchedule({ onNavigate }) {
               <h1 className="text-xl font-bold text-slate-900">Maintenance Schedule</h1>
               <p className="text-sm text-slate-500 mt-1">Managing {tasks.length} tasks</p>
             </div>
-            <button
-              onClick={() => onNavigate('schedule-maintenance')}
-              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
-            >
-              + New Schedule
-            </button>
+            {user?.role === "hospital" && (
+              <button
+                onClick={() => onNavigate('schedule-maintenance')}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
+              >
+                + New Schedule
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -120,12 +124,14 @@ export default function MaintenanceSchedule({ onNavigate }) {
                       <div className="flex flex-col items-center">
                         <span className="text-4xl mb-2">🛠️</span>
                         <p className="font-medium">No maintenance tasks scheduled yet.</p>
-                        <button 
-                          onClick={() => onNavigate('schedule-maintenance')}
-                          className="mt-4 text-teal-600 hover:text-teal-700 text-sm font-semibold"
-                        >
-                          Schedule your first task
-                        </button>
+                        {user?.role === "hospital" && (
+                          <button 
+                            onClick={() => onNavigate('schedule-maintenance')}
+                            className="mt-4 text-teal-600 hover:text-teal-700 text-sm font-semibold"
+                          >
+                            Schedule your first task
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

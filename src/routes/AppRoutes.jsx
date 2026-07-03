@@ -19,16 +19,32 @@ import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
 import ScheduleMaintenancePage from "../pages/hospital/ScheduleMaintenancePage";
 import RequestEquipmentPage from "../pages/hospital/RequestEquipmentPage";
 
+const UnauthorizedPage = ({ onNavigate, message }) => (
+  <div className="min-h-screen bg-slate-900 flex items-center justify-center font-sans text-white p-6">
+    <div className="bg-slate-800 rounded-[2rem] p-16 text-center border border-red-500/20 max-w-md shadow-2xl">
+      <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 text-3xl">⚠️</div>
+      <h2 className="text-2xl font-black mb-2">Access Denied</h2>
+      <p className="text-red-400 font-bold mb-6">{message || "Your account role is not authorized to access this resource."}</p>
+      <button 
+        onClick={() => onNavigate("dashboard")} 
+        className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-500/20"
+      >
+        Go to Dashboard
+      </button>
+    </div>
+  </div>
+);
+
 export default function AppRouter({ currentPage, onNavigate, pageData }) {
   const { user } = useAuth();
 
-  // Helper function to protect routes
-  const ProtectedRoute = (Component, props = {}) => {
-    return user ? (
-      <Component onNavigate={onNavigate} {...props} />
-    ) : (
-      <LoginPage onNavigate={onNavigate} />
-    );
+  // Helper function to protect routes with optional role restriction
+  const ProtectedRoute = (Component, props = {}, allowedRoles = []) => {
+    if (!user) return <LoginPage onNavigate={onNavigate} />;
+    if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+      return <UnauthorizedPage onNavigate={onNavigate} />;
+    }
+    return <Component onNavigate={onNavigate} {...props} />;
   };
 
   switch (currentPage) {
@@ -46,11 +62,11 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "equipment": 
       return ProtectedRoute(EquipmentList);
     case "add-equipment": 
-      return ProtectedRoute(AddEquipmentForm);
+      return ProtectedRoute(AddEquipmentForm, {}, ["hospital"]);
     case "schedule-maintenance": 
-      return ProtectedRoute(ScheduleMaintenancePage);
+      return ProtectedRoute(ScheduleMaintenancePage, {}, ["hospital"]);
     case "request-equipment": 
-      return ProtectedRoute(RequestEquipmentPage);
+      return ProtectedRoute(RequestEquipmentPage, {}, ["hospital"]);
     case "maintenance": 
       return ProtectedRoute(MaintenanceSchedule);
     

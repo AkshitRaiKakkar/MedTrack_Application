@@ -62,11 +62,11 @@ export default function Dashboard({ onNavigate }) {
             <h2 className="text-lg font-bold text-slate-800 mb-4">Quick Actions</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-                { label: "Add Equipment", page: "add-equipment", icon: "➕", desc: "New Inventory Item" },
-                { label: "Schedule Service", page: "schedule-maintenance", icon: "📅", desc: "Plan Maintenance" },
-                { label: "Request Order", page: "request-equipment", icon: "📦", desc: "Place Equipment Order" },
-                { label: "View Inventory", page: "equipment", icon: "📋", desc: "Full Equipment List" },
-            ].map((action) => (
+                { label: "Add Equipment", page: "add-equipment", icon: "➕", desc: "New Inventory Item", hospitalOnly: true },
+                { label: "Schedule Service", page: "schedule-maintenance", icon: "📅", desc: "Plan Maintenance", hospitalOnly: true },
+                { label: "Request Order", page: "request-equipment", icon: "📦", desc: "Place Equipment Order", hospitalOnly: true },
+                { label: "View Inventory", page: "equipment", icon: "📋", desc: "Full Equipment List", hospitalOnly: false },
+            ].filter(action => !action.hospitalOnly || user?.role === "hospital").map((action) => (
                 <button
                   key={action.label}
                   onClick={() => onNavigate(action.page)}

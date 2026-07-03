@@ -31,4 +31,14 @@ API.interceptors.request.use(
   }
 );
 
+// Intercept responses to handle 403 Forbidden errors globally
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 403) {
+      alert("Access Denied: You do not have authorization to perform this action.");
+    }
+    return Promise.reject(error);
+  }
+);
 export default API;
