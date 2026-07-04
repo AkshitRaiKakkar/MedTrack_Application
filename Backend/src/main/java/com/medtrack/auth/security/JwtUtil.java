@@ -1,4 +1,4 @@
-package com.medtrack.security;
+package com.medtrack.auth.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

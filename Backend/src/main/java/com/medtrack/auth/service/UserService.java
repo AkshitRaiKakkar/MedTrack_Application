@@ -1,10 +1,10 @@
-package com.medtrack.service;
+package com.medtrack.auth.service;
 
-import com.medtrack.dto.AuthResponse;
-import com.medtrack.dto.LoginRequest;
-import com.medtrack.model.User;
-import com.medtrack.repository.UserRepository;
-import com.medtrack.security.JwtUtil;
+import com.medtrack.auth.dto.AuthResponse;
+import com.medtrack.auth.dto.LoginRequest;
+import com.medtrack.auth.model.User;
+import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.auth.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

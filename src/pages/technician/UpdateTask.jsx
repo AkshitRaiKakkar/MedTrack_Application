@@ -117,7 +117,7 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
         hoursWorked: form.hours
       };
 
-      await updateTask(taskState.id, payload);
+      await updateTask(task.id, payload);
       setDone(true);
       setTimeout(() => onNavigate("tasks"), 2000);
     } catch (err) {
@@ -156,6 +156,8 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
             <button 
               type="submit"
               className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-sm transition-all"
+            >
+              Search
             </button>
           </form>
         </div>

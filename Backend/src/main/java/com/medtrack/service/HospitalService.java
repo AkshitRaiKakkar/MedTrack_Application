@@ -1,9 +1,9 @@
 package com.medtrack.service;
 
 import com.medtrack.model.Hospital;
-import com.medtrack.model.User;
+import com.medtrack.auth.model.User;
 import com.medtrack.repository.HospitalRepository;
-import com.medtrack.repository.UserRepository;
+import com.medtrack.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

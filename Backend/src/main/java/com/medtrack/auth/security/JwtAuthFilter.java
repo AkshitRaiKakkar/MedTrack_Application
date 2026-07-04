@@ -1,4 +1,4 @@
-package com.medtrack.security;
+package com.medtrack.auth.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

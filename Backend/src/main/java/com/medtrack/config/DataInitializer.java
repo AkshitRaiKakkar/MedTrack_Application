@@ -1,5 +1,7 @@
 package com.medtrack.config;
 
+import com.medtrack.auth.model.User;
+import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.model.*;
 import com.medtrack.repository.*;
 import lombok.RequiredArgsConstructor;

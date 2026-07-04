@@ -1,4 +1,4 @@
-package com.medtrack.model;
+package com.medtrack.auth.model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;

@@ -1,4 +1,4 @@
-package com.medtrack.dto;
+package com.medtrack.auth.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

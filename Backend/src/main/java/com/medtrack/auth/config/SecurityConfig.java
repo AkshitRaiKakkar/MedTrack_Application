@@ -1,6 +1,6 @@
-package com.medtrack.config;
+package com.medtrack.auth.config;
 
-import com.medtrack.security.JwtAuthFilter;
+import com.medtrack.auth.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

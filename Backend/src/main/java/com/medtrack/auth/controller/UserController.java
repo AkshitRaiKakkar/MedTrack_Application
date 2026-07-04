@@ -1,9 +1,9 @@
-package com.medtrack.controller;
+package com.medtrack.auth.controller;
 
-import com.medtrack.dto.AuthResponse;
-import com.medtrack.dto.LoginRequest;
-import com.medtrack.model.User;
-import com.medtrack.service.UserService;
+import com.medtrack.auth.dto.AuthResponse;
+import com.medtrack.auth.dto.LoginRequest;
+import com.medtrack.auth.model.User;
+import com.medtrack.auth.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
