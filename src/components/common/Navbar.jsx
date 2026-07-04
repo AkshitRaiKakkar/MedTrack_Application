@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import logo from "../../assets/logo.png";
 
 export default function Navbar({ onNavigate, currentPage }) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Landing page links
@@ -38,19 +40,18 @@ export default function Navbar({ onNavigate, currentPage }) {
   const navLinks = user ? privateLinks : publicLinks;
 
   return (
-    <nav className="bg-white/30 backdrop-blur-lg border-b border-white/20 sticky top-0 z-50">
+    <nav className="bg-surface/80 backdrop-blur-lg border-b border-subtle sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex justify-between items-center h-16">
 
           {/* Logo */}
           <button
             onClick={() => onNavigate("landing")}
-            className="flex items-center gap-2"
+            className="flex items-center group transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg"
           >
-            <img src={logo} alt="logo" className="h-8 w-auto" />
-            {/* <span className="font-semibold text-lg text-gray-900">
-              Med<span className="text-blue-600">Track</span>
-            </span> */}
+            <div className="bg-white p-1.5 rounded-lg shadow-sm">
+              <img src={logo} alt="MedTrack Logo" className="h-8 w-auto object-contain" />
+            </div>
           </button>
 
           {/* Desktop Navigation */}
@@ -63,7 +64,7 @@ export default function Navbar({ onNavigate, currentPage }) {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   currentPage === link.page
                     ? "bg-blue-600 text-white shadow-md"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                    : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
               >
                 {link.label}
@@ -77,13 +78,26 @@ export default function Navbar({ onNavigate, currentPage }) {
 
             {user ? (
               <>
+                {/* Dark Mode Toggle */}
+                <button
+                  onClick={toggleTheme}
+                  className="p-2 text-secondary hover:text-primary rounded-full hover:bg-hover transition-colors"
+                  aria-label="Toggle Dark Mode"
+                >
+                  {theme === "dark" ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                  )}
+                </button>
+
                 {/* User Avatar */}
                 <div className="hidden sm:flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
                     {user.name?.[0]?.toUpperCase()}
                   </div>
 
-                  <span className="text-sm text-gray-700 font-medium">
+                  <span className="text-sm text-primary font-medium">
                     {user.name}
                   </span>
                 </div>
@@ -91,7 +105,7 @@ export default function Navbar({ onNavigate, currentPage }) {
                 {/* Logout */}
                 <button
                   onClick={logout}
-                  className="text-sm text-gray-600 hover:text-gray-900"
+                  className="text-sm text-secondary hover:text-primary"
                 >
                   Log out
                 </button>
@@ -101,7 +115,7 @@ export default function Navbar({ onNavigate, currentPage }) {
                 {/* Login */}
                 <button
                   onClick={() => onNavigate("login")}
-                  className="text-sm text-gray-600 hover:text-gray-900"
+                  className="text-sm text-secondary hover:text-primary"
                 >
                   Log in
                 </button>
@@ -119,7 +133,7 @@ export default function Navbar({ onNavigate, currentPage }) {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+              className="md:hidden p-2 rounded-lg text-secondary hover:bg-hover"
             >
               <svg
                 className="w-5 h-5"
@@ -146,7 +160,7 @@ export default function Navbar({ onNavigate, currentPage }) {
 
       {/* Mobile Navigation */}
       {menuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white px-6 py-4 space-y-3">
+        <div className="md:hidden border-t border-subtle bg-surface px-6 py-4 space-y-3">
 
           {navLinks.map((link) => (
             <button
@@ -158,7 +172,7 @@ export default function Navbar({ onNavigate, currentPage }) {
               className={`block w-full text-left px-3 py-2 rounded-lg text-sm ${
                 currentPage === link.page
                   ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-primary hover:bg-hover"
               }`}
             >
               {link.label}

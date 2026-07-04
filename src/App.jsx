@@ -5,6 +5,7 @@ import Footer from "./components/common/Footer";
 import AppRoutes from "./routes/AppRoutes";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import { ThemeProvider } from "./context/ThemeContext";
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useState("landing");
@@ -20,7 +21,7 @@ function AppContent() {
 
   return (
     <div
-      className="flex flex-col min-h-screen"
+      className="flex flex-col min-h-screen bg-surface text-primary transition-colors duration-200"
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
       {!isAuthPage && (
@@ -49,7 +50,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
     </AuthProvider>
   );
 }

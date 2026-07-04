@@ -19,7 +19,12 @@ export const placeOrder = async (data) => {
 };
 
 // Update status of an order
-export const updateOrderStatus = async (id, status, notes) => {
-  const response = await API.put(`/api/orders/${id}?status=${status}&notes=${notes}`);
+export const updateOrderStatus = async (id, status, notes = "") => {
+  const response = await API.put(
+    `/api/orders/${id}/status?status=${encodeURIComponent(
+      status
+    )}&notes=${encodeURIComponent(notes)}`
+  );
+
   return response.data;
 };

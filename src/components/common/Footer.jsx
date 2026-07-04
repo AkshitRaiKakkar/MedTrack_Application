@@ -1,4 +1,4 @@
-import logo from "../common/assets/logo.png";
+import logo from "../../assets/logo.png";
 
 export default function Footer() {
   return (
@@ -10,15 +10,17 @@ export default function Footer() {
           {/* Logo Section */}
           <div className="col-span-2 md:col-span-1">
 
-            <div className="flex items-center mb-4">
-              <img
-                src={logo}
-                alt="MedTrack Logo"
-                className="h-8"
-              />
+            <div className="mb-6">
+              <div className="bg-white p-2 rounded-lg inline-flex shadow-sm">
+                <img
+                  src={logo}
+                  alt="MedTrack Logo"
+                  className="h-8 w-auto object-contain"
+                />
+              </div>
             </div>
 
-            <p className="text-sm leading-relaxed">
+            <p className="text-sm leading-relaxed text-gray-400 max-w-xs">
               Medical equipment lifecycle management for modern hospitals.
             </p>
 

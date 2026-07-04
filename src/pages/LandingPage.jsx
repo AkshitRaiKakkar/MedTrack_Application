@@ -1,35 +1,83 @@
+import React, { useState } from "react";
+
 export default function LandingPage({ onNavigate }) {
+  const [activePersona, setActivePersona] = useState(null);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  const defaultHeroState = {
+    heroImg: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=1200&h=1600&q=80",
+    subtext: "MedTrack connects hospitals, technicians, and suppliers in one unified platform — ensuring zero downtime, complete traceability, and optimized equipment lifecycles.",
+    badge: "Unified Platform",
+    icon: (
+      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    )
+  };
+
+  const personas = [
+    {
+      id: "hospital",
+      label: "Hospital Admin",
+      avatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=100&h=100&q=80",
+      heroImg: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=1200&h=1600&q=80",
+      subtext: "Monitor hospital equipment, schedule maintenance, and manage supplier orders from a central dashboard.",
+      badge: "Hospital Management",
+      icon: (
+        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+      )
+    },
+    {
+      id: "technician",
+      label: "Technician",
+      avatar: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=100&h=100&q=80",
+      heroImg: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&h=1600&q=80",
+      subtext: "Access maintenance assignments, update task status, and record service details for efficient equipment support.",
+      badge: "Maintenance Portal",
+      icon: (
+        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+      )
+    },
+    {
+      id: "supplier",
+      label: "Supplier",
+      avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=100&h=100&q=80",
+      heroImg: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&h=1600&q=80",
+      subtext: "Process equipment orders, manage inventory levels, and coordinate deliveries to healthcare facilities.",
+      badge: "Supplier Network",
+      icon: (
+        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+      )
+    }
+  ];
+
+  const currentHero = activePersona !== null ? personas[activePersona] : defaultHeroState;
+
   const features = [
-    { 
-      img: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b",
-      title: "Hospital Management", 
-      desc: "Track equipment, schedule maintenance, and monitor operational status across all departments." 
+    {
+      img: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=1600&h=900&q=80",
+      badge: "Live Analytics",
+      title: "Real-Time Equipment Dashboards",
+      desc: "Monitor equipment health, track maintenance trends, and view operational KPIs from clinical device sensors."
     },
-    { 
-      img: "https://images.unsplash.com/photo-1581092160607-ee22621dd758",
-      title: "Technician Portal", 
-      desc: "Manage repair tasks, log work progress, and submit maintenance reports in real-time." 
+    {
+      img: "https://images.unsplash.com/photo-1581595220892-b0739db3ba8c?auto=format&fit=crop&w=1600&h=900&q=80",
+      badge: "Maintenance Scheduling",
+      title: "Automated Work Orders",
+      desc: "Keep equipment running smoothly with predictive scheduling and automated technician dispatches for regular servicing."
     },
-    { 
-      img: "https://images.unsplash.com/photo-1581595219315-a187dd40c322",
-      title: "Supplier Integration", 
-      desc: "Process orders, track deliveries, and manage spare parts inventory seamlessly." 
+    {
+      img: "https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&w=1600&h=900&q=80",
+      badge: "Supplier Integration",
+      title: "Supplier Order Tracking",
+      desc: "Process new orders, track part deliveries, and manage your inventory stock with real-time supplier synchronization."
     },
-    { 
-      img: "https://images.unsplash.com/photo-1551288049-bebda4e38f71",
-      title: "Live Analytics", 
-      desc: "Visual dashboards showing equipment health, maintenance trends, and operational KPIs." 
-    },
-    { 
-      img: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b",
-      title: "Smart Alerts", 
-      desc: "Automated notifications for overdue maintenance, low inventory, and equipment failures." 
-    },
-    { 
-      img: "https://images.unsplash.com/photo-1563986768609-322da13575f3",
-      title: "HIPAA Compliant", 
-      desc: "Enterprise-grade security with role-based access control and full audit trails." 
-    },
+    {
+      img: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&h=900&q=80",
+      badge: "Compliance & Security",
+      title: "HIPAA Compliant Reporting",
+      desc: "Ensure enterprise-grade security with role-based access control, full audit trails, and automated compliance reports."
+    }
   ];
 
   const stats = [
@@ -39,301 +87,275 @@ export default function LandingPage({ onNavigate }) {
     { value: "40%", label: "Downtime Reduced" },
   ];
 
-  const roles = [
-    {
-      img: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=900&q=80",
-      role: "Hospital Admin",
-      desc: "Monitor hospital equipment, schedule maintenance, and manage supplier orders from a central dashboard.",
-      color: "blue",
-      page: "login",
-    },
-    {
-      img: "https://images.unsplash.com/photo-1581092335397-9583eb92d232?auto=format&fit=crop&w=900&q=80",
-      role: "Technician",
-      desc: "Access maintenance assignments, update task status, and record service details for efficient equipment support.",
-      color: "purple",
-      page: "login",
-    },
-    {
-      img: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=900&q=80",
-      role: "Supplier",
-      desc: "Process equipment orders, manage inventory levels, and coordinate deliveries to healthcare facilities.",
-      color: "emerald",
-      page: "login",
-    },
-  ];
+  const handleNextSlide = () => {
+    setActiveSlide((prev) => (prev + 1) % features.length);
+  };
+
+  const handlePrevSlide = () => {
+    setActiveSlide((prev) => (prev === 0 ? features.length - 1 : prev - 1));
+  };
+
+  // Keyboard support for carousel
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "ArrowRight") handleNextSlide();
+      if (e.key === "ArrowLeft") handlePrevSlide();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Swipe support
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e) => setTouchEnd(e.targetTouches[0].clientX);
+
+  const onTouchEndEvent = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    if (distance > minSwipeDistance) handleNextSlide();
+    if (distance < -minSwipeDistance) handlePrevSlide();
+  };
 
   return (
-    <div className="bg-white">
+    <div className="bg-[#f8fafc] text-gray-900 font-sans min-h-screen selection:bg-blue-600 selection:text-white">
+      
+      {/* Hero Section (Asymmetric) */}
+      <section className="relative w-full pt-12 pb-16 lg:pt-8 lg:pb-0 overflow-hidden bg-white rounded-b-[40px] shadow-sm">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-12 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          
+          {/* Left Side: Typography & CTAs */}
+          <div className="flex flex-col justify-center order-2 lg:order-1 pt-8 lg:pt-0 z-10 lg:pr-8">
+            
+            {/* Persona Switcher (Horizontal Row) */}
+            <div className="flex items-center flex-wrap gap-4 mb-8 bg-gray-50 p-2 rounded-[2rem] w-fit border border-gray-100">
+              {personas.map((p, idx) => (
+                <button
+                  key={p.id}
+                  onClick={() => setActivePersona(idx)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 ${
+                    activePersona === idx ? "bg-white shadow-sm ring-1 ring-gray-200" : "opacity-60 hover:opacity-100"
+                  }`}
+                  aria-label={`Switch to ${p.label} view`}
+                >
+                  <img src={p.avatar} alt={`${p.label} Avatar`} width="32" height="32" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+                  <span className={`text-sm font-semibold ${activePersona === idx ? "text-gray-900" : "text-gray-500"}`}>
+                    {p.label}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-      {/* Hero */}
-      <section className="relative bg-white text-gray-900 overflow-hidden">
+            <h1 className="text-5xl sm:text-7xl lg:text-[5.5rem] font-black leading-[1.05] tracking-tight mb-6 text-gray-900">
+              Keep your <br className="hidden sm:block" /> equipment <br className="hidden sm:block" />
+              <span className="text-blue-600">always ready.</span>
+            </h1>
+            
+            {/* Dynamic Subtext with Crossfade */}
+            <div className="relative min-h-[80px] mb-10">
+              <p key={activePersona} className="text-lg sm:text-xl text-gray-500 max-w-lg leading-relaxed font-medium animate-fadeSlideIn">
+                {currentHero.subtext}
+              </p>
+            </div>
 
-  {/* Grid background */}
-  <div className="absolute inset-0 opacity-30 
-  bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)]
-  bg-[size:60px_60px]"></div>
+            <div className="flex flex-wrap gap-4">
+              <button
+                onClick={() => onNavigate("register")}
+                className="px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-full hover:bg-blue-700 transition-transform transform hover:-translate-y-0.5 shadow-xl shadow-blue-600/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+              >
+                Get Started Free
+              </button>
+              <button
+                onClick={() => onNavigate("login")}
+                className="px-8 py-4 bg-gray-100 text-gray-900 text-lg font-bold rounded-full hover:bg-gray-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2"
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
 
-  <div className="relative max-w-7xl mx-auto px-6 py-28">
+          {/* Right Side: Large Lifestyle Photo */}
+          <div className="relative order-1 lg:order-2 h-[350px] sm:h-[500px] lg:h-[800px] w-full rounded-[40px] overflow-hidden shadow-2xl bg-gray-100">
+            <img 
+              key={activePersona}
+              src={currentHero.heroImg} 
+              alt="Medical Professional using MedTrack" 
+              className="w-full h-full object-cover animate-fadeSlideIn"
+            />
+            
+            {/* Overlapping Badge */}
+            <div key={`${activePersona}-badge`} className="absolute top-4 sm:top-8 right-4 sm:right-8 bg-white/90 backdrop-blur-md px-4 sm:px-6 py-3 sm:py-4 rounded-3xl shadow-xl flex items-center gap-3 sm:gap-4 animate-fadeSlideIn">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                {currentHero.icon}
+              </div>
+              <div>
+                <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-wider">Module Active</p>
+                <p className="text-xs sm:text-sm font-bold text-gray-900">{currentHero.badge}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full mb-6 uppercase tracking-wide">
-      Medical Equipment Management Platform
-    </span>
+      {/* Marquee Ticker */}
+      <div className="w-full bg-blue-600 py-3 sm:py-4 overflow-hidden shadow-inner flex relative z-0">
+        <div className="whitespace-nowrap flex animate-marquee">
+          {/* Repeat text multiple times to ensure seamless infinite scroll */}
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="flex items-center text-white/90 font-bold text-lg sm:text-xl uppercase tracking-widest mx-2 sm:mx-4">
+              <span>Hospitals</span><span className="mx-4 sm:mx-8 opacity-50">•</span>
+              <span>Technicians</span><span className="mx-4 sm:mx-8 opacity-50">•</span>
+              <span>Suppliers</span><span className="mx-4 sm:mx-8 opacity-50">•</span>
+              <span>Compliance</span><span className="mx-4 sm:mx-8 opacity-50">•</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-    <h1 className="text-5xl lg:text-6xl font-extrabold leading-tight mb-6">
-      Keep your equipment <br />
-      <span className="text-blue-600">always ready.</span>
-    </h1>
-
-    <p className="text-gray-600 text-lg max-w-xl mb-10 leading-relaxed">
-      MedTrack connects hospitals, technicians, and suppliers in one unified
-      platform — ensuring zero downtime, complete traceability, and optimized
-      equipment lifecycles.
-    </p>
-
-    <div className="flex gap-4">
-
-      <button
-        onClick={() => onNavigate("register")}
-        className="px-6 py-3.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition shadow-md"
-      >
-        Get Started Free
-      </button>
-
-      <button
-        onClick={() => onNavigate("login")}
-        className="px-6 py-3.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition"
-      >
-        Sign In →
-      </button>
-
-    </div>
-
-  </div>
-
-</section>
-      {/* Stats */}
-      <section className="bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+      {/* Stats Section */}
+      <section className="py-20 sm:py-24 bg-[#f8fafc]">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 text-center divide-x divide-gray-200">
             {stats.map((s) => (
-              <div key={s.label}>
-                <p className="text-3xl font-extrabold text-blue-400">{s.value}</p>
-                <p className="text-gray-400 text-sm mt-1">{s.label}</p>
+              <div key={s.label} className="px-2 sm:px-4">
+                <p className="text-4xl sm:text-5xl md:text-6xl font-black text-gray-900 mb-2 tracking-tighter">{s.value}</p>
+                <p className="text-gray-500 font-semibold uppercase tracking-wider text-xs sm:text-sm">{s.label}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="relative py-20 overflow-hidden">
-
-  {/* Gradient Background */}
-  <div className="absolute inset-0 bg-gradient-to-r from-[#1f3a6d] via-[#1e4f73] to-[#1f7a74]"></div>
-
-  {/* Grid Pattern */}
-  <div className="absolute inset-0 opacity-20 
-  bg-[linear-gradient(to_right,#ffffff30_1px,transparent_1px),linear-gradient(to_bottom,#ffffff30_1px,transparent_1px)]
-  bg-[size:80px_80px]"></div>
-
-  <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
-    <div className="text-center mb-12">
-      <h2 className="text-3xl font-bold text-white mb-3">
-        Everything your facility needs
-      </h2>
-      <p className="text-blue-100 max-w-xl mx-auto">
-        A complete toolkit for managing the full lifecycle of medical equipment — from procurement to disposal.
-      </p>
-    </div>
-
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-
-      {features.map((f) => (
-        <div
-          key={f.title}
-          className="bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-lg hover:border-blue-200 transition-all"
-        >
-
-          <img
-            src={f.img}
-            alt={f.title}
-            className="w-14 h-14 object-cover rounded-lg mb-3"
-          />
-
-          <h3 className="font-bold text-gray-900 mt-3 mb-2">{f.title}</h3>
-          <p className="text-gray-500 text-sm leading-relaxed">{f.desc}</p>
-
-        </div>
-      ))}
-
-    </div>
-
-  </div>
-</section>
-
-<section className="relative py-28 bg-white overflow-hidden">
-
-  {/* grid background */}
-  <div className="absolute inset-0 opacity-30
-  bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)]
-  bg-[size:60px_60px]"></div>
-
-  <div className="relative max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
-
-    {/* LEFT SIDE CARDS */}
-    <div className="grid grid-cols-2 gap-6">
-
-      <div className="bg-white border rounded-xl p-6 shadow-sm">
-        <p className="text-gray-400 text-sm">Policy makers</p>
-      </div>
-
-      <div className="bg-white border rounded-xl p-6 shadow-sm">
-        <p className="text-gray-400 text-sm">Diagnostics</p>
-      </div>
-
-      <div className="bg-white border rounded-xl p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-2">
-          <img
-            src="https://randomuser.me/api/portraits/men/32.jpg"
-            className="w-8 h-8 rounded-full"
-          />
-          <div>
-            <p className="text-sm font-semibold">Henry Cooper</p>
-            <p className="text-xs text-green-600">In-Patient</p>
-          </div>
-        </div>
-        <p className="text-gray-400 text-xs">
-          order_type: medication_OPD
-        </p>
-      </div>
-
-      {/* highlighted card */}
-      <div className="bg-gradient-to-br from-blue-700 to-teal-600 text-white rounded-xl p-6 shadow-lg">
-
-        <h3 className="font-semibold mb-2">
-          Health centers
-        </h3>
-
-        <p className="text-sm text-blue-100">
-          Connects patients data to relevant point-of-care services
-        </p>
-
-      </div>
-
-      <div className="bg-white border rounded-xl p-6 shadow-sm">
-        <p className="text-gray-400 text-sm">Pharmacies</p>
-      </div>
-
-      <div className="bg-white border rounded-xl p-6 shadow-sm">
-        <p className="text-gray-400 text-sm">Clinicians</p>
-      </div>
-
-    </div>
-
-
-    {/* RIGHT SIDE TEXT */}
-    <div className="text-center md:text-left">
-
-      <p className="text-sm text-blue-500 mb-3">
-        A connected solution
-      </p>
-
-      <h2 className="text-4xl font-bold text-gray-900 mb-6 leading-tight">
-        Built on a unified infrastructure to connect physicians
-        to all point of care services
-      </h2>
-
-      <p className="text-gray-600 leading-relaxed max-w-lg">
-        Our cutting-edge health information system is built to transform
-        collaboration across multiple care providers and facilities.
-        Unlock the potential of seamless information exchange and
-        coordinated care for better health outcomes across the continent.
-      </p>
-
-    </div>
-
-  </div>
-
-</section>
-
-      {/* Role Cards */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-3">
-              Built for every stakeholder
-            </h2>
-            <p className="text-gray-500">
-              Three tailored portals. One unified system.
-            </p>
+      {/* Slideshow Features Section */}
+      <section className="py-16 sm:py-24 bg-white relative">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
+          
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 sm:mb-12">
+            <div className="max-w-2xl">
+              <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-4 sm:mb-6 leading-tight tracking-tight">
+                Everything your facility needs.
+              </h2>
+              <p className="text-lg sm:text-xl text-gray-500 font-medium">
+                A complete toolkit for managing the full lifecycle of medical equipment — from procurement to disposal.
+              </p>
+            </div>
+            
+            {/* Slideshow Controls */}
+            <div className="flex items-center gap-4 sm:gap-6 mt-6 md:mt-0">
+              <div className="flex items-center gap-2">
+                <button aria-label="Previous Slide" onClick={handlePrevSlide} className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:border-blue-600 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <button aria-label="Next Slide" onClick={handleNextSlide} className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:border-blue-600 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </button>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-gray-300 tracking-widest">
+                <span className="text-gray-900">0{activeSlide + 1}</span> / 0{features.length}
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Active Slide Card */}
+          <div 
+            className="relative w-full h-[450px] lg:h-[600px] rounded-[30px] sm:rounded-[40px] overflow-hidden bg-gray-100 group cursor-grab active:cursor-grabbing"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEndEvent}
+          >
+            <img 
+              key={activeSlide}
+              src={features[activeSlide].img} 
+              alt={features[activeSlide].title}
+              width="1600"
+              height="900"
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 animate-fadeSlideIn"
+              loading="lazy"
+            />
+            {/* Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-gray-900/95 via-gray-900/50 to-transparent"></div>
+            
+            <div className="absolute bottom-0 left-0 p-6 sm:p-10 lg:p-16 max-w-3xl">
+              <span className="inline-block bg-blue-600 text-white font-bold px-3 py-1.5 sm:px-4 sm:py-2 rounded-full mb-4 sm:mb-6 text-xs sm:text-sm tracking-wider uppercase">
+                {features[activeSlide].badge}
+              </span>
+              <h3 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white mb-3 sm:mb-4">
+                {features[activeSlide].title}
+              </h3>
+              <p className="text-lg sm:text-xl text-gray-200 font-medium leading-relaxed">
+                {features[activeSlide].desc}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            {roles.map((r) => (
-              <div key={r.role} className="bg-white rounded-2xl border-2 border-gray-100 hover:border-blue-200 p-7 text-center hover:shadow-xl transition-all">
+      {/* Stakeholder Portals */}
+      <section className="py-20 sm:py-24 bg-[#f8fafc]">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
+          
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-4 sm:mb-6 tracking-tight">Built for every stakeholder</h2>
+            <p className="text-lg sm:text-xl text-gray-500 font-medium">Three tailored portals. One unified system.</p>
+          </div>
 
-                <img
-                  src={r.img}
-                  alt={r.role}
-                  className="w-16 h-16 object-cover rounded-xl mx-auto mb-4"
-                />
-
-                <h3 className="font-bold text-gray-900 text-lg mt-4 mb-2">{r.role}</h3>
-
-                <p className="text-gray-500 text-sm leading-relaxed mb-5">
-                  {r.desc}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+            {personas.map((p) => (
+              <div key={p.id} className="bg-white rounded-[24px] sm:rounded-[32px] p-6 sm:p-8 lg:p-10 shadow-sm border border-gray-100 hover:shadow-2xl transition-shadow duration-300 group flex flex-col h-full">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-blue-50 flex items-center justify-center mb-6 sm:mb-8 group-hover:bg-blue-600 transition-colors duration-300">
+                  <div className="text-blue-600 group-hover:text-white transition-colors duration-300">
+                    {p.icon}
+                  </div>
+                </div>
+                
+                <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-3 sm:mb-4">{p.label} Portal</h3>
+                <p className="text-gray-500 font-medium leading-relaxed mb-8 sm:mb-10 flex-grow">
+                  {p.subtext}
                 </p>
 
                 <button
-                  onClick={() => onNavigate(r.page)}
-                  className="w-full py-2.5 bg-blue-600 text-white font-semibold text-sm rounded-xl hover:bg-blue-700 transition-colors"
+                  onClick={() => onNavigate("login")}
+                  className="w-full py-3 sm:py-4 bg-gray-50 text-gray-900 font-bold rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors border border-gray-200 hover:border-blue-200"
                 >
-                  Login as {r.role.split(" ")[0]}
+                  Login as {p.label.split(' ')[0]}
                 </button>
-
               </div>
             ))}
-
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="relative py-16 text-white overflow-hidden">
+      {/* Oversized Closing CTA */}
+      <section className="py-24 sm:py-32 bg-white text-center px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-5xl sm:text-6xl md:text-8xl font-black text-gray-900 tracking-tighter mb-6 sm:mb-8 leading-none">
+            Ready to <br className="hidden sm:block" /> <span className="text-blue-600">transform</span> <br className="hidden sm:block" /> your workflow?
+          </h2>
+          <p className="text-xl sm:text-2xl text-gray-500 font-medium mb-10 sm:mb-12 max-w-2xl mx-auto">
+            Join hundreds of hospitals already using MedTrack to reduce downtime and cut costs.
+          </p>
+          <button
+            onClick={() => onNavigate("register")}
+            className="px-10 py-5 sm:px-12 sm:py-6 bg-gray-900 text-white text-xl sm:text-2xl font-black rounded-full hover:bg-blue-600 transition-colors shadow-2xl"
+          >
+            Get Started Now
+          </button>
+        </div>
+      </section>
 
-  {/* Gradient Background */}
-  <div className="absolute inset-0 bg-gradient-to-r from-[#1f3a6d] via-[#1e4f73] to-[#1f7a74]"></div>
-
-  {/* Grid Pattern */}
-  <div className="absolute inset-0 opacity-20
-  bg-[linear-gradient(to_right,#ffffff30_1px,transparent_1px),linear-gradient(to_bottom,#ffffff30_1px,transparent_1px)]
-  bg-[size:80px_80px]"></div>
-
-  <div className="relative max-w-3xl mx-auto px-4 text-center">
-
-    <h2 className="text-3xl font-bold mb-4">
-      Start managing smarter today
-    </h2>
-
-    <p className="text-blue-100 mb-8 text-lg">
-      Join hundreds of hospitals already using MedTrack to reduce equipment downtime and cut maintenance costs.
-    </p>
-
-    <button
-      onClick={() => onNavigate("register")}
-      className="px-8 py-4 bg-white text-blue-700 font-bold rounded-xl hover:bg-blue-50 transition-colors shadow-lg text-sm"
-    >
-      Create Free Account
-    </button>
-
-  </div>
-
-</section>
-
+      {/* Unsplash Attribution Footer */}
+      <footer className="bg-gray-50 py-6 text-center border-t border-gray-200">
+        <p className="text-xs sm:text-sm text-gray-400 font-medium">
+          Images provided by incredible photographers on <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-blue-600 underline decoration-gray-300 hover:decoration-blue-600 transition-colors">Unsplash</a>.
+        </p>
+      </footer>
     </div>
   );
 }

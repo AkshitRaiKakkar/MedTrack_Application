@@ -74,20 +74,20 @@ export default function MaintenanceSchedule({ onNavigate }) {
 
   // Style configurations for Status Badges
   const statusStyles = {
-    "Scheduled": "bg-blue-100 text-blue-700 border-blue-200",
-    "In Progress": "bg-yellow-100 text-yellow-700 border-yellow-200",
-    "Completed": "bg-green-100 text-green-700 border-green-200",
+    "Scheduled": "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800",
+    "In Progress": "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800",
+    "Completed": "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800",
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-surface">
       {/* Header Section */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+      <header className="bg-card border-b border-subtle sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Maintenance Schedule</h1>
-              <p className="text-sm text-slate-500 mt-1">Managing {tasks.length} tasks</p>
+              <h1 className="text-xl font-bold text-primary">Maintenance Schedule</h1>
+              <p className="text-sm text-secondary mt-1">Managing {tasks.length} tasks</p>
             </div>
             {user?.role === "hospital" && (
               <button
@@ -103,27 +103,33 @@ export default function MaintenanceSchedule({ onNavigate }) {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-card rounded-xl shadow-sm border border-subtle overflow-hidden">
           
           {/* Desktop Table View */}
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50 border-b border-slate-200">
+            <table className="min-w-full divide-y divide-subtle">
+              <thead className="bg-surface border-b border-subtle">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Equipment</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Technician</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">Equipment</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">Technician</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
+              <tbody className="divide-y divide-subtle bg-card">
                 {tasks.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="text-center py-16 text-slate-400">
+                    <td colSpan="5" className="text-center py-16 text-secondary">
                       <div className="flex flex-col items-center">
                         <span className="text-4xl mb-2">🛠️</span>
                         <p className="font-medium">No maintenance tasks scheduled yet.</p>
+                        <button 
+                          onClick={() => onNavigate('schedule-maintenance')}
+                          className="mt-4 text-teal-600 hover:text-teal-700 dark:hover:text-teal-500 text-sm font-semibold"
+                        >
+                          Schedule your first task
+                        </button>
                         {user?.role === "hospital" && (
                           <button 
                             onClick={() => onNavigate('schedule-maintenance')}
@@ -137,32 +143,32 @@ export default function MaintenanceSchedule({ onNavigate }) {
                   </tr>
                 ) : (
                   tasks.map((task) => (
-                    <tr key={task.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={task.id} className="hover:bg-hover transition-colors">
                       {/* Equipment Name */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <span className="text-lg mr-3">🩺</span>
                           <div>
-                            <span className="font-medium text-slate-800 block">{task.equipmentName}</span>
-                            <span className="text-xs text-slate-400">{task.id}</span>
+                            <span className="font-medium text-primary block">{task.equipmentName}</span>
+                            <span className="text-xs text-secondary">{task.id}</span>
                           </div>
                         </div>
                       </td>
                       
                       {/* Maintenance Type */}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
                         {task.maintenanceType}
                       </td>
                       
                       {/* Date */}
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-slate-600 font-medium">{formatDate(task.scheduledDate)}</div>
+                        <div className="text-sm text-primary font-medium">{formatDate(task.scheduledDate)}</div>
                       </td>
                       
                       {/* Technician */}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
+                          <div className="w-6 h-6 rounded-full bg-hover flex items-center justify-center text-xs font-bold text-secondary border border-subtle">
                             {task.assignedTechnician ? task.assignedTechnician.charAt(0) : "?"}
                           </div>
                           {task.assignedTechnician || 'Unassigned'}

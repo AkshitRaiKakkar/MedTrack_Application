@@ -2,7 +2,10 @@ import API from "./HttpService";
 
 // Fetch all maintenance tasks, optionally filtered by technician
 export const getAllTasks = async (technicianId) => {
-  const url = technicianId ? `/api/maintenance?technicianId=${technicianId}` : "/api/maintenance";
+  const url = technicianId
+    ? `/api/maintenance?technicianId=${technicianId}`
+    : "/api/maintenance";
+
   const response = await API.get(url);
   return response.data;
 };

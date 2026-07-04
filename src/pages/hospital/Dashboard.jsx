@@ -20,24 +20,24 @@ export default function Dashboard({ onNavigate }) {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+    <div className="min-h-screen bg-surface font-sans text-primary">
       {/* Background Decorative Blobs */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100 rounded-full filter blur-3xl opacity-50 -z-10"></div>
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-100 rounded-full filter blur-3xl opacity-50 -z-10"></div>
+      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100 dark:bg-blue-900 rounded-full filter blur-3xl opacity-50 -z-10 transition-colors"></div>
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-100 dark:bg-indigo-900 rounded-full filter blur-3xl opacity-50 -z-10 transition-colors"></div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-3xl font-bold text-primary tracking-tight">
               {getGreeting()}, {user?.name || "Hospital Admin"} 👋
             </h1>
-            <p className="text-slate-500 mt-1">Here's your facility overview for today.</p>
+            <p className="text-secondary mt-1">Here's your facility overview for today.</p>
           </div>
-          <div className="mt-4 md:mt-0 flex items-center gap-3 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
+          <div className="mt-4 md:mt-0 flex items-center gap-3 bg-card px-4 py-2 rounded-full shadow-sm border border-subtle">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-sm font-medium text-slate-700">System Operational</span>
+            <span className="text-sm font-medium text-primary">System Operational</span>
           </div>
         </div>
 
@@ -46,10 +46,10 @@ export default function Dashboard({ onNavigate }) {
           {stats.map((stat) => (
             <div 
               key={stat.label} 
-              className="bg-white/70 backdrop-blur-lg border border-white shadow-sm rounded-2xl p-5 transition-all hover:scale-[1.02] hover:shadow-md"
+              className="bg-card/70 backdrop-blur-lg border border-subtle shadow-sm rounded-2xl p-5 transition-all hover:scale-[1.02] hover:shadow-md"
             >
               <div className="flex justify-between items-start">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{stat.label}</p>
+                <p className="text-xs font-bold text-secondary uppercase tracking-wider">{stat.label}</p>
                 <span className="text-2xl" aria-hidden="true">{stat.icon}</span>
               </div>
               <p className={`text-3xl font-bold mt-2 ${stat.color}`}>{stat.value}</p>
@@ -59,7 +59,7 @@ export default function Dashboard({ onNavigate }) {
 
         {/* Quick Actions - Specific to Member 9 Requirements */}
         <div className="mb-8">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">Quick Actions</h2>
+            <h2 className="text-lg font-bold text-primary mb-4">Quick Actions</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
                 { label: "Add Equipment", page: "add-equipment", icon: "➕", desc: "New Inventory Item", hospitalOnly: true },
@@ -70,13 +70,13 @@ export default function Dashboard({ onNavigate }) {
                 <button
                   key={action.label}
                   onClick={() => onNavigate(action.page)}
-                  className="bg-white border border-slate-100 hover:border-blue-200 hover:shadow-lg rounded-xl p-5 text-left transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="bg-card border border-subtle hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-lg rounded-xl p-5 text-left transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <span className="text-3xl filter grayscale group-hover:grayscale-0 transition-all" aria-hidden="true">{action.icon}</span>
-                  <p className="text-sm font-semibold text-slate-700 mt-3 group-hover:text-blue-600 transition-colors">
+                  <p className="text-sm font-semibold text-primary mt-3 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {action.label}
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">{action.desc}</p>
+                  <p className="text-xs text-secondary mt-1">{action.desc}</p>
                 </button>
             ))}
             </div>
