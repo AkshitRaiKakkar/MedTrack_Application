@@ -10,6 +10,8 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 
 /**
@@ -43,9 +45,9 @@ public class UserService {
 
     /**
      * Token lifetime in milliseconds. This value must correspond directly with {@link JwtUtil#EXPIRATION_MS}
-     * to keep client-side session timeout synchronization accurate.
+     * to keep client-side session timeout synchronization synchronization accurate.
      */
-    private static final long TOKEN_EXPIRATION_MS = 1000 * 60 * 60 * 24;
+    private static final long TOKEN_EXPIRATION_MS = 1000 * 60 * 15;
 
     /**
      * Repository interface for performing CRUD operations on the User table.
@@ -63,6 +65,11 @@ public class UserService {
     private final JwtUtil jwtUtil;
 
     /**
+     * Service responsible for managing database-backed refresh tokens.
+     */
+    private final RefreshTokenService refreshTokenService;
+
+    /**
      * Registers a new user account in the application database.
      * Enforces unique email check and valid system role assignment, then encodes the password using BCrypt.
      *
@@ -70,6 +77,7 @@ public class UserService {
      * @return the {@link AuthResponse} containing user profile information and generated JWT token
      * @throws RuntimeException if the email already exists in the database or if an invalid role is provided
      */
+    @Transactional
     public AuthResponse register(User user) {
         // Enforce email uniqueness constraint prior to registration
         if (userRepository.existsByEmail(user.getEmail())) {
@@ -101,6 +109,7 @@ public class UserService {
      * @return the {@link AuthResponse} containing user profile information and generated JWT token
      * @throws BadCredentialsException if the email address does not exist or if the passwords do not match
      */
+    @Transactional
     public AuthResponse login(LoginRequest loginRequest) {
         // Retrieve user by email or throw a BadCredentialsException to protect system metadata details
         User user = userRepository.findByEmail(loginRequest.getEmail())
@@ -125,6 +134,7 @@ public class UserService {
     private AuthResponse mapToAuthResponse(User user) {
         // Request a new JWT token signed with user's email and role claims
         String token = jwtUtil.generateToken(user.getEmail(), user.getRole());
+        String refreshToken = refreshTokenService.createRefreshToken(user.getId()).getToken();
 
         // Build and return the response DTO
         return AuthResponse.builder()
@@ -133,7 +143,37 @@ public class UserService {
                 .email(user.getEmail())
                 .role(user.getRole())
                 .token(token)
+                .refreshToken(refreshToken)
                 .expiresIn(TOKEN_EXPIRATION_MS)
                 .build();
+    }
+
+    /**
+     * Issues a new access token (and rotates the refresh token) given a valid refresh token.
+     *
+     * @param requestRefreshToken the refresh token submitted by the client
+     * @return the new {@link AuthResponse} containing rotated tokens
+     */
+    @Transactional
+    public AuthResponse refreshAccessToken(String requestRefreshToken) {
+        var refreshToken = refreshTokenService.verifyToken(requestRefreshToken);
+
+        User user = userRepository.findById(refreshToken.getUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Rotate: revoke old refresh token, issue a brand new one
+        refreshTokenService.revokeToken(requestRefreshToken);
+
+        return mapToAuthResponse(user);
+    }
+
+    /**
+     * Logs the user out by revoking the specified refresh token.
+     *
+     * @param refreshToken the refresh token to revoke
+     */
+    @Transactional
+    public void logout(String refreshToken) {
+        refreshTokenService.revokeToken(refreshToken);
     }
 }

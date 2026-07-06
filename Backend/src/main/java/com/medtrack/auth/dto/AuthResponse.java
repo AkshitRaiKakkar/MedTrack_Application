@@ -59,4 +59,9 @@ public class AuthResponse {
      * Helpful for frontend applications to track session lifetime and automatically initiate logout.
      */
     private Long expiresIn;
+
+    /**
+     * The database-backed refresh token used to obtain a new access token.
+     */
+    private String refreshToken;
 }
