@@ -107,6 +107,8 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/user/login",
                     "/api/user/register",
+                    "/api/user/refresh-token",
+                    "/api/user/logout",
                     "/h2-console/**"
                 ).permitAll()
 

@@ -29,8 +29,8 @@ public class JwtUtil {
     private static final String SECRET = "medtrack-super-secret-key-change-this-in-production-1234567890";
     private static final SecretKey SIGNING_KEY = Keys.hmacShaKeyFor(SECRET.getBytes());
 
-    // Token validity period set to 24 hours (in milliseconds)
-    private static final long EXPIRATION_MS = 1000 * 60 * 60 * 24;
+    // Token validity period set to 15 minutes (in milliseconds)
+    private static final long EXPIRATION_MS = 1000 * 60 * 15;
 
     /**
      * Generates a new JSON Web Token (JWT) signed with HMAC-SHA containing the user's email and role.
