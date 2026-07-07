@@ -2,6 +2,7 @@ package com.medtrack.auth.service;
 
 import com.medtrack.auth.dto.AuthResponse;
 import com.medtrack.auth.dto.LoginRequest;
+import com.medtrack.auth.dto.RegisterRequest;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.auth.security.JwtUtil;
@@ -73,27 +74,32 @@ public class UserService {
      * Registers a new user account in the application database.
      * Enforces unique email check and valid system role assignment, then encodes the password using BCrypt.
      *
-     * @param user the transient {@link User} entity containing details supplied during registration
+     * @param request the registration details DTO
      * @return the {@link AuthResponse} containing user profile information and generated JWT token
      * @throws RuntimeException if the email already exists in the database or if an invalid role is provided
      */
     @Transactional
-    public AuthResponse register(User user) {
+    public AuthResponse register(RegisterRequest request) {
         // Enforce email uniqueness constraint prior to registration
-        if (userRepository.existsByEmail(user.getEmail())) {
+        if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("Email already exists");
         }
 
+        // Normalize the role string casing to uppercase for consistency in authorization checks; defaults to HOSPITAL
+        String role = request.getRole() != null ? request.getRole().toUpperCase() : "HOSPITAL";
+
         // Validate that the assigned role is mapped to one of the authorized application roles
-        if (user.getRole() == null || !VALID_ROLES.contains(user.getRole().toUpperCase())) {
+        if (!VALID_ROLES.contains(role)) {
             throw new RuntimeException("Invalid role. Must be one of: HOSPITAL, TECHNICIAN, SUPPLIER");
         }
 
-        // Normalize the role string casing to uppercase for consistency in authorization checks
-        user.setRole(user.getRole().toUpperCase());
-
-        // Cryptographically hash the plain-text password using the configured password encoder
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        // Map the RegisterRequest DTO to the User database entity and encode raw password
+        User user = User.builder()
+                .name(request.getName())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(role)
+                .build();
         
         // Persist the user record to the database
         User savedUser = userRepository.save(user);

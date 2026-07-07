@@ -3,6 +3,7 @@ package com.medtrack.auth.controller;
 import com.medtrack.auth.dto.AuthResponse;
 import com.medtrack.auth.dto.LoginRequest;
 import com.medtrack.auth.dto.RefreshTokenRequest;
+import com.medtrack.auth.dto.RegisterRequest;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.service.UserService;
 import jakarta.validation.Valid;
@@ -48,9 +49,9 @@ public class UserController {
      * @return a {@link ResponseEntity} wrapping the {@link AuthResponse} containing the generated JWT token and registered user details.
      */
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody User user) {
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest registerRequest) {
         // Delegate user registration to the service layer and return HTTP 200 (OK) with the auth response
-        return ResponseEntity.ok(userService.register(user));
+        return ResponseEntity.ok(userService.register(registerRequest));
     }
 
     /**
