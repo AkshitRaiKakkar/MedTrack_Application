@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -29,13 +30,13 @@ public class EquipmentController {
 
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Equipment> addEquipment(@RequestBody Equipment equipment) {
+    public ResponseEntity<Equipment> addEquipment(@Valid @RequestBody Equipment equipment) {
         return ResponseEntity.ok(equipmentService.addEquipment(equipment));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Equipment> updateEquipment(@PathVariable Long id, @RequestBody Equipment equipment) {
+    public ResponseEntity<Equipment> updateEquipment(@PathVariable Long id, @Valid @RequestBody Equipment equipment) {
         return ResponseEntity.ok(equipmentService.updateEquipment(id, equipment));
     }
 
