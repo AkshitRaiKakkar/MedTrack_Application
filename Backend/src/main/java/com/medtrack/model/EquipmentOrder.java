@@ -134,6 +134,24 @@ public class EquipmentOrder {
     private String trackingNo;
 
     /**
+     * The logistics carrier name (e.g., FedEx, DHL, Blue Dart).
+     */
+    @Column(length = 100)
+    private String carrier;
+
+    /**
+     * The timestamp when the order was dispatched/shipped.
+     */
+    @Column
+    private LocalDateTime dispatchedAt;
+
+    /**
+     * The timestamp when the order was delivered to the hospital.
+     */
+    @Column
+    private LocalDateTime deliveredAt;
+
+    /**
      * Timestamp indicating when the order was originally placed. Defaults to the system date and time.
      */
     @Builder.Default
