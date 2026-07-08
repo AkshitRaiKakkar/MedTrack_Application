@@ -9,6 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 /**
  * User represents the persistent entity stored in the database for application users.
  * It maps to the "users" table and stores authentication credentials, profile details,
@@ -112,4 +114,9 @@ public class User {
     @Column(nullable = false)
     @Builder.Default
     private AccountStatus accountStatus = AccountStatus.ACTIVE;
+
+    @Builder.Default
+    private int failedLoginAttempts = 0;
+
+    private LocalDateTime accountLockedUntil;
 }

@@ -3,6 +3,7 @@ package com.medtrack.exception;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -30,6 +31,14 @@ public class GlobalExceptionHandler {
     // Handles invalid login credentials -> 401 Unauthorized
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, String>> handleBadCredentials(BadCredentialsException ex) {
+        Map<String, String> response = new HashMap<>();
+        response.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    // Handles locked account login attempts -> 401 Unauthorized
+    @ExceptionHandler(LockedException.class)
+    public ResponseEntity<Map<String, String>> handleLockedException(LockedException ex) {
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);

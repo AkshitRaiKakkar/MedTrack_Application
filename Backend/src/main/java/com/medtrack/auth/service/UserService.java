@@ -14,8 +14,10 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.LockedException;
+import java.time.LocalDateTime;
 
 import java.util.List;
 
@@ -75,6 +77,9 @@ public class UserService {
     private final RefreshTokenService refreshTokenService;
     private final AuthenticationManager authenticationManager;
 
+    @Value("${security.account.lock-duration:30}")
+    private int lockDurationMinutes;
+
     /**
      * Registers a new user account in the application database.
      * Enforces unique email check and valid system role assignment, then encodes the password using BCrypt.
@@ -127,19 +132,53 @@ public class UserService {
      * @return the {@link AuthResponse} containing user profile information and generated JWT token
      * @throws BadCredentialsException if the email address does not exist or if the passwords do not match
      */
-    @Transactional
+    @Transactional(noRollbackFor = {BadCredentialsException.class, LockedException.class, UsernameNotFoundException.class})
     public AuthResponse login(LoginRequest loginRequest) {
-        // Authenticate credentials using Spring Security's AuthenticationManager
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
-        );
-
-        // Retrieve user by email (after successful authentication) to generate token
         User user = userRepository.findByEmail(loginRequest.getEmail())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + loginRequest.getEmail()));
 
+        // Check if user account is locked
+        if (user.getAccountStatus() == AccountStatus.LOCKED || user.getAccountLockedUntil() != null) {
+            if (user.getAccountLockedUntil() != null && LocalDateTime.now().isAfter(user.getAccountLockedUntil())) {
+                // Lock expired - perform automatic unlock
+                user.setAccountStatus(AccountStatus.ACTIVE);
+                user.setAccountLockedUntil(null);
+                user.setFailedLoginAttempts(0);
+                user = userRepository.save(user);
+            } else {
+                throw new LockedException("Account is temporarily locked.");
+            }
+        }
+
+        try {
+            // Authenticate credentials using Spring Security's AuthenticationManager
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
+            );
+        } catch (BadCredentialsException e) {
+            // Only increment failed attempts if the account status is ACTIVE.
+            if (user.getAccountStatus() == AccountStatus.ACTIVE) {
+                int newAttempts = user.getFailedLoginAttempts() + 1;
+                if (newAttempts >= 5) {
+                    user.setAccountStatus(AccountStatus.LOCKED);
+                    user.setAccountLockedUntil(LocalDateTime.now().plusMinutes(lockDurationMinutes));
+                    user.setFailedLoginAttempts(0);
+                } else {
+                    user.setFailedLoginAttempts(newAttempts);
+                }
+                userRepository.save(user);
+            }
+            throw e;
+        }
+
+        // On successful login: reset failedLoginAttempts and clear lock values
+        user.setFailedLoginAttempts(0);
+        user.setAccountLockedUntil(null);
+        user.setAccountStatus(AccountStatus.ACTIVE);
+        User savedUser = userRepository.save(user);
+
         // Generate response payload containing user info and a new JWT token
-        return mapToAuthResponse(user);
+        return mapToAuthResponse(savedUser);
     }
 
     /**

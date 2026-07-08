@@ -112,7 +112,10 @@ public class DataInitializer implements CommandLineRunner {
         if (equipmentOrderRepository.count() == 0) {
             equipmentOrderRepository.save(EquipmentOrder.builder()
                 .orderCode("ORD-1001")
+                .equipmentId("EQ-1001")
                 .equipmentName("Defibrillator Pads (Box of 10)")
+                .quantity(5)
+                .hospital("City General Hospital")
                 .createdBy("Admin User")
                 .orderDate(LocalDate.now().minusDays(2).atStartOfDay())
                 .status("PENDING")

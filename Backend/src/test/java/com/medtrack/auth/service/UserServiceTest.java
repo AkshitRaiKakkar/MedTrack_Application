@@ -16,6 +16,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -55,6 +57,7 @@ public class UserServiceTest {
         refreshTokenService = new RefreshTokenService(refreshTokenRepository);
         ReflectionTestUtils.setField(refreshTokenService, "refreshExpirationDays", 7L);
         userService = new UserService(userRepository, passwordEncoder, jwtUtil, refreshTokenService, authenticationManager);
+        ReflectionTestUtils.setField(userService, "lockDurationMinutes", 30);
     }
 
     @Test
@@ -215,6 +218,7 @@ public class UserServiceTest {
 
         when(authenticationManager.authenticate(any())).thenReturn(null);
         when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(invocation -> {
             RefreshToken rt = invocation.getArgument(0);
@@ -234,9 +238,9 @@ public class UserServiceTest {
     void login_UserNotFound_ThrowsException() {
         LoginRequest request = new LoginRequest("test@example.com", "password123");
 
-        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Invalid email or password"));
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.empty());
 
-        assertThrows(BadCredentialsException.class, () -> userService.login(request));
+        assertThrows(UsernameNotFoundException.class, () -> userService.login(request));
     }
 
     @Test
@@ -250,9 +254,98 @@ public class UserServiceTest {
                 .accountStatus(AccountStatus.ACTIVE)
                 .build();
 
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(user));
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Invalid email or password"));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertThrows(BadCredentialsException.class, () -> userService.login(request));
+        assertEquals(1, user.getFailedLoginAttempts());
+    }
+
+    @Test
+    void login_FailedAttemptsIncremented() {
+        LoginRequest request = new LoginRequest("test@example.com", "wrong_password");
+        User user = User.builder()
+                .id(1L)
+                .email("test@example.com")
+                .failedLoginAttempts(2)
+                .accountStatus(AccountStatus.ACTIVE)
+                .build();
+
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(user));
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Invalid credentials"));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThrows(BadCredentialsException.class, () -> userService.login(request));
+        assertEquals(3, user.getFailedLoginAttempts());
+    }
+
+    @Test
+    void login_AccountLockedAfter5Failures() {
+        LoginRequest request = new LoginRequest("test@example.com", "wrong_password");
+        User user = User.builder()
+                .id(1L)
+                .email("test@example.com")
+                .failedLoginAttempts(4)
+                .accountStatus(AccountStatus.ACTIVE)
+                .build();
+
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(user));
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Invalid credentials"));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThrows(BadCredentialsException.class, () -> userService.login(request));
+        assertEquals(AccountStatus.LOCKED, user.getAccountStatus());
+        assertNotNull(user.getAccountLockedUntil());
+        assertEquals(0, user.getFailedLoginAttempts());
+    }
+
+    @Test
+    void login_LockedAccountRejected() {
+        LoginRequest request = new LoginRequest("test@example.com", "password123");
+        User user = User.builder()
+                .id(1L)
+                .email("test@example.com")
+                .accountStatus(AccountStatus.LOCKED)
+                .accountLockedUntil(LocalDateTime.now().plusMinutes(15))
+                .build();
+
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(user));
+
+        LockedException exception = assertThrows(LockedException.class, () -> userService.login(request));
+        assertEquals("Account is temporarily locked.", exception.getMessage());
+        verify(authenticationManager, never()).authenticate(any());
+    }
+
+    @Test
+    void login_LockedAccountAutoUnlockedAfterCooldown() {
+        LoginRequest request = new LoginRequest("test@example.com", "password123");
+        User user = User.builder()
+                .id(1L)
+                .email("test@example.com")
+                .name("Test User")
+                .role("HOSPITAL")
+                .accountStatus(AccountStatus.LOCKED)
+                .accountLockedUntil(LocalDateTime.now().minusMinutes(5)) // Expired
+                .failedLoginAttempts(0)
+                .build();
+
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(authenticationManager.authenticate(any())).thenReturn(null);
+
+        when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(invocation -> {
+            RefreshToken rt = invocation.getArgument(0);
+            rt.setId(10L);
+            return rt;
+        });
+
+        AuthResponse response = userService.login(request);
+
+        assertNotNull(response);
+        assertEquals(AccountStatus.ACTIVE, user.getAccountStatus());
+        assertNull(user.getAccountLockedUntil());
+        assertEquals(0, user.getFailedLoginAttempts());
     }
 
     @Test
