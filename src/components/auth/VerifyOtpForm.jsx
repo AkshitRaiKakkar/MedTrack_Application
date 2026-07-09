@@ -74,6 +74,25 @@ export default function VerifyOtpForm({ onNavigate, email }) {
         </p>
       </div>
 
+      {/* Local Development Notice */}
+      <div
+        className="mb-6 p-4 rounded-xl text-xs"
+        style={{
+          background: "#fffbeb",
+          color: "#b45309",
+          border: "1px solid #fde68a",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "8px",
+          lineHeight: "1.5"
+        }}
+      >
+        <span style={{ fontSize: "16px" }}>💡</span>
+        <div>
+          <strong>Local Development Notice:</strong> Since a real email server is not configured, please check your <strong>backend terminal logs</strong> or the <strong>H2 database console</strong> to retrieve the generated OTP.
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Error */}
         {error && (
