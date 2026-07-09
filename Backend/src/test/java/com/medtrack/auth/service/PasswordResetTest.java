@@ -7,6 +7,7 @@ import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.model.PasswordResetToken;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.PasswordResetTokenRepository;
+import com.medtrack.auth.repository.RefreshTokenRepository;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.auth.security.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +37,7 @@ public class PasswordResetTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
-    private RefreshTokenService refreshTokenService;
+    private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
     private AuthenticationManager authenticationManager;
@@ -48,10 +49,13 @@ public class PasswordResetTest {
     private EmailService emailService;
 
     private final JwtUtil jwtUtil = new JwtUtil();
+    private RefreshTokenService refreshTokenService;
     private UserService userService;
 
     @BeforeEach
     void setUp() {
+        refreshTokenService = new RefreshTokenService(refreshTokenRepository);
+        ReflectionTestUtils.setField(refreshTokenService, "refreshExpirationDays", 7L);
         userService = new UserService(
                 userRepository,
                 passwordEncoder,
