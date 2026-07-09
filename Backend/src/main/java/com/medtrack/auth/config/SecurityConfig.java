@@ -1,6 +1,7 @@
 package com.medtrack.auth.config;
 
 import com.medtrack.auth.security.JwtAuthFilter;
+import com.medtrack.auth.security.RateLimitingFilter;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.auth.model.AccountStatus;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -23,6 +24,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import com.medtrack.auth.security.CustomAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.logout.LogoutFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -67,6 +69,7 @@ public class SecurityConfig {
      */
     private final JwtAuthFilter jwtAuthFilter;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+    private final RateLimitingFilter rateLimitingFilter;
 
     /**
      * Configures and registers a {@link PasswordEncoder} bean.
@@ -190,10 +193,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             
-            // 5. Register Custom JWT Filter
-            // Inject jwtAuthFilter BEFORE UsernamePasswordAuthenticationFilter.
-            // This ensures that the incoming request has its JWT token parsed and the SecurityContext
-            // populated with authentication details before standard password/session authentication checks.
+            .addFilterBefore(rateLimitingFilter, LogoutFilter.class)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             
             // 5b. Exception Handling for Unauthorized Requests
