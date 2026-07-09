@@ -1,8 +1,6 @@
 package com.medtrack.auth.config;
 
 import com.medtrack.auth.security.JwtAuthFilter;
-import com.medtrack.auth.security.CustomAuthenticationEntryPoint;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.auth.model.AccountStatus;
 import org.springframework.security.authentication.AuthenticationManager;
