@@ -1,4 +1,4 @@
-name: PR Size Labeler
+name: ECSoc26 Labeler
 on:
   pull_request_target:
     types: [opened]
@@ -14,21 +14,9 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: pullRequest } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number
-            });
-            const linesChanged = pullRequest.additions + pullRequest.deletions;
-            let label = 'ECSoC26-L3';
-            if (linesChanged <= 50) {
-              label = 'ECSoC26-L1';
-            } else if (linesChanged <= 250) {
-              label = 'ECSoC26-L2';
-            }
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              labels: [label, 'ECSoc26']
+              labels: ['ECSoc26']
             });
