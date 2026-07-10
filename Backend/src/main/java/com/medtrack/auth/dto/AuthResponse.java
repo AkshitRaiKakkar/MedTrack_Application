@@ -1,5 +1,6 @@
 package com.medtrack.auth.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,65 +9,45 @@ import lombok.NoArgsConstructor;
 /**
  * AuthResponse is a Data Transfer Object (DTO) that represents the response payload
  * returned to the client upon successful authentication (either login or registration).
- *
- * <p>This object conveys the user's basic profile details alongside the generated JSON Web Token (JWT)
- * and its lifetime, allowing the client application to manage session state and authorize subsequent requests.</p>
- *
- * <p>Annotations used:
- * <ul>
- *   <li>{@code @Data}: Lombok annotation that automatically generates boilerplate code including getters, setters, {@code equals()}, {@code hashCode()}, and a {@code toString()} method.</li>
- *   <li>{@code @Builder}: Lombok annotation implementing the Builder design pattern, enabling fluent object construction.</li>
- *   <li>{@code @NoArgsConstructor}: Lombok annotation that generates an empty (no-argument) constructor, required for JSON deserialization.</li>
- *   <li>{@code @AllArgsConstructor}: Lombok annotation that generates a constructor accepting arguments for all fields.</li>
- * </ul>
- * </p>
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Standard successful authentication response payload wrapping JWT access/refresh tokens and profile info")
 public class AuthResponse {
 
-    /**
-     * Unique database identifier of the authenticated user.
-     */
-    private Long id;
+    @Schema(description = "Operation status indicator", example = "true")
+    private boolean success;
 
-    /**
-     * The full name of the user.
-     */
-    private String name;
+    @Schema(description = "Contextual success description message", example = "Login successful")
+    private String message;
 
-    /**
-     * The unique username of the user.
-     */
-    private String username;
+    @Schema(description = "Detailed profile of the authenticated user")
+    private UserResponse user;
 
-    /**
-     * The registered email address of the user, which also serves as their login identifier.
-     */
-    private String email;
-
-    /**
-     * The security role assigned to the user (e.g., "ROLE_HOSPITAL", "ROLE_TECHNICIAN", "ROLE_SUPPLIER").
-     * This role dictates their authorization access level across backend APIs.
-     */
-    private String role;
-    
-    /**
-     * The generated JSON Web Token (JWT). The client must include this token in the "Authorization" header
-     * prefixed with "Bearer " to access protected APIs.
-     */
+    @Schema(description = "Signed JWT access token for verifying authorization headers on secure routes", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
     private String token;
 
-    /**
-     * Token expiration duration in milliseconds from the time of creation.
-     * Helpful for frontend applications to track session lifetime and automatically initiate logout.
-     */
+    // Flat compatibility fields for legacy frontend support
+    @Schema(description = "Database primary key ID of user (legacy flat response field)", example = "15")
+    private Long id;
+
+    @Schema(description = "Full name of the user (legacy flat response field)", example = "John Doe")
+    private String name;
+
+    @Schema(description = "Generated username of the user (legacy flat response field)", example = "john.doe")
+    private String username;
+
+    @Schema(description = "Primary email address of the user (legacy flat response field)", example = "john.doe@medtrack.com")
+    private String email;
+
+    @Schema(description = "User authorization role (legacy flat response field)", example = "HOSPITAL")
+    private String role;
+
+    @Schema(description = "Token expiration duration in milliseconds", example = "604800000")
     private Long expiresIn;
 
-    /**
-     * The database-backed refresh token used to obtain a new access token.
-     */
+    @Schema(description = "UUID string used as a rotation token to fetch fresh access tokens", example = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d")
     private String refreshToken;
 }
