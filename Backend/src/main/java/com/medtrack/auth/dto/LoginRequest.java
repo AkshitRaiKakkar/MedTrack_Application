@@ -2,6 +2,7 @@ package com.medtrack.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -27,24 +28,36 @@ import lombok.NoArgsConstructor;
 public class LoginRequest {
 
     /**
-     * User's registered email address used as the unique username/login identifier.
-     * Enforces constraints:
+     * User's registered email address used as the unique login identifier.
+     * Constraints:
      * <ul>
-      *   <li>{@code @NotBlank}: Email cannot be null, empty, or consist entirely of whitespace characters.</li>
-     *   <li>{@code @Email}: Validates that the input follows a standard, syntactically correct email format.</li>
+     *   <li>{@code @NotBlank}: Email cannot be null, empty, or whitespace.</li>
+     *   <li>{@code @Email}: Must be a syntactically valid email address.</li>
      * </ul>
      */
-    @NotBlank
-    @Email
+    @NotBlank(message = "Email is required")
+    @Email(message = "Email must be a valid email address")
     private String email;
 
     /**
-     * Raw text password supplied by the user.
-     * Enforces constraints:
+     * Raw plain-text password supplied by the user.
+     * Constraints:
      * <ul>
-     *   <li>{@code @NotBlank}: Password cannot be null, empty, or consist entirely of whitespace characters.</li>
+     *   <li>{@code @NotBlank}: Password cannot be null, empty, or whitespace.</li>
      * </ul>
      */
-    @NotBlank
+    @NotBlank(message = "Password is required")
     private String password;
+
+    /**
+     * The professional role being requested for login.
+     * Must be one of: HOSPITAL, TECHNICIAN, SUPPLIER (case-insensitive — normalized in service layer).
+     */
+    @NotBlank(message = "Role is required")
+    @Pattern(
+        regexp = "(?i)^(HOSPITAL|TECHNICIAN|SUPPLIER)$",
+        message = "Role must be one of: HOSPITAL, TECHNICIAN, SUPPLIER"
+    )
+    private String role;
 }
+

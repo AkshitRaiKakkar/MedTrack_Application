@@ -119,4 +119,19 @@ public class User {
     private int failedLoginAttempts = 0;
 
     private LocalDateTime accountLockedUntil;
+
+    @NotBlank
+    @Column(nullable = false)
+    private String phone;
+
+    @NotBlank
+    @Column(nullable = false)
+    private String organization;
+
+    @org.hibernate.annotations.CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    private LocalDateTime updatedAt;
 }
