@@ -36,6 +36,8 @@ public class DataInitializer implements CommandLineRunner {
                     .email("hospital@medtrack.com")
                     .password(passwordEncoder.encode("admin123"))
                     .role("hospital")
+                    .phone("+1 (555) 019-2834")
+                    .organization("St. Mary Clinic")
                     .accountStatus(AccountStatus.ACTIVE)
                     .build());
 
@@ -45,6 +47,8 @@ public class DataInitializer implements CommandLineRunner {
                     .email("tech@medtrack.com")
                     .password(passwordEncoder.encode("tech123"))
                     .role("Technician")
+                    .phone("+1 (555) 019-2835")
+                    .organization("Maintenance Hub")
                     .accountStatus(AccountStatus.ACTIVE)
                     .build());
 
@@ -54,6 +58,8 @@ public class DataInitializer implements CommandLineRunner {
                     .email("supplier@medtrack.com")
                     .password(passwordEncoder.encode("supply123"))
                     .role("Supplier")
+                    .phone("+1 (555) 019-2836")
+                    .organization("Global Suppliers Ltd")
                     .accountStatus(AccountStatus.ACTIVE)
                     .build());
         }

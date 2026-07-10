@@ -2,6 +2,7 @@ package com.medtrack.auth.controller;
 
 import com.medtrack.auth.dto.AuthResponse;
 import com.medtrack.auth.dto.LoginRequest;
+import com.medtrack.auth.dto.LoginResponse;
 import com.medtrack.auth.dto.RefreshTokenRequest;
 import com.medtrack.auth.dto.RegisterRequest;
 import com.medtrack.auth.dto.ForgotPasswordRequest;
@@ -11,6 +12,7 @@ import com.medtrack.auth.model.User;
 import com.medtrack.auth.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
@@ -35,17 +37,17 @@ public class AuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest registerRequest) {
-        return ResponseEntity.ok(userService.register(registerRequest));
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.register(registerRequest));
     }
 
     /**
-     * Authenticates an existing user using their email and password.
+     * Authenticates an existing user using their email, password, and role.
      *
      * @param loginRequest the {@link LoginRequest} DTO.
-     * @return a {@link ResponseEntity} wrapping the {@link AuthResponse}.
+     * @return a {@link ResponseEntity} wrapping the {@link LoginResponse}.
      */
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
         return ResponseEntity.ok(userService.login(loginRequest));
     }
 
