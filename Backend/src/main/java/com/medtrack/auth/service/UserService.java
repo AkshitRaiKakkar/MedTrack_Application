@@ -29,6 +29,8 @@ import com.medtrack.auth.dto.VerifyOtpRequest;
 import com.medtrack.auth.dto.ResetPasswordRequest;
 import com.medtrack.auth.model.PasswordResetToken;
 import com.medtrack.auth.repository.PasswordResetTokenRepository;
+import com.medtrack.auth.event.UserLoginEvent;
+import com.medtrack.auth.event.UserRegisteredEvent;
 
 /**
  * UserService encapsulates the business logic for user management, credential validation,
@@ -87,6 +89,7 @@ public class UserService {
     private final AuthenticationManager authenticationManager;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
+    private final KafkaEventPublisher kafkaEventPublisher;
 
     @Value("${security.account.lock-duration:30}")
     private int lockDurationMinutes;
@@ -150,6 +153,16 @@ public class UserService {
         
         // Persist the user record to the database
         User savedUser = userRepository.save(user);
+
+        // Publish UserRegisteredEvent
+        UserRegisteredEvent registeredEvent = UserRegisteredEvent.builder()
+                .userId(savedUser.getId())
+                .username(savedUser.getUsername())
+                .email(savedUser.getEmail())
+                .role(savedUser.getRole())
+                .timestamp(java.time.Instant.now().toString())
+                .build();
+        kafkaEventPublisher.publishUserRegistered(registeredEvent);
 
         // Map the persisted user to authentication response payload containing JWT token
         return mapToAuthResponse(savedUser, "Account created successfully");
@@ -221,6 +234,16 @@ public class UserService {
         user.setAccountLockedUntil(null);
         user.setAccountStatus(AccountStatus.ACTIVE);
         User savedUser = userRepository.save(user);
+
+        // Publish UserLoginEvent
+        UserLoginEvent loginEvent = UserLoginEvent.builder()
+                .userId(savedUser.getId())
+                .username(savedUser.getUsername())
+                .email(savedUser.getEmail())
+                .role(savedUser.getRole())
+                .loginTime(java.time.Instant.now().toString())
+                .build();
+        kafkaEventPublisher.publishUserLogin(loginEvent);
 
         // Generate response payload containing user info and a new JWT token
         return mapToAuthResponse(savedUser, "Login successful");
