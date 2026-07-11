@@ -27,6 +27,11 @@ jobs:
             let labelsToAdd = new Set(['ECSoC26']);
             const currentLabels = issue.labels ? issue.labels.map(l => l.name) : [];
 
+            console.log("=== Workflow Triggered ===");
+            console.log(`Trigger: ${context.eventName}`);
+            console.log(`Actor: ${context.actor}`);
+            console.log(`Labels before: ${currentLabels.join(', ')}`);
+
             // 1. Auto-assign creator
             try {
               await github.rest.issues.addAssignees({

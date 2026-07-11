@@ -17,6 +17,11 @@ jobs:
           script: |
             const pr = context.payload.pull_request;
             const labels = pr.labels ? pr.labels.map(l => l.name) : [];
+
+            console.log("=== Workflow Triggered ===");
+            console.log(`Trigger: ${context.eventName}`);
+            console.log(`Actor: ${context.actor}`);
+            console.log(`Labels before: ${labels.join(', ')}`);
             
             const difficulty = labels.find(l => ['ECSoC26-L1', 'ECSoC26-L2', 'ECSoC26-L3'].includes(l)) || 'Unknown';
             const bonusLabels = labels.filter(l => l.startsWith('good-'));

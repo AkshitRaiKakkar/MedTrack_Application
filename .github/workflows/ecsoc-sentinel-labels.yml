@@ -19,6 +19,10 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            console.log("=== Workflow Triggered ===");
+            console.log(`Trigger: ${context.eventName}`);
+            console.log(`Actor: ${context.actor}`);
+            
             const requiredLabels = [
               { name: 'ECSoC26', color: '1D76DB', description: 'ECSoC 2026 Initiative' },
               { name: 'ECSoC26-L1', color: '0E8A16', description: 'Difficulty Level 1 - Easy' },

@@ -28,6 +28,11 @@ jobs:
             const currentLabels = pr.labels ? pr.labels.map(l => l.name) : [];
             let labelsToAdd = new Set(['ECSoC26']);
 
+            console.log("=== Workflow Triggered ===");
+            console.log(`Trigger: ${context.eventName}`);
+            console.log(`Actor: ${context.actor}`);
+            console.log(`Labels before: ${currentLabels.join(', ')}`);
+
             // 1. Assign PR author
             try {
               await github.rest.issues.addAssignees({

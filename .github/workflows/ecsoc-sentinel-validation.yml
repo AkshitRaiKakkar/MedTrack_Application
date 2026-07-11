@@ -30,6 +30,11 @@ jobs:
             });
             const labels = labelsData.map(l => l.name);
 
+            console.log("=== Workflow Triggered ===");
+            console.log(`Trigger: ${context.eventName}`);
+            console.log(`Actor: ${context.actor}`);
+            console.log(`Labels before: ${labels.join(', ')}`);
+
             // 1. Admin Enforcer for protected labels
             const protectedLabels = ['ECSoC26-L1', 'ECSoC26-L2', 'ECSoC26-L3', 'good-pr', 'good-ui', 'good-backend', 'good-issue'];
             
