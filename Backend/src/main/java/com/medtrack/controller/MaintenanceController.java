@@ -20,7 +20,13 @@ public class MaintenanceController {
 
     @GetMapping
     public ResponseEntity<List<MaintenanceTask>> getAllTasks() {
-        return ResponseEntity.ok(maintenanceService.getAllTasks());
+        List<MaintenanceTask> tasks = maintenanceService.getAllTasks();
+
+        if (tasks.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        return ResponseEntity.ok(tasks);
     }
 
     @GetMapping("/{id}")

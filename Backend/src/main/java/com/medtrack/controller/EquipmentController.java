@@ -21,7 +21,13 @@ public class EquipmentController {
 
     @GetMapping
     public ResponseEntity<List<Equipment>> getAllEquipment() {
-        return ResponseEntity.ok(equipmentService.getAllEquipment());
+        List<Equipment> equipment = equipmentService.getAllEquipment();
+
+        if (equipment.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        return ResponseEntity.ok(equipment);
     }
 
     @GetMapping("/{id}")

@@ -20,7 +20,13 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<List<EquipmentOrder>> getAllOrders() {
-        return ResponseEntity.ok(orderService.getAllOrders());
+        List<EquipmentOrder> orders = orderService.getAllOrders();
+
+        if (orders.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        return ResponseEntity.ok(orders);
     }
 
     @GetMapping("/{id}")
