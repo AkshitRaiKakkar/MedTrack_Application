@@ -41,7 +41,7 @@ public class HospitalController {
             Hospital createdHospital = hospitalService.createHospitalProfile(hospital, userEmail);
             return new ResponseEntity<>(createdHospital, HttpStatus.CREATED);
         } catch (RuntimeException e) {
-            return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
+            return ResponseEntity.badRequest().build();
         }
     }
 }
