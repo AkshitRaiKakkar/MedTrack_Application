@@ -1,140 +1,219 @@
-import LoginForm from "../../components/auth/LoginForm";
+import { useState } from "react";
+import { Check, Hospital, Layers, Lock, Mail, Wrench } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import { loginUser } from "../../services/AuthService";
+import "./auth.css";
+
+const roles = [
+  {
+    title: "Hospital",
+    subtitle: "Manage Equipment",
+    icon: Hospital,
+    roleKey: "hospital",
+  },
+  {
+    title: "Technician",
+    subtitle: "Maintenance",
+    icon: Wrench,
+    roleKey: "technician",
+  },
+  {
+    title: "Supplier",
+    subtitle: "Medical Equipment Vendor",
+    icon: Layers,
+    roleKey: "supplier",
+  },
+];
 
 export default function LoginPage({ onNavigate }) {
+  const { login } = useAuth();
+  const [selectedRole, setSelectedRole] = useState("hospital");
+  const [email, setEmail] = useState("admin@medtrack.com");
+  const [password, setPassword] = useState("admin123");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const response = await loginUser({ email, password, role: selectedRole.toUpperCase() });
+
+      // Flatten the nested response shape into the format AuthContext expects
+      const userData = {
+        id: response.user.id,
+        name: response.user.name,
+        email: response.user.email,
+        phone: response.user.phone,
+        organization: response.user.organization,
+        // Store role as lowercase so AppRoutes page-key mapping works correctly
+        role: response.user.role.toLowerCase(),
+        token: response.token,
+      };
+
+      login(userData);
+
+      if (onNavigate) {
+        onNavigate(
+          userData.role === "hospital" ? "dashboard"
+            : userData.role === "technician" ? "tasks"
+            : "orders"
+        );
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      if (err.response) {
+        setError(err.response.data.message || "Invalid credentials.");
+      } else {
+        setError("Server not responding. Please try again.");
+      }
+    }
+    setLoading(false);
+  };
+
+  const handleRoleSelect = (roleKey) => {
+    setSelectedRole(roleKey);
+    if (roleKey === "hospital") {
+      setEmail("admin@medtrack.com");
+      setPassword("admin123");
+    } else if (roleKey === "technician") {
+      setEmail("tech@medtrack.com");
+      setPassword("tech123");
+    } else if (roleKey === "supplier") {
+      setEmail("supplier@medtrack.com");
+      setPassword("supplier123");
+    }
+  };
+
   return (
-    <div className="min-h-screen flex font-sans" style={{ fontFamily: "'Inter', 'Plus Jakarta Sans', sans-serif" }}>
+    <main className="auth-page auth-page-with-bg">
+      <div className="auth-bg" aria-hidden="true" style={{ backgroundImage: 'url("/medtrack-auth-bg.png")' }} />
+      <section className="auth-card">
+        <header className="auth-header">
+          <img src="/medtrack-logo.png" alt="MedTrack" className="auth-logo" />
+          <span className="platform-badge">Healthcare Equipment Platform</span>
+        </header>
 
-      {/* ── LEFT PANEL ─────────────────────────────────────────────── */}
-      <div
-        className="hidden lg:flex w-1/2 relative overflow-hidden flex-col justify-between"
-        style={{
-          background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 40%, #0e7490 100%)"
-        }}
-      >
-        {/* Decorative blobs */}
-        <div
-          className="absolute -top-20 -left-20 w-80 h-80 rounded-full opacity-20"
-          style={{ background: "radial-gradient(circle, #38bdf8, transparent 70%)" }}
-        />
-        <div
-          className="absolute bottom-10 right-[-60px] w-96 h-96 rounded-full opacity-15"
-          style={{ background: "radial-gradient(circle, #06b6d4, transparent 70%)" }}
-        />
-        <div
-          className="absolute top-1/2 left-1/3 w-48 h-48 rounded-full opacity-10"
-          style={{ background: "radial-gradient(circle, #7dd3fc, transparent 70%)" }}
-        />
-
-        {/* Brand */}
-        <div className="relative z-10 px-12 pt-12">
-          <div className="flex items-center gap-3 mb-4">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-lg"
-              style={{ background: "linear-gradient(135deg, #38bdf8, #0284c7)" }}
-            >
-              M
-            </div>
-            <span className="text-white font-bold text-xl tracking-wide">MedTrack</span>
-          </div>
-        </div>
-
-        {/* Hero copy */}
-        <div className="relative z-10 px-12 flex-1 flex flex-col justify-center">
-          <div
-            className="inline-block text-xs font-semibold px-3 py-1 rounded-full mb-5 w-fit"
-            style={{ background: "rgba(56,189,248,0.15)", color: "#7dd3fc", border: "1px solid rgba(56,189,248,0.3)" }}
-          >
-            Trusted by 200+ Hospitals
-          </div>
-
-          <h1 className="text-4xl font-extrabold text-white leading-tight mb-4">
-            The Smarter Way<br />
-            to Manage <span style={{ color: "#38bdf8" }}>Medical<br />Equipment</span>
+        <div className="auth-title">
+          <h1>
+            Sign into
+            <br />
+            Your <span>Workspace</span>
           </h1>
+        </div>
 
-          <p className="text-base mb-10" style={{ color: "#94a3b8" }}>
-            Track inventory, schedule maintenance &amp; coordinate
-            supplier orders — all in one powerful platform.
-          </p>
+        <div className="role-section">
+          <p className="section-label">Select Professional Role</p>
 
-          {/* Feature cards */}
-          <div className="space-y-3">
-            {[
-              { title: "Equipment Inventory", desc: "Real-time tracking across all departments" },
-              { title: "Maintenance Scheduling", desc: "Assign & monitor technician tasks" },
-              { title: "Supplier Orders", desc: "Streamlined procurement workflow" },
-            ].map(({ title, desc }) => (
-              <div
-                key={title}
-                className="flex items-center gap-4 px-4 py-3 rounded-2xl transition-transform duration-200 hover:-translate-y-0.5"
-                style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  backdropFilter: "blur(8px)"
-                }}
-              >
-                <div
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ background: "#38bdf8" }}
-                />
-                <div>
-                  <div className="text-white font-semibold text-sm">{title}</div>
-                  <div className="text-xs" style={{ color: "#64748b" }}>{desc}</div>
-                </div>
-              </div>
-            ))}
+          <div className="role-grid">
+            {roles.map((role) => {
+              const Icon = role.icon;
+              const isSelected = selectedRole === role.roleKey;
+
+              return (
+                <button
+                  key={role.title}
+                  type="button"
+                  onClick={() => handleRoleSelect(role.roleKey)}
+                  className={isSelected ? "role-card selected" : "role-card"}
+                >
+                  <span className="role-icon">
+                    <Icon size={18} />
+                  </span>
+
+                  {isSelected && (
+                    <span className="role-check">
+                      <Check size={12} />
+                    </span>
+                  )}
+
+                  <span className="role-title">{role.title}</span>
+                  <span className="role-subtitle">{role.subtitle}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Bottom stat bar */}
-        <div
-          className="relative z-10 mx-8 mb-10 px-6 py-4 rounded-2xl flex justify-between"
-          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
-        >
-          {[["200+", "Hospitals"], ["5K+", "Equipment"], ["99.9%", "Uptime"]].map(([num, label]) => (
-            <div key={label} className="text-center">
-              <div className="text-white font-bold text-lg" style={{ color: "#38bdf8" }}>{num}</div>
-              <div className="text-xs" style={{ color: "#64748b" }}>{label}</div>
+        {error && <div className="error-message">{error}</div>}
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label>
+            Hospital Email
+            <div className="input-box">
+              <Mail size={18} />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
-          ))}
+          </label>
+
+          <label>
+            Password
+            <div className="input-box">
+              <Lock size={18} />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+          </label>
+
+          <div className="form-row">
+            <label className="checkbox-label">
+              <input type="checkbox" defaultChecked />
+              Remember Me
+            </label>
+
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => onNavigate && onNavigate("forgot-password")}
+            >
+              Forgot Password?
+            </button>
+          </div>
+
+          <button type="submit" className="primary-button" disabled={loading}>
+            {loading ? "Signing In..." : "Sign In to Workspace"}
+          </button>
+        </form>
+
+        <div className="divider-row">
+          <span>OR</span>
         </div>
-      </div>
 
-      {/* ── RIGHT PANEL ────────────────────────────────────────────── */}
-      <div
-        className="w-full lg:w-1/2 flex items-center justify-center p-6 relative"
-        style={{ background: "#f8fafc" }}
-      >
-        {/* Subtle background blobs */}
-        <div
-          className="absolute top-0 right-0 w-72 h-72 rounded-full opacity-30 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #e0f2fe, transparent 70%)", transform: "translate(30%, -30%)" }}
-        />
-        <div
-          className="absolute bottom-0 left-0 w-60 h-60 rounded-full opacity-20 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #bae6fd, transparent 70%)", transform: "translate(-30%, 30%)" }}
-        />
+        <button type="button" className="google-button">
+          <svg className="h-5 w-5" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Continue with Google
+        </button>
 
-        <div className="w-full max-w-md relative z-10">
-          {/* Card */}
-          <div
-            className="rounded-3xl p-8 shadow-2xl"
-            style={{
-              background: "rgba(255,255,255,0.9)",
-              backdropFilter: "blur(20px)",
-              border: "1px solid rgba(255,255,255,0.7)",
-              boxShadow: "0 25px 50px rgba(14,116,144,0.12), 0 0 0 1px rgba(255,255,255,0.6)"
+        <footer className="auth-footer">
+          <span>Don’t have an account?</span>
+          <a
+            href="/register"
+            onClick={(e) => {
+              if (onNavigate) {
+                e.preventDefault();
+                onNavigate("register");
+              }
             }}
           >
-            <LoginForm onNavigate={onNavigate} />
-          </div>
-
-          <p className="text-center text-xs mt-5" style={{ color: "#94a3b8" }}>
-            Protected by HIPAA-compliant security standards
-          </p>
-        </div>
-      </div>
-
-    </div>
+            Register Node
+          </a>
+        </footer>
+      </section>
+    </main>
   );
 }

@@ -1,154 +1,419 @@
-import RegisterForm from "../../components/auth/RegisterForm";
+import { useState, useRef } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { registerUser } from "../../services/AuthService";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
+import {
+  Building2,
+  Check,
+  Eye,
+  EyeOff,
+  Hospital,
+  Layers,
+  Lock,
+  Mail,
+  Phone,
+  User,
+  Wrench,
+  ArrowRight,
+} from "lucide-react";
+
+// Register GSAP plugins
+gsap.registerPlugin(useGSAP);
+
+// Password strength calculation
+function getPasswordStrength(pw) {
+  if (!pw) return { score: 0, label: "", color: "" };
+  let score = 0;
+  if (pw.length >= 6) score++;
+  if (pw.length >= 10) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { score, label: "Weak", color: "#ef4444" };
+  if (score <= 3 || pw.length < 10) return { score, label: "Fair", color: "#f59e0b" };
+  return { score, label: "Strong", color: "#10b981" };
+}
+
+const roles = [
+  {
+    title: "Hospital",
+    subtitle: "Manage Equipment",
+    icon: Hospital,
+    orgLabel: "Hospital Name",
+    orgPlaceholder: "St. Mary Clinic",
+  },
+  {
+    title: "Technician",
+    subtitle: "Maintenance",
+    icon: Wrench,
+    orgLabel: "Organization",
+    orgPlaceholder: "MedCare Services",
+  },
+  {
+    title: "Supplier",
+    subtitle: "Medical Equipment Vendor",
+    icon: Layers,
+    orgLabel: "Company Name",
+    orgPlaceholder: "BioMed Supplies Inc.",
+  },
+];
 
 export default function RegisterPage({ onNavigate }) {
+  const { login } = useAuth();
+  const [selectedRole, setSelectedRole] = useState("Hospital");
+  const [fullName, setFullName] = useState("");
+  const [hospitalName, setHospitalName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
+
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const passwordStrength = getPasswordStrength(password);
+  const passwordMismatch = confirmPassword.length > 0 && confirmPassword !== password;
+
+  const containerRef = useRef(null);
+
+  useGSAP(() => {
+    // Hide components initially to prevent flash of unstyled content
+    gsap.set(".auth-card", { opacity: 0, y: 40 });
+    gsap.set(".auth-header, .auth-title, .role-section, .auth-form, .auth-footer", { opacity: 0, y: 20 });
+
+    const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+    tl.to(".auth-card", {
+      opacity: 1,
+      y: 0,
+      duration: 0.8,
+    })
+    .to(".auth-header, .auth-title, .role-section, .auth-form, .auth-footer", {
+      opacity: 1,
+      y: 0,
+      duration: 0.6,
+      stagger: 0.1,
+    }, "-=0.4");
+  }, { scope: containerRef });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (!agreeTerms) {
+      setError("You must agree to the terms and privacy policy.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const user = await registerUser({
+        name: fullName,
+        organization: hospitalName,
+        email: email,
+        phone: phone,
+        password: password,
+        confirmPassword: confirmPassword,
+        role: selectedRole.toUpperCase(),
+      });
+      login(user);
+      onNavigate("login");
+    } catch (err) {
+      console.error("Registration error:", err);
+      if (err.response && err.response.data) {
+        setError(err.response.data.message || "Registration failed.");
+      } else {
+        setError("Server not responding. Please try again.");
+      }
+    }
+    setLoading(false);
+  };
+
   return (
-    <div className="min-h-screen flex font-sans" style={{ fontFamily: "'Inter', 'Plus Jakarta Sans', sans-serif" }}>
+    <main className="auth-page auth-page-with-bg" ref={containerRef}>
+      <div className="auth-bg" style={{ backgroundImage: 'url("/medtrack-auth-bg.png")' }} aria-hidden="true" />
+      <section className="auth-card">
+        <header className="auth-header">
+          <img src="/medtrack-logo.png" alt="MedTrack" className="auth-logo" />
+          <span className="platform-badge">Healthcare Equipment Platform</span>
+        </header>
 
-      {/* ── LEFT PANEL ─────────────────────────────────────────────── */}
-      <div
-        className="hidden lg:flex w-1/2 relative overflow-hidden flex-col justify-between"
-        style={{
-          background: "linear-gradient(135deg, #064e3b 0%, #065f46 40%, #0f766e 100%)"
-        }}
-      >
-        {/* Decorative blobs */}
-        <div
-          className="absolute -top-24 -right-16 w-96 h-96 rounded-full opacity-20"
-          style={{ background: "radial-gradient(circle, #34d399, transparent 70%)" }}
-        />
-        <div
-          className="absolute bottom-0 left-[-60px] w-80 h-80 rounded-full opacity-15"
-          style={{ background: "radial-gradient(circle, #6ee7b7, transparent 70%)" }}
-        />
-        <div
-          className="absolute top-1/3 right-1/4 w-56 h-56 rounded-full opacity-10"
-          style={{ background: "radial-gradient(circle, #a7f3d0, transparent 70%)" }}
-        />
-
-        {/* Brand */}
-        <div className="relative z-10 px-12 pt-12">
-          <div className="flex items-center gap-3 mb-4">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-lg"
-              style={{ background: "linear-gradient(135deg, #34d399, #059669)" }}
-            >
-              M
-            </div>
-            <span className="text-white font-bold text-xl tracking-wide">MedTrack</span>
-          </div>
-        </div>
-
-        {/* Hero copy */}
-        <div className="relative z-10 px-12 flex-1 flex flex-col justify-center">
-          <div
-            className="inline-block text-xs font-semibold px-3 py-1 rounded-full mb-5 w-fit"
-            style={{ background: "rgba(52,211,153,0.15)", color: "#6ee7b7", border: "1px solid rgba(52,211,153,0.3)" }}
-          >
-            Join 200+ Healthcare Organizations
-          </div>
-
-          <h1 className="text-4xl font-extrabold text-white leading-tight mb-4">
-            Start Managing<br />
-            Smarter with <span style={{ color: "#34d399" }}>MedTrack</span>
+        <div className="auth-title">
+          <h1>
+            Create Your
+            <br />
+            <span>Account</span>
           </h1>
+        </div>
 
-          <p className="text-base mb-10" style={{ color: "#6ee7b7", opacity: 0.8 }}>
-            Set up your hospital, technician, or supplier account in minutes
-            and take control of your medical equipment lifecycle.
-          </p>
+        <div className="role-section">
+          <p className="section-label">Select Professional Role</p>
 
-          {/* Step cards */}
-          <div className="space-y-3">
-            {[
-              { step: "01", title: "Create Your Account", desc: "Fill in your details and choose your role" },
-              { step: "02", title: "Set Up Your Profile", desc: "Configure your organization settings" },
-              { step: "03", title: "Start Tracking", desc: "Monitor equipment, tasks & orders instantly" },
-            ].map(({ step, title, desc }) => (
-              <div
-                key={step}
-                className="flex items-center gap-4 px-4 py-3 rounded-2xl transition-transform duration-200 hover:-translate-y-0.5"
-                style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  backdropFilter: "blur(8px)"
-                }}
-              >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm"
-                  style={{ background: "rgba(52,211,153,0.2)", color: "#34d399" }}
+          <div className="role-grid">
+            {roles.map((role) => {
+              const Icon = role.icon;
+              const isSelected = selectedRole === role.title;
+
+              return (
+                <button
+                  key={role.title}
+                  type="button"
+                  className={isSelected ? "role-card selected" : "role-card"}
+                  onClick={() => setSelectedRole(role.title)}
                 >
-                  {step}
-                </div>
-                <div>
-                  <div className="text-white font-semibold text-sm">{title}</div>
-                  <div className="text-xs" style={{ color: "#6ee7b7", opacity: 0.7 }}>{desc}</div>
-                </div>
-              </div>
-            ))}
+                  <span className="role-icon">
+                    <Icon size={18} />
+                  </span>
+
+                  {isSelected && (
+                    <span className="role-check">
+                      <Check size={12} />
+                    </span>
+                  )}
+
+                  <span className="role-title">{role.title}</span>
+                  <span className="role-subtitle">{role.subtitle}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Bottom testimonial */}
-        <div
-          className="relative z-10 mx-8 mb-10 px-6 py-5 rounded-2xl"
-          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
-        >
-          <p className="text-sm italic mb-3" style={{ color: "#a7f3d0" }}>
-            "MedTrack transformed how we handle equipment — from chaos to complete clarity."
-          </p>
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-              style={{ background: "linear-gradient(135deg, #34d399, #059669)" }}
-            >
-              DR
-            </div>
-            <div>
-              <div className="text-white text-xs font-semibold">Dr. Rajan</div>
-              <div className="text-xs" style={{ color: "#6ee7b7", opacity: 0.7 }}>City General Hospital</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── RIGHT PANEL ────────────────────────────────────────────── */}
-      <div
-        className="w-full lg:w-1/2 flex items-center justify-center p-6 relative overflow-hidden"
-        style={{ background: "#f0fdf4" }}
-      >
-        {/* Subtle background blobs */}
-        <div
-          className="absolute top-0 right-0 w-72 h-72 rounded-full opacity-30 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #bbf7d0, transparent 70%)", transform: "translate(30%, -30%)" }}
-        />
-        <div
-          className="absolute bottom-0 left-0 w-60 h-60 rounded-full opacity-20 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #a7f3d0, transparent 70%)", transform: "translate(-30%, 30%)" }}
-        />
-
-        <div className="w-full max-w-md relative z-10">
-          {/* Card */}
+        {error && (
           <div
-            className="rounded-3xl p-8 shadow-2xl"
+            className="error-message"
             style={{
-              background: "rgba(255,255,255,0.92)",
-              backdropFilter: "blur(20px)",
-              border: "1px solid rgba(255,255,255,0.7)",
-              boxShadow: "0 25px 50px rgba(6,95,70,0.12), 0 0 0 1px rgba(255,255,255,0.6)"
+              padding: "12px 16px",
+              borderRadius: "14px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#dc2626",
+              fontSize: "13px",
+              marginBottom: "18px",
+              fontWeight: "600"
             }}
           >
-            <RegisterForm onNavigate={onNavigate} />
+            {error}
+          </div>
+        )}
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <div className="two-column">
+            <label>
+              Full Name
+              <div className="input-box">
+                <User size={18} />
+                <input
+                  type="text"
+                  placeholder="Your Name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                />
+              </div>
+            </label>
+
+            <label>
+              {roles.find((r) => r.title === selectedRole)?.orgLabel ?? "Organization"}
+              <div className="input-box">
+                <Building2 size={18} />
+                <input
+                  type="text"
+                  placeholder={roles.find((r) => r.title === selectedRole)?.orgPlaceholder ?? "Organization"}
+                  value={hospitalName}
+                  onChange={(e) => setHospitalName(e.target.value)}
+                  required
+                />
+              </div>
+            </label>
           </div>
 
-          <p className="text-center text-xs mt-5" style={{ color: "#6b7280" }}>
-            By creating an account, you agree to our{" "}
-            <span className="underline cursor-pointer" style={{ color: "#059669" }}>Terms of Service</span>{" "}
-            &amp;{" "}
-            <span className="underline cursor-pointer" style={{ color: "#059669" }}>Privacy Policy</span>
-          </p>
-        </div>
-      </div>
+          <div className="two-column">
+            <label>
+              Enterprise Email
+              <div className="input-box">
+                <Mail size={18} />
+                <input
+                  type="email"
+                  placeholder="carter@stmary.org"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+            </label>
 
-    </div>
+            <label>
+              Phone
+              <div className="input-box">
+                <Phone size={18} />
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 019-2834"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                />
+              </div>
+            </label>
+          </div>
+
+          <div className="two-column">
+            <label>
+              Password
+              <div className="input-box">
+                <Lock size={18} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  aria-describedby={password ? "password-strength" : undefined}
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {/* Password strength bar */}
+              {password && (
+                <div id="password-strength" className="password-strength">
+                  <div className="strength-bars">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div
+                        key={i}
+                        className="strength-bar"
+                        style={{
+                          background:
+                            i <= passwordStrength.score
+                              ? passwordStrength.color
+                              : "#e2e8f0",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span className="strength-label" style={{ color: passwordStrength.score <= 1 ? "#b91c1c" : passwordStrength.score <= 3 || password.length < 10 ? "#b45309" : "#047857" }}>
+                    {passwordStrength.label}
+                  </span>
+                </div>
+              )}
+            </label>
+
+            <label>
+              Confirm Password
+              <div className="input-box">
+                <Lock size={18} />
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  aria-invalid={passwordMismatch}
+                  aria-describedby={confirmPassword ? "confirm-password-msg" : undefined}
+                  style={
+                    passwordMismatch
+                      ? { borderColor: "#fca5a5" }
+                      : confirmPassword && !passwordMismatch
+                      ? { borderColor: "#86efac" }
+                      : {}
+                  }
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {passwordMismatch && (
+                <span id="confirm-password-msg" className="field-error" role="alert">
+                  Passwords don't match
+                </span>
+              )}
+              {confirmPassword && !passwordMismatch && (
+                <span id="confirm-password-msg" className="field-success" role="status">
+                  Passwords match
+                </span>
+              )}
+            </label>
+          </div>
+
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={agreeTerms}
+              onChange={(e) => setAgreeTerms(e.target.checked)}
+              required
+            />
+            <span>
+              I agree to the{" "}
+              <span
+                style={{
+                  color: "#316bff",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  fontWeight: "bold"
+                }}
+              >
+                Terms &amp; Privacy Policy
+              </span>{" "}
+              statements for compliance.
+            </span>
+          </label>
+
+          <button type="submit" className="primary-button" disabled={loading}>
+            {loading ? (
+              "Creating Account..."
+            ) : (
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+              >
+                Create Account <ArrowRight size={16} />
+              </span>
+            )}
+          </button>
+        </form>
+
+        <footer className="auth-footer">
+          <span>Already have an account?</span>
+          <a
+            href="/login"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate("login");
+            }}
+          >
+            Sign In
+          </a>
+        </footer>
+      </section>
+    </main>
   );
 }

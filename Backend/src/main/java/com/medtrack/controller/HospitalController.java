@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +23,7 @@ public class HospitalController {
      * Create a hospital profile linked to the authenticated user.
      */
     @PostMapping("/create")
+    @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<Hospital> createHospitalProfile(@Valid @RequestBody Hospital hospital) {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -29,6 +31,11 @@ public class HospitalController {
 
         Hospital createdHospital = hospitalService.createHospitalProfile(hospital, userEmail);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdHospital);
+        try {
+            Hospital createdHospital = hospitalService.createHospitalProfile(hospital, userEmail);
+            return new ResponseEntity<>(createdHospital, HttpStatus.CREATED);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

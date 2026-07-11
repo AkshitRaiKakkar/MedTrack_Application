@@ -3,7 +3,8 @@ package com.medtrack.controller;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.service.OrderService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -39,6 +40,19 @@ public class OrderController {
     public ResponseEntity<EquipmentOrder> placeOrder(@RequestBody EquipmentOrder order) {
         EquipmentOrder createdOrder = orderService.placeOrder(order);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdOrder);
+    }
+    @GetMapping("/{id}/purchase-order.pdf")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<byte[]> downloadPurchaseOrder(@PathVariable Long id) {
+        EquipmentOrder order = orderService.getOrderById(id);
+        byte[] pdf = orderService.generatePurchaseOrderPdf(id);
+        String orderCode = order.getOrderCode() == null ? String.valueOf(id) : order.getOrderCode();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=purchase-order-" + orderCode + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     @PutMapping("/{id}/status")
