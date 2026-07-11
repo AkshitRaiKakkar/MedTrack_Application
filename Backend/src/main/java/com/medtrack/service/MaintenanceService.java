@@ -4,6 +4,7 @@ import com.medtrack.model.MaintenanceTask;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.medtrack.exception.ResourceNotFoundException;
 
 import java.util.List;
 
@@ -23,7 +24,7 @@ public class MaintenanceService {
 
     public MaintenanceTask getTaskById(Long id) {
         return taskRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Maintenance task not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found with id: " + id));
     }
 
     public MaintenanceTask scheduleTask(MaintenanceTask task) {
@@ -40,7 +41,7 @@ public class MaintenanceService {
     public MaintenanceTask updateTask(Long id, MaintenanceTask taskDetails) {
         try {
             MaintenanceTask task = taskRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Task not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
 
             task.setStatus(taskDetails.getStatus());
             task.setNotes(taskDetails.getNotes());
@@ -54,10 +55,11 @@ public class MaintenanceService {
     }
 
     public void deleteTask(Long id) {
-        try {
-            taskRepository.deleteById(id);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to delete maintenance task", e);
-        }
+        MaintenanceTask task = taskRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Maintenance task not found with id: " + id));
+
+        taskRepository.delete(task);
+    }
     }
 }

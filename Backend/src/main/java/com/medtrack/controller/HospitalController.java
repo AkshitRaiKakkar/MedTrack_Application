@@ -2,9 +2,11 @@ package com.medtrack.controller;
 
 import com.medtrack.model.Hospital;
 import com.medtrack.service.HospitalService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -23,11 +25,14 @@ public class HospitalController {
 
     /**
      * Create a hospital profile linked to the authenticated user.
+     *
      * @param hospital the hospital details
      * @return the created hospital profile
      */
     @PostMapping("/create")
-    public ResponseEntity<Hospital> createHospitalProfile(@RequestBody Hospital hospital) {
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Hospital> createHospitalProfile(@Valid @RequestBody Hospital hospital) {
+
         // Get the authenticated user's email from the security context
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String userEmail = authentication.getName(); // JWT filter sets username to email
@@ -36,7 +41,7 @@ public class HospitalController {
             Hospital createdHospital = hospitalService.createHospitalProfile(hospital, userEmail);
             return new ResponseEntity<>(createdHospital, HttpStatus.CREATED);
         } catch (RuntimeException e) {
-            return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
+            return ResponseEntity.badRequest().build();
         }
     }
 }
