@@ -12,6 +12,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * REST controller for managing equipment orders.
+ * Provides endpoints to create, retrieve, update,
+ * download purchase orders, and delete orders.
+ */
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
@@ -20,6 +25,12 @@ public class OrderController {
 
     private final OrderService orderService;
 
+    /**
+     * Retrieves all equipment orders.
+     *
+     * @return a list of equipment orders if available,
+     *         or HTTP 204 No Content when no orders exist
+     */
     @GetMapping
     public ResponseEntity<List<EquipmentOrder>> getAllOrders() {
         List<EquipmentOrder> orders = orderService.getAllOrders();
@@ -31,11 +42,24 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
 
+    /**
+     * Retrieves an equipment order by its unique identifier.
+     *
+     * @param id the order identifier
+     * @return the requested equipment order
+     */
     @GetMapping("/{id}")
     public ResponseEntity<EquipmentOrder> getOrderById(@PathVariable Long id) {
         return ResponseEntity.ok(orderService.getOrderById(id));
     }
 
+    /**
+     * Creates a new equipment order.
+     * Accessible only to users with the HOSPITAL role.
+     *
+     * @param order the equipment order to create
+     * @return the newly created equipment order with HTTP 201 Created
+     */
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<EquipmentOrder> placeOrder(@RequestBody EquipmentOrder order) {
@@ -43,6 +67,13 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(createdOrder);
     }
 
+    /**
+     * Downloads the purchase order as a PDF document.
+     * Accessible only to users with the HOSPITAL role.
+     *
+     * @param id the order identifier
+     * @return a PDF file containing the purchase order
+     */
     @GetMapping("/{id}/purchase-order.pdf")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<byte[]> downloadPurchaseOrder(@PathVariable Long id) {
@@ -57,6 +88,15 @@ public class OrderController {
                 .body(pdf);
     }
 
+    /**
+     * Updates the status of an existing equipment order.
+     * Accessible only to users with the SUPPLIER role.
+     *
+     * @param id the order identifier
+     * @param status the updated order status
+     * @param notes optional supplier notes related to the status update
+     * @return the updated equipment order
+     */
     @PutMapping("/{id}/status")
     @PreAuthorize("hasRole('SUPPLIER')")
     public ResponseEntity<EquipmentOrder> updateStatus(
@@ -67,6 +107,13 @@ public class OrderController {
         return ResponseEntity.ok(orderService.updateOrderStatus(id, status, notes));
     }
 
+    /**
+     * Deletes an equipment order by its identifier.
+     * Accessible only to users with the HOSPITAL role.
+     *
+     * @param id the order identifier
+     * @return HTTP 204 No Content when the order is successfully deleted
+     */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<Void> deleteOrder(@PathVariable Long id) {
