@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * Controller exposing REST endpoints for managing equipment maintenance workflows.
+ * Mapped under "/api/maintenance" to schedule, track, and update maintenance requests.
+ */
 @RestController
 @RequestMapping("/api/maintenance")
 @RequiredArgsConstructor
@@ -18,6 +22,9 @@ public class MaintenanceController {
 
     private final MaintenanceService maintenanceService;
 
+    /**
+     * Retrieves a list of all maintenance tasks registered in the platform.
+     */
     @GetMapping
     public ResponseEntity<List<MaintenanceTask>> getAllTasks() {
         List<MaintenanceTask> tasks = maintenanceService.getAllTasks();
@@ -29,11 +36,18 @@ public class MaintenanceController {
         return ResponseEntity.ok(tasks);
     }
 
+    /**
+     * Resolves a single maintenance task by its unique database identifier.
+     */
     @GetMapping("/{id}")
     public ResponseEntity<MaintenanceTask> getTaskById(@PathVariable Long id) {
         return ResponseEntity.ok(maintenanceService.getTaskById(id));
     }
 
+    /**
+     * Schedules a new maintenance task for a piece of equipment.
+     * Restricted to authenticated users holding the 'HOSPITAL' role authority.
+     */
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<MaintenanceTask> scheduleTask(@RequestBody MaintenanceTask task) {
@@ -41,6 +55,10 @@ public class MaintenanceController {
         return ResponseEntity.status(HttpStatus.CREATED).body(createdTask);
     }
 
+    /**
+     * Updates an existing maintenance task's status or details.
+     * Restricted to authenticated users holding the 'TECHNICIAN' role authority.
+     */
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('TECHNICIAN')")
     public ResponseEntity<MaintenanceTask> updateTask(@PathVariable Long id,
@@ -48,6 +66,10 @@ public class MaintenanceController {
         return ResponseEntity.ok(maintenanceService.updateTask(id, task));
     }
 
+    /**
+     * Removes a scheduled maintenance task from the database.
+     * Restricted to authenticated users holding the 'HOSPITAL' role authority.
+     */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<Void> deleteTask(@PathVariable Long id) {
