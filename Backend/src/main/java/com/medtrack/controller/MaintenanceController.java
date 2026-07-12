@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,8 +27,10 @@ public class MaintenanceController {
      * Retrieves a list of all maintenance tasks registered in the platform.
      */
     @GetMapping
-    public ResponseEntity<List<MaintenanceTask>> getAllTasks() {
-        List<MaintenanceTask> tasks = maintenanceService.getAllTasks();
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<List<MaintenanceTask>> getAllTasks(Authentication authentication) {
+        // Forward the trusted identity so the service can enforce record ownership.
+        List<MaintenanceTask> tasks = maintenanceService.getAllTasks(authentication);
 
         if (tasks.isEmpty()) {
             return ResponseEntity.noContent().build();
@@ -40,8 +43,9 @@ public class MaintenanceController {
      * Resolves a single maintenance task by its unique database identifier.
      */
     @GetMapping("/{id}")
-    public ResponseEntity<MaintenanceTask> getTaskById(@PathVariable Long id) {
-        return ResponseEntity.ok(maintenanceService.getTaskById(id));
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<MaintenanceTask> getTaskById(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(maintenanceService.getTaskById(id, authentication));
     }
 
     /**
@@ -50,8 +54,9 @@ public class MaintenanceController {
      */
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<MaintenanceTask> scheduleTask(@RequestBody MaintenanceTask task) {
-        MaintenanceTask createdTask = maintenanceService.scheduleTask(task);
+    public ResponseEntity<MaintenanceTask> scheduleTask(@RequestBody MaintenanceTask task,
+                                                        Authentication authentication) {
+        MaintenanceTask createdTask = maintenanceService.scheduleTask(task, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdTask);
     }
 
@@ -62,8 +67,9 @@ public class MaintenanceController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('TECHNICIAN')")
     public ResponseEntity<MaintenanceTask> updateTask(@PathVariable Long id,
-                                                      @RequestBody MaintenanceTask task) {
-        return ResponseEntity.ok(maintenanceService.updateTask(id, task));
+                                                      @RequestBody MaintenanceTask task,
+                                                      Authentication authentication) {
+        return ResponseEntity.ok(maintenanceService.updateTask(id, task, authentication));
     }
 
     /**
@@ -72,8 +78,8 @@ public class MaintenanceController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Void> deleteTask(@PathVariable Long id) {
-        maintenanceService.deleteTask(id);
+    public ResponseEntity<Void> deleteTask(@PathVariable Long id, Authentication authentication) {
+        maintenanceService.deleteTask(id, authentication);
         return ResponseEntity.noContent().build();
     }
 }
