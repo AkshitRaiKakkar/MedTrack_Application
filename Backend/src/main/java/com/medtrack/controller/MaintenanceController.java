@@ -11,8 +11,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * Controller exposing REST endpoints for managing equipment maintenance workflows.
- * Mapped under "/api/maintenance" to schedule, track, and update maintenance requests.
+ * REST controller for managing equipment maintenance tasks.
+ * Provides endpoints to create, retrieve, update, and delete
+ * maintenance records.
  */
 @RestController
 @RequestMapping("/api/maintenance")
@@ -23,7 +24,10 @@ public class MaintenanceController {
     private final MaintenanceService maintenanceService;
 
     /**
-     * Retrieves a list of all maintenance tasks registered in the platform.
+     * Retrieves all maintenance tasks.
+     *
+     * @return a list of maintenance tasks if available,
+     *         or HTTP 204 No Content when no tasks exist
      */
     @GetMapping
     public ResponseEntity<List<MaintenanceTask>> getAllTasks() {
@@ -37,7 +41,10 @@ public class MaintenanceController {
     }
 
     /**
-     * Resolves a single maintenance task by its unique database identifier.
+     * Retrieves a maintenance task by its unique identifier.
+     *
+     * @param id the maintenance task identifier
+     * @return the requested maintenance task
      */
     @GetMapping("/{id}")
     public ResponseEntity<MaintenanceTask> getTaskById(@PathVariable Long id) {
@@ -45,8 +52,11 @@ public class MaintenanceController {
     }
 
     /**
-     * Schedules a new maintenance task for a piece of equipment.
-     * Restricted to authenticated users holding the 'HOSPITAL' role authority.
+     * Schedules a new maintenance task.
+     * Accessible only to users with the HOSPITAL role.
+     *
+     * @param task the maintenance task to be created
+     * @return the newly created maintenance task with HTTP 201 Created
      */
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
@@ -56,8 +66,12 @@ public class MaintenanceController {
     }
 
     /**
-     * Updates an existing maintenance task's status or details.
-     * Restricted to authenticated users holding the 'TECHNICIAN' role authority.
+     * Updates an existing maintenance task.
+     * Accessible only to users with the TECHNICIAN role.
+     *
+     * @param id the maintenance task identifier
+     * @param task the updated maintenance task details
+     * @return the updated maintenance task
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('TECHNICIAN')")
@@ -67,8 +81,11 @@ public class MaintenanceController {
     }
 
     /**
-     * Removes a scheduled maintenance task from the database.
-     * Restricted to authenticated users holding the 'HOSPITAL' role authority.
+     * Deletes a maintenance task by its identifier.
+     * Accessible only to users with the HOSPITAL role.
+     *
+     * @param id the maintenance task identifier
+     * @return HTTP 204 No Content when the task is successfully deleted
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")
