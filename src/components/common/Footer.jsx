@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function Footer() {
+export default function Footer({ onNavigate }) {
   return (
     <footer className="bg-slate-50 dark:bg-slate-900/40 text-secondary mt-auto border-t border-subtle">
       <div className="max-w-[1400px] mx-auto px-6 lg:px-12 pt-16 pb-8">
@@ -23,13 +23,13 @@ export default function Footer() {
             {/* Column 1: MedTrack */}
             <div>
               <h4 className="text-primary font-bold text-[15px] mb-5">MedTrack</h4>
-              <ul className="space-y-4 text-[14px] font-medium text-secondary">
-                <li><a href="#" className="hover:text-primary transition-colors">About / Press</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Awards</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Research</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Contact Us</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Guides</a></li>
+              <ul className="space-y-4 text-[14px] font-medium text-secondary flex flex-col items-start">
+                <li><button onClick={() => onNavigate && onNavigate("about")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">About / Press</button></li>
+                <li><button onClick={() => onNavigate && onNavigate("awards")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Awards</button></li>
+                <li><button onClick={() => onNavigate && onNavigate("blog")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Blog</button></li>
+                <li><button onClick={() => onNavigate && onNavigate("research")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Research</button></li>
+                <li><button onClick={() => onNavigate && onNavigate("contact")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Contact Us</button></li>
+                <li><a href="#" onClick={(e) => e.preventDefault()} className="hover:text-primary transition-colors">Guides</a></li>
               </ul>
             </div>
 
