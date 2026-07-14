@@ -62,7 +62,7 @@ export default function Footer({ onNavigate }) {
               <h4 className="text-primary font-bold text-[15px] mb-5">Work With Us</h4>
               <ul className="space-y-4 text-[14px] font-medium text-secondary">
                 <li><a href="#" className="hover:text-primary transition-colors">Advertisers</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Careers</a></li>
+                <li><button onClick={() => onNavigate && onNavigate('careers')} className="hover:text-primary transition-colors">Careers</button></li>
               </ul>
             </div>
 
