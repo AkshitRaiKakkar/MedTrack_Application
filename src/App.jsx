@@ -31,6 +31,13 @@ const getRouteStateFromPath = () => {
     };
   }
 
+  if (path.startsWith("apply/")) {
+    return {
+      page: "apply",
+      data: decodeURIComponent(path.slice("apply/".length)),
+    };
+  }
+
   const routeMap = {
     blog: "blog",
     register: "register",
@@ -52,6 +59,7 @@ const getRouteStateFromPath = () => {
     orderstatus: "orderstatus",
     about: "about",
     contact: "contact",
+    careers: "careers",
   };
 
   return {
@@ -78,6 +86,8 @@ function AppContent() {
         ? `${basePath}/blog/${encodeURIComponent(data)}`
         : page === "edit-equipment" && data
         ? `${basePath}/edit-equipment/${encodeURIComponent(data)}`
+        : page === "apply" && data
+        ? `${basePath}/apply/${encodeURIComponent(data)}`
         : `${basePath}/${page}`;
 
     window.history.pushState({}, "", nextPath);
@@ -101,6 +111,7 @@ function AppContent() {
     "forgot-password",
     "verify-otp",
     "reset-password",
+    "apply"
   ];
   const isAuthPage = noLayoutPages.includes(currentPage);
 
@@ -128,7 +139,7 @@ function AppContent() {
           )}
         </main>
 
-        {!isAuthPage && <Footer />}
+        {!isAuthPage && <Footer onNavigate={handleNavigate} />}
       </div>
     </ReactLenis>
   );

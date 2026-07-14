@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function Footer() {
+export default function Footer({ onNavigate }) {
   return (
     <footer className="bg-slate-50 dark:bg-slate-900/40 text-secondary mt-auto border-t border-subtle">
       <div className="max-w-[1400px] mx-auto px-6 lg:px-12 pt-16 pb-8">
@@ -62,7 +62,7 @@ export default function Footer() {
               <h4 className="text-primary font-bold text-[15px] mb-5">Work With Us</h4>
               <ul className="space-y-4 text-[14px] font-medium text-secondary">
                 <li><a href="#" className="hover:text-primary transition-colors">Advertisers</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Careers</a></li>
+                <li><button onClick={() => onNavigate && onNavigate('careers')} className="hover:text-primary transition-colors">Careers</button></li>
               </ul>
             </div>
 
