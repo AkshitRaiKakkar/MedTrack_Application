@@ -9,6 +9,7 @@ import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
 import AwardsPage from "./pages/AwardsPage";
 import ResearchPage from "./pages/ResearchPage";
+import GuidesPage from "./pages/GuidesPage";
 import { ThemeProvider } from "./context/ThemeContext";
 
 const getRouteStateFromPath = () => {
@@ -48,6 +49,7 @@ const getRouteStateFromPath = () => {
     contact: "contact",
     awards: "awards",
     research: "research",
+    guides: "guides",
   };
 
   return {
@@ -117,6 +119,8 @@ function AppContent() {
             <AwardsPage />
           ) : currentPage === "research" ? (
             <ResearchPage />
+          ) : currentPage === "guides" ? (
+            <GuidesPage />
           ) : (
             <AppRoutes
               currentPage={currentPage}
