@@ -25,6 +25,11 @@ public class MaintenanceTask {
     private String equipmentId;
     private String equipment;
     private String hospital;
+
+    // Stable ownership key used by the service to isolate one hospital's tasks from another.
+    @Column(name = "hospital_id")
+    private Long hospitalId;
+
     private String maintenanceType;
     private LocalDate deadline;
     private String assignedTechnician;
@@ -42,6 +47,11 @@ public class MaintenanceTask {
     private Double hoursWorked;
 
     private String partsUsed;
+
+    @Column(columnDefinition = "TEXT")
+    private String signature;
+
+    private Integer recurrencePeriodDays;
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
