@@ -7,10 +7,8 @@ import Footer from "./components/common/Footer";
 import AppRoutes from "./routes/AppRoutes";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import HelpPage from "./pages/HelpPage";
 import AwardsPage from "./pages/AwardsPage";
-import ResearchPage from "./pages/ResearchPage";
-import GuidesPage from "./pages/GuidesPage";
-import SupplierCentrePage from "./pages/SupplierCentrePage";
 import { ThemeProvider } from "./context/ThemeContext";
 
 const getRouteStateFromPath = () => {
@@ -28,6 +26,13 @@ const getRouteStateFromPath = () => {
     };
   }
 
+  if (path.startsWith("edit-equipment/")) {
+    return {
+      page: "edit-equipment",
+      data: decodeURIComponent(path.slice("edit-equipment/".length)),
+    };
+  }
+
   const routeMap = {
     blog: "blog",
     register: "register",
@@ -38,6 +43,7 @@ const getRouteStateFromPath = () => {
     dashboard: "dashboard",
     equipment: "equipment",
     "add-equipment": "add-equipment",
+    "edit-equipment": "edit-equipment",
     "schedule-maintenance": "schedule-maintenance",
     "request-equipment": "request-equipment",
     maintenance: "maintenance",
@@ -48,10 +54,8 @@ const getRouteStateFromPath = () => {
     orderstatus: "orderstatus",
     about: "about",
     contact: "contact",
+    help: "help",
     awards: "awards",
-    research: "research",
-    guides: "guides",
-    "supplier-centre": "supplier-centre",
   };
 
   return {
@@ -76,6 +80,8 @@ function AppContent() {
     const nextPath =
       page === "blog-post" && data
         ? `${basePath}/blog/${encodeURIComponent(data)}`
+        : page === "edit-equipment" && data
+        ? `${basePath}/edit-equipment/${encodeURIComponent(data)}`
         : `${basePath}/${page}`;
 
     window.history.pushState({}, "", nextPath);
@@ -117,14 +123,10 @@ function AppContent() {
             <AboutPage />
           ) : currentPage === "contact" ? (
             <ContactPage />
+          ) : currentPage === "help" ? (
+            <HelpPage />
           ) : currentPage === "awards" ? (
             <AwardsPage />
-          ) : currentPage === "research" ? (
-            <ResearchPage />
-          ) : currentPage === "guides" ? (
-            <GuidesPage />
-          ) : currentPage === "supplier-centre" ? (
-            <SupplierCentrePage onNavigate={handleNavigate} />
           ) : (
             <AppRoutes
               currentPage={currentPage}
