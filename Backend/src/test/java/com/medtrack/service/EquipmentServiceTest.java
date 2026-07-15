@@ -3,7 +3,7 @@ package com.medtrack.service;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
-import com.medtrack.dto.EquipmentImportSummary;
+import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.Hospital;
 import com.medtrack.repository.EquipmentRepository;
