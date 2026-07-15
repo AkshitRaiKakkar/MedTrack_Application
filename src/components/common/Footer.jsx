@@ -49,7 +49,7 @@ export default function Footer({ onNavigate }) {
               <ul className="space-y-4 text-[14px] font-medium text-secondary flex flex-col items-start">
                 <li><button onClick={() => onNavigate && onNavigate("help")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Help</button></li>
                 <li><a href="#" onClick={(e) => e.preventDefault()} className="hover:text-primary transition-colors">Guidelines</a></li>
-                <li><a href="#" onClick={(e) => e.preventDefault()} className="hover:text-primary transition-colors">Terms of Use</a></li>
+                <li><button onClick={() => onNavigate && onNavigate("terms")} className="hover:text-primary transition-colors text-left bg-transparent border-none p-0 cursor-pointer">Terms of Use</button></li>
                 <li><a href="#" onClick={(e) => e.preventDefault()} className="hover:text-primary transition-colors">Privacy and Ad Choices</a></li>
                 <li><a href="#" onClick={(e) => e.preventDefault()} className="hover:text-primary transition-colors">Do Not Sell Or Share My Information</a></li>
                 <li><a href="#" onClick={(e) => e.preventDefault()} className="hover:text-primary transition-colors">Cookie Consent Tool</a></li>
