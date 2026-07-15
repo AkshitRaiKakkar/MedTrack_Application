@@ -7,6 +7,7 @@ import Footer from "./components/common/Footer";
 import AppRoutes from "./routes/AppRoutes";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import GuidelinesPage from "./pages/GuidelinesPage";
 import HelpPage from "./pages/HelpPage";
 import AwardsPage from "./pages/AwardsPage";
 import TermsPage from "./pages/TermsPage";
@@ -62,6 +63,7 @@ const getRouteStateFromPath = () => {
     orderstatus: "orderstatus",
     about: "about",
     contact: "contact",
+    guidelines: "guidelines",
     help: "help",
     awards: "awards",
     terms: "terms",
@@ -135,6 +137,8 @@ function AppContent() {
             <AboutPage />
           ) : currentPage === "contact" ? (
             <ContactPage />
+          ) : currentPage === "guidelines" ? (
+            <GuidelinesPage />
           ) : currentPage === "help" ? (
             <HelpPage />
           ) : currentPage === "awards" ? (
