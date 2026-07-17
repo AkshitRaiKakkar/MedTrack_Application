@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import com.medtrack.model.EquipmentStatus;
 
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -80,7 +81,7 @@ public class DataInitializer implements CommandLineRunner {
                     .model("Siemens Healthcare")
                     .serialNumber("SN-9921-A")
                     .department("Radiology")
-                    .status("Operational")
+                    .status(EquipmentStatus.ACTIVE)
                     .category("Imaging")
                     .purchaseDate(LocalDate.now().minusYears(2))
                     .build());
@@ -91,7 +92,7 @@ public class DataInitializer implements CommandLineRunner {
                     .model("Philips V60")
                     .serialNumber("SN-1102-B")
                     .department("ICU")
-                    .status("Maintenance")
+                    .status(EquipmentStatus.UNDER_MAINTENANCE)
                     .category("Respiratory")
                     .purchaseDate(LocalDate.now().minusMonths(6))
                     .build());
