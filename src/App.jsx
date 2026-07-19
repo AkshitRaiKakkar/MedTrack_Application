@@ -4,7 +4,7 @@ import "lenis/dist/lenis.css";
 import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
-import AppRoutes from "./routes/AppRoutes";
+import CustomCursor from "./components/common/CustomCursor";import AppRoutes from "./routes/AppRoutes";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
 import GuidelinesPage from "./pages/GuidelinesPage";
@@ -134,6 +134,7 @@ function AppContent() {
         className="flex flex-col min-h-screen bg-surface text-primary transition-colors duration-200"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
+        <CustomCursor />
         {!isAuthPage && (
           <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
         )}
