@@ -86,8 +86,9 @@ public class MaintenanceController {
     }
 
     /**
-     * Deletes a maintenance task by its identifier.
+     * Deletes a non-completed maintenance task by its identifier.
      * Accessible only to users with the HOSPITAL role.
+     * Completed records are retained as immutable maintenance evidence.
      *
      * @param id the maintenance task identifier
      * @return HTTP 204 No Content when the task is successfully deleted
