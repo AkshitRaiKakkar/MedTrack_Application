@@ -29,6 +29,14 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             @Param("id") Long id,
             @Param("assignedTechnician") String assignedTechnician);
 
+    // Serialize hospital deletion with technician completion of the same task.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT task FROM MaintenanceTask task "
+            + "WHERE task.id = :id AND task.hospitalId = :hospitalId")
+    Optional<MaintenanceTask> findByIdAndHospitalIdForUpdate(
+            @Param("id") Long id,
+            @Param("hospitalId") Long hospitalId);
+
     List<MaintenanceTask> findByStatus(MaintenanceStatus status);
 
     // Equipment history remains hospital-scoped so it cannot leak another hospital's records.

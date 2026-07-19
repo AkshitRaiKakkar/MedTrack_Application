@@ -104,10 +104,20 @@ public class MaintenanceService {
         validateTechnicianUpdate(task, taskDetails);
 
         task.setStatus(taskDetails.getStatus());
-        task.setNotes(taskDetails.getNotes());
-        task.setHoursWorked(taskDetails.getHoursWorked());
-        task.setPartsUsed(taskDetails.getPartsUsed());
-        task.setSignature(taskDetails.getSignature());
+        // Technician updates are partial: omitted optional report fields must not erase
+        // values captured by an earlier update. Empty strings remain explicit values.
+        if (taskDetails.getNotes() != null) {
+            task.setNotes(taskDetails.getNotes());
+        }
+        if (taskDetails.getHoursWorked() != null) {
+            task.setHoursWorked(taskDetails.getHoursWorked());
+        }
+        if (taskDetails.getPartsUsed() != null) {
+            task.setPartsUsed(taskDetails.getPartsUsed());
+        }
+        if (taskDetails.getSignature() != null) {
+            task.setSignature(taskDetails.getSignature());
+        }
         if (previousStatus != MaintenanceStatus.COMPLETED
                 && taskDetails.getStatus() == MaintenanceStatus.COMPLETED) {
             task.setCompletedAt(LocalDateTime.now());
@@ -317,11 +327,15 @@ public class MaintenanceService {
         ical.append(contentLine, start, contentLine.length()).append("\r\n");
     }
 
+    @Transactional
     public void deleteTask(Long id, Authentication authentication) {
-        // Hospital deletion is ownership-scoped to stop cross-hospital ID access.
-        MaintenanceTask task = taskRepository.findByIdAndHospitalId(
+        // Lock the owned row so deletion cannot race with technician completion.
+        MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(
                         id, getHospitalForUser(authentication.getName()).getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or access denied"));
+        if (task.getStatus() == MaintenanceStatus.COMPLETED) {
+            throw new InvalidStatusTransitionException("Completed maintenance tasks cannot be deleted");
+        }
         taskRepository.delete(task);
     }
 
