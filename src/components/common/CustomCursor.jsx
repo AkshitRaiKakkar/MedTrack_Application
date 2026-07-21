@@ -22,9 +22,19 @@ export default function CustomCursor() {
     const handleMouseDown = () => ringRef.current?.classList.add("cursor-click");
     const handleMouseUp = () => ringRef.current?.classList.remove("cursor-click");
 
-    const interactiveSelector = "a, button, input, textarea, select, [role='button'], .cursor-pointer";
+    const interactiveSelector = "a, button, [role='button'], .cursor-pointer";
 
     const handleMouseOver = (e) => {
+      // Hide custom cursor ring over text inputs for clean form interaction
+      if (e.target.closest("input, select, textarea")) {
+        if (dotRef.current) dotRef.current.style.opacity = "0";
+        if (ringRef.current) ringRef.current.style.opacity = "0";
+        return;
+      } else {
+        if (dotRef.current) dotRef.current.style.opacity = "1";
+        if (ringRef.current) ringRef.current.style.opacity = "1";
+      }
+
       if (e.target.closest(interactiveSelector)) {
         ringRef.current?.classList.add("cursor-hover");
       }

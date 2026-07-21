@@ -131,7 +131,18 @@ body {
 @media (pointer: fine) {
   body.custom-cursor-enabled,
   body.custom-cursor-enabled * {
+    cursor: auto;
+  }
+  body.custom-cursor-enabled a,
+  body.custom-cursor-enabled button,
+  body.custom-cursor-enabled [role='button'],
+  body.custom-cursor-enabled .cursor-pointer {
     cursor: none !important;
+  }
+  body.custom-cursor-enabled input,
+  body.custom-cursor-enabled select,
+  body.custom-cursor-enabled textarea {
+    cursor: text !important;
   }
 }
 
