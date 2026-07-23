@@ -98,8 +98,13 @@ public class MfaService {
         }
 
         // 2. Check if code matches an emergency recovery code
-        if (secret.getRecoveryCodes() != null && secret.getRecoveryCodes().contains(code)) {
-            List<String> remainingCodes = Arrays.stream(secret.getRecoveryCodes().split(","))
+        List<String> existingRecoveryCodes = secret.getRecoveryCodes() != null
+                ? Arrays.asList(secret.getRecoveryCodes().split(","))
+                : Collections.emptyList();
+        boolean isValidRecoveryCode = existingRecoveryCodes.stream().anyMatch(c -> c.equalsIgnoreCase(code));
+
+        if (isValidRecoveryCode) {
+            List<String> remainingCodes = existingRecoveryCodes.stream()
                     .filter(c -> !c.equalsIgnoreCase(code))
                     .collect(Collectors.toList());
 
