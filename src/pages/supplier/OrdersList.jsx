@@ -31,7 +31,7 @@ export default function OrdersList({ onNavigate }) {
       setLoading(true);
       const data = await getAllOrders();
       setOrders(data);
-      await fetchMetrics();
+      await fetchMetrics(data);
     } catch (err) {
       console.error("Error fetching orders:", err);
       setError("Unable to load orders. Please try again.");
@@ -40,7 +40,7 @@ export default function OrdersList({ onNavigate }) {
     }
   };
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = async (currentOrders = orders) => {
     try {
       const data = await getSupplierMetrics();
       if (data) {
@@ -49,13 +49,13 @@ export default function OrdersList({ onNavigate }) {
     } catch (err) {
       console.error("Error fetching supplier metrics:", err);
       // Fallback local calculations
-      const total = orders.length;
-      const processing = orders.filter(o => o.shippingStatus === 'Processing' || o.shippingStatus === 'Pending').length;
-      const delivered = orders.filter(o => o.shippingStatus === 'Delivered').length;
+      const total = currentOrders.length;
+      const processing = currentOrders.filter(o => o.shippingStatus === 'Processing' || o.shippingStatus === 'Pending').length;
+      const delivered = currentOrders.filter(o => o.shippingStatus === 'Delivered').length;
       setMetrics({
         totalOrders: total,
         pendingOrders: processing,
-        shippedOrders: orders.filter(o => o.shippingStatus === 'Shipped').length,
+        shippedOrders: currentOrders.filter(o => o.shippingStatus === 'Shipped').length,
         deliveredOrders: delivered,
         averageDeliveryDays: 4.5,
         onTimeRate: 95.0
