@@ -6,6 +6,8 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.model.*;
 import com.medtrack.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,6 +31,8 @@ import java.time.LocalDate;
         matchIfMissing = true
 )
 public class DataInitializer implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
 
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
@@ -176,6 +180,6 @@ public class DataInitializer implements CommandLineRunner {
                     .build());
         }
 
-        System.out.println(">> Database Seeded Successfully!");
+        log.info("Database seeded successfully!");
     }
 }
