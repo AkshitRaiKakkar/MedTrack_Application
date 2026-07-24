@@ -76,7 +76,7 @@ public class MaintenanceService {
         Hospital hospital = getHospitalForUser(authentication.getName());
         validateSchedulingRequest(request);
         Equipment equipment = resolveOwnedEquipment(request.getEquipmentId(), hospital.getId());
-        validateAssignedTechnician(request.getAssignedTechnician());
+        String assignedTechnician = resolveAssignedTechnician(request.getAssignedTechnician());
 
         MaintenanceTask task = MaintenanceTask.builder()
                 .taskCode("MNT-" + UUID.randomUUID())
@@ -87,7 +87,7 @@ public class MaintenanceService {
                 .hospitalId(hospital.getId())
                 .maintenanceType(request.getMaintenanceType())
                 .deadline(request.getDeadline())
-                .assignedTechnician(request.getAssignedTechnician())
+                .assignedTechnician(assignedTechnician)
                 .description(request.getDescription())
                 .priority(request.getPriority())
                 .image(request.getImage())
@@ -95,6 +95,7 @@ public class MaintenanceService {
                 .recurrencePeriodDays(request.getRecurrencePeriodDays())
                 .createdAt(LocalDateTime.now())
                 .build();
+        validateOwnershipInvariant(task);
         return taskRepository.save(task);
     }
 
@@ -103,6 +104,7 @@ public class MaintenanceService {
         // A technician can update only a task explicitly assigned to their login email.
         MaintenanceTask task = taskRepository.findByIdAndAssignedTechnicianForUpdate(id, authentication.getName())
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or not assigned to you"));
+        validateOwnershipInvariant(task);
 
         MaintenanceStatus previousStatus = task.getStatus();
         validateTechnicianUpdate(task, request);
@@ -137,6 +139,7 @@ public class MaintenanceService {
                 && savedTask.getRecurrencePeriodDays() != null
                 && savedTask.getRecurrencePeriodDays() > 0) {
 
+            String recurringTechnician = resolveRecurringTechnician(savedTask.getAssignedTechnician());
             MaintenanceTask nextTask = MaintenanceTask.builder()
                     .taskCode("MNT-" + UUID.randomUUID())
                     .equipmentId(savedTask.getEquipmentId())
@@ -146,13 +149,14 @@ public class MaintenanceService {
                     .hospitalId(savedTask.getHospitalId())
                     .maintenanceType(savedTask.getMaintenanceType() != null ? savedTask.getMaintenanceType() : "Recurring Preventive Maintenance")
                     .deadline(java.time.LocalDate.now().plusDays(savedTask.getRecurrencePeriodDays()))
-                    .assignedTechnician(savedTask.getAssignedTechnician())
+                    .assignedTechnician(recurringTechnician)
                     .description("Auto-scheduled recurring maintenance task based on completion of task: " + savedTask.getTaskCode())
                     .priority(savedTask.getPriority())
                     .status(MaintenanceStatus.SCHEDULED)
                     .recurrencePeriodDays(savedTask.getRecurrencePeriodDays())
                     .build();
 
+            validateOwnershipInvariant(nextTask);
             taskRepository.save(nextTask);
         }
 
@@ -208,14 +212,36 @@ public class MaintenanceService {
         }
     }
 
-    private void validateAssignedTechnician(String assignedTechnician) {
+    private String resolveAssignedTechnician(String assignedTechnician) {
         if (assignedTechnician == null || assignedTechnician.isBlank()) {
-            return;
+            return null;
         }
-        User technician = userRepository.findByEmail(assignedTechnician)
+        User technician = userRepository.findByEmail(assignedTechnician.trim())
                 .orElseThrow(() -> new IllegalArgumentException("Assigned technician account does not exist"));
         if (!"technician".equalsIgnoreCase(technician.getRole())) {
             throw new IllegalArgumentException("Assigned user must have the technician role");
+        }
+        return technician.getEmail();
+    }
+
+    private String resolveRecurringTechnician(String assignedTechnician) {
+        try {
+            return resolveAssignedTechnician(assignedTechnician);
+        } catch (IllegalArgumentException exception) {
+            // Completion evidence must still be committed when the previous technician
+            // account is no longer eligible. The hospital can assign the new task later.
+            return null;
+        }
+    }
+
+    private void validateOwnershipInvariant(MaintenanceTask task) {
+        Equipment equipment = task.getEquipmentRecord();
+        if (task.getHospitalId() == null
+                || equipment == null
+                || equipment.getHospital() == null
+                || !task.getHospitalId().equals(equipment.getHospital().getId())) {
+            throw new IllegalStateException(
+                    "Maintenance task hospital ownership does not match its equipment");
         }
     }
 
