@@ -27,6 +27,7 @@ public class SupplierController {
     private final SupplierPerformanceService supplierPerformanceService;
 
     @GetMapping("/orders")
+    @PreAuthorize("hasRole('SUPPLIER')")
     @Operation(summary = "Get paginated, filtered supplier orders", description = "Allows suppliers to search and filter through synchronized equipment purchase orders.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully retrieved orders", content = @Content(schema = @Schema(implementation = Page.class))),
@@ -74,6 +75,7 @@ public class SupplierController {
     // -----------------------------------------------------------------------
 
     @GetMapping("/suppliers/{supplierId}/performance")
+    @PreAuthorize("hasRole('SUPPLIER')")
     @Operation(summary = "Get supplier performance score", description = "Returns on-time delivery rate and overall performance score for the given supplier.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Performance metrics returned successfully", content = @Content(schema = @Schema(implementation = SupplierPerformanceResponse.class))),
