@@ -8,6 +8,7 @@ import Blog from "../pages/Blog";
 import BlogPost from "../pages/BlogPost";
 import CareersPage from "../pages/CareersPage";
 import JobApplicationPage from "../pages/JobApplicationPage";
+import CertificateGeneratorPage from "../pages/CertificateGeneratorPage";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
@@ -83,6 +84,8 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return <CareersPage onNavigate={onNavigate} />;
     case "apply":
       return <JobApplicationPage onNavigate={onNavigate} jobId={pageData} />;
+    case "certificate":
+      return <CertificateGeneratorPage />;
     case "login":
       return <LoginPage onNavigate={onNavigate} />;
     case "register":

@@ -87,6 +87,7 @@ const getRouteStateFromPath = () => {
     "zerotrust-security": "zerotrust-security",
     keyvault: "keyvault-security",
     "keyvault-security": "keyvault-security",
+    certificate: "certificate",
   };
 
   return {
