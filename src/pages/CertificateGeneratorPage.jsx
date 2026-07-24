@@ -1,15 +1,24 @@
 import React, { useState, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import { Code, Trophy, Star, Activity } from 'lucide-react'; // Activity as placeholder for MedTrack logo
+import MedTrackLogo from '../components/common/MedTrackLogo';
 
 // The starting ID as requested by the user
 const STARTING_ID_NUMBER = 9;
 
 export default function CertificateGeneratorPage() {
-  const [name, setName] = useState('Subhodeep Biswas');
-  const [role, setRole] = useState('Project Admin');
+  const today = new Date();
+  const defaultFormattedDate = today.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }).replace(/ /g, '-');
+
+  const [name, setName] = useState('John Doe');
+  const [role, setRole] = useState('Project Contributor');
   const [prs, setPrs] = useState('12');
   const [rank, setRank] = useState('Top 10%');
+  const [date, setDate] = useState(defaultFormattedDate);
   const [idCounter, setIdCounter] = useState(STARTING_ID_NUMBER);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -17,14 +26,6 @@ export default function CertificateGeneratorPage() {
 
   // Generate current ID string (e.g. MTK2026EC0009)
   const currentId = `MTK2026EC${String(idCounter).padStart(4, '0')}`;
-  
-  // Format current date like "23-Jul-2026"
-  const today = new Date();
-  const formattedDate = today.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }).replace(/ /g, '-');
 
   const handleDownload = async () => {
     if (!certificateRef.current) return;
@@ -63,7 +64,7 @@ export default function CertificateGeneratorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 pt-32 pb-32 font-sans">
+    <div className="min-h-screen bg-gray-50 p-8 pt-8 pb-32 font-sans">
       <div className="max-w-[1400px] mx-auto">
         
         <div className="mb-8">
@@ -90,48 +91,59 @@ export default function CertificateGeneratorPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sticky top-32">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Certificate Details</h2>
               
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Contributor Name</label>
+                  <label className="block text-[13px] font-bold text-gray-700 mb-1.5">Contributor Name</label>
                   <input 
                     type="text" 
                     value={name} 
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
+                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
                     placeholder="e.g. John Doe"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Role</label>
+                  <label className="block text-[13px] font-bold text-gray-700 mb-1.5">Role</label>
                   <input 
                     type="text" 
                     value={role} 
                     onChange={(e) => setRole(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
+                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
                     placeholder="e.g. Contributor"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Successfully Merged PRs</label>
+                  <label className="block text-[13px] font-bold text-gray-700 mb-1.5">Successfully Merged PRs</label>
                   <input 
                     type="number" 
                     value={prs} 
                     onChange={(e) => setPrs(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
+                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
                     placeholder="e.g. 12"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Elite Contributor Rank</label>
+                  <label className="block text-[13px] font-bold text-gray-700 mb-1.5">Elite Contributor Rank</label>
                   <input 
                     type="text" 
                     value={rank} 
                     onChange={(e) => setRank(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
+                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
                     placeholder="e.g. Top 10%"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[13px] font-bold text-gray-700 mb-1.5">Date</label>
+                  <input 
+                    type="text" 
+                    value={date} 
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent font-medium"
+                    placeholder="e.g. 23-Jul-2026"
                   />
                 </div>
 
@@ -186,26 +198,21 @@ export default function CertificateGeneratorPage() {
                   
                   {/* Header: Logo */}
                   <div className="flex flex-col items-center mb-16 pt-8">
-                    <div className="flex items-center gap-3 text-[#0f3d3e] mb-1">
-                      {/* Placeholder Logo Box */}
-                      <div className="w-16 h-16 bg-[#0f3d3e] rounded-b-[2rem] rounded-tl-[2rem] rounded-tr-md flex items-center justify-center text-white shadow-md relative">
-                        <Activity size={32} strokeWidth={1.5} />
-                        <div className="absolute top-0 right-0 w-4 h-4 bg-emerald-400 rounded-full border-2 border-[#0f3d3e] translate-x-1 -translate-y-1"></div>
-                      </div>
-                      <span className="text-5xl font-black tracking-tight" style={{ letterSpacing: '-0.03em' }}>MedTrack</span>
+                    <div className="flex flex-col items-center gap-1 text-[#0f3d3e] mb-1">
+                      <MedTrackLogo size="text-4xl" className="!text-[#0f3d3e] dark:!text-[#0f3d3e]" />
                     </div>
                     <p className="text-gray-500 font-medium text-lg tracking-wide">Smart Equipment. Stronger Care.</p>
                   </div>
 
                   {/* Date & ID Row */}
                   <div className="flex justify-between items-center mb-14 text-sm font-bold text-gray-800 tracking-wide px-4">
-                    <p>Date: {formattedDate}</p>
+                    <p>Date: {date}</p>
                     <p>{currentId}</p>
                   </div>
 
                   {/* Title */}
                   <div className="text-center mb-16">
-                    <h1 className="text-3xl font-black uppercase tracking-wider inline-block border-b-2 border-gray-900 pb-1">
+                    <h1 className="text-xl font-black uppercase tracking-wider inline-block border-b-2 border-gray-900 pb-1">
                       Contribution Certificate
                     </h1>
                   </div>
@@ -217,29 +224,29 @@ export default function CertificateGeneratorPage() {
                     </p>
                     
                     <p>
-                      During the entire summer of code, he/she has shown excellent leadership, dedication and commitment towards building and improving the project.
+                      During the entire summer of code, he/she has shown excellent dedication, consistency, and commitment towards building and improving the project.
                     </p>
                   </div>
 
                   {/* Metric Rows */}
-                  <div className="px-8 my-16 space-y-7">
-                    <div className="flex items-center gap-5">
-                      <div className="text-[#0f3d3e] border-2 border-[#0f3d3e] rounded-md p-1.5">
-                        <Code size={20} strokeWidth={2.5} />
+                  <div className="px-8 my-10 space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="text-[#0f3d3e] border-[1.5px] border-[#0f3d3e] rounded-md p-1 w-8 h-8 flex items-center justify-center">
+                        <Code size={18} strokeWidth={2.5} />
                       </div>
                       <p className="text-[17px]"><span className="font-bold text-gray-900">Successfully Merged PRs:</span> {prs || '0'}</p>
                     </div>
                     
-                    <div className="flex items-center gap-5">
-                      <div className="text-[#0f3d3e]">
-                        <Trophy size={28} strokeWidth={2.5} />
+                    <div className="flex items-center gap-4">
+                      <div className="text-[#0f3d3e] w-8 h-8 flex items-center justify-center">
+                        <Trophy size={22} strokeWidth={2.5} />
                       </div>
                       <p className="text-[17px]"><span className="font-bold text-gray-900">Elite Contributor Rank:</span> {rank || 'N/A'}</p>
                     </div>
 
-                    <div className="flex items-center gap-5">
-                      <div className="text-[#0f3d3e]">
-                        <Star size={28} strokeWidth={2.5} fill="#0f3d3e" />
+                    <div className="flex items-center gap-4">
+                      <div className="text-[#0f3d3e] w-8 h-8 flex items-center justify-center">
+                        <Star size={22} strokeWidth={2.5} fill="#0f3d3e" />
                       </div>
                       <p className="text-[17px]"><span className="font-bold text-gray-900">Contribution:</span> Great contribution in the entire summer of code</p>
                     </div>
@@ -257,10 +264,10 @@ export default function CertificateGeneratorPage() {
                     </div>
                   </div>
 
-                  <div className="mt-auto pt-16">
-                    <div className="w-full h-[1px] bg-gray-200 mb-6"></div>
+                  <div className="mt-auto pt-8">
+                    <div className="w-full h-[1px] bg-gray-200 mb-4"></div>
                     
-                    <div className="px-4 text-[13px] leading-relaxed text-gray-600 font-medium mb-12">
+                    <div className="px-4 text-[13px] leading-relaxed text-gray-600 font-medium mb-8">
                       <span className="font-bold text-gray-900">Note:</span> This certificate is generated based on the participation in the open source project "MedTrack" during the Elite Coders Summer of Code (ECSoC) 2026 program from July 1 – August 31, 2026.
                     </div>
 
@@ -270,7 +277,7 @@ export default function CertificateGeneratorPage() {
                       {/* Placeholder ECSoC Logo */}
                       <div className="text-right">
                          <div className="inline-block px-4 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-400 font-bold text-xs uppercase tracking-wider">
-                           ECSoC 2026 Logo
+                           ECSoC 2026
                          </div>
                       </div>
                     </div>
