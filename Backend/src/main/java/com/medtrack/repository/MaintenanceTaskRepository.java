@@ -3,6 +3,7 @@ package com.medtrack.repository;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -29,6 +30,18 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
     List<MaintenanceTask> findByHospitalId(@Param("hospitalId") Long hospitalId);
 
     @Query("SELECT task FROM MaintenanceTask task "
+            + "WHERE task.hospitalId = :hospitalId "
+            + "AND task.equipmentRecord.hospital.id = :hospitalId "
+            + "AND (:status IS NULL OR task.status = :status) "
+            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId) "
+            + "ORDER BY task.deadline ASC, task.id ASC")
+    List<MaintenanceTask> findByHospitalIdWithFilters(
+            @Param("hospitalId") Long hospitalId,
+            @Param("status") MaintenanceStatus status,
+            @Param("equipmentId") String equipmentId,
+            Pageable pageable);
+
+    @Query("SELECT task FROM MaintenanceTask task "
             + "WHERE task.id = :id AND task.hospitalId = :hospitalId "
             + "AND task.equipmentRecord.hospital.id = :hospitalId")
     Optional<MaintenanceTask> findByIdAndHospitalId(
@@ -41,6 +54,18 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
     Optional<MaintenanceTask> findByIdAndAssignedTechnician(
             @Param("id") Long id,
             @Param("assignedTechnician") String assignedTechnician);
+
+    @Query("SELECT task FROM MaintenanceTask task "
+            + "WHERE task.assignedTechnician = :assignedTechnician "
+            + "AND task.equipmentRecord.hospital.id = task.hospitalId "
+            + "AND (:status IS NULL OR task.status = :status) "
+            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId) "
+            + "ORDER BY task.deadline ASC, task.id ASC")
+    List<MaintenanceTask> findByAssignedTechnicianWithFilters(
+            @Param("assignedTechnician") String assignedTechnician,
+            @Param("status") MaintenanceStatus status,
+            @Param("equipmentId") String equipmentId,
+            Pageable pageable);
 
     // Serialize updates to one assigned task so completion cannot create duplicate recurrences.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -59,8 +84,6 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
     Optional<MaintenanceTask> findByIdAndHospitalIdForUpdate(
             @Param("id") Long id,
             @Param("hospitalId") Long hospitalId);
-
-    List<MaintenanceTask> findByStatus(MaintenanceStatus status);
 
     // Equipment history remains hospital-scoped so it cannot leak another hospital's records.
     @Query("SELECT task FROM MaintenanceTask task "
