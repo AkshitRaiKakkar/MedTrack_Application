@@ -156,6 +156,133 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
+  const handleExportPdf = () => {
+    if (!task) return;
+
+    let signatureImgHtml = "";
+    const canvas = canvasRef.current;
+    let sigSrc = task.signature;
+    if (!sigSrc && canvas) {
+      const ctx = canvas.getContext("2d");
+      const buffer = new Uint32Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer);
+      if (buffer.some(color => color !== 0)) {
+        sigSrc = canvas.toDataURL("image/png");
+      }
+    }
+
+    if (sigSrc) {
+      signatureImgHtml = `<div style="margin-top: 20px;">
+        <p style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Technician Digital Signature Sign-Off</p>
+        <img src="${sigSrc}" style="max-width: 220px; max-height: 80px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px; background: #ffffff;" alt="Signature" />
+      </div>`;
+    }
+
+    const printWindow = window.open("", "_blank", "width=850,height=950");
+    if (!printWindow) {
+      alert("Please allow popups to export the PDF report.");
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Maintenance_Report_${task.id || "Document"}</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 0; padding: 40px; background: #ffffff; }
+          .header { border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-start; }
+          .logo { font-size: 24px; font-weight: 900; color: #2563eb; letter-spacing: -0.5px; }
+          .subtitle { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+          .report-meta { text-align: right; font-size: 12px; color: #475569; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+          .box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; }
+          .box-title { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 8px; }
+          .val { font-size: 15px; font-weight: 700; color: #0f172a; margin: 0; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 800; text-transform: uppercase; background: #dbeafe; color: #1e40af; }
+          .section { margin-bottom: 25px; }
+          .section-title { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; }
+          .parts-list { display: flex; flex-wrap: wrap; gap: 8px; }
+          .part-tag { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+          .notes { background: #f8fafc; border-left: 4px solid #2563eb; padding: 14px; font-size: 13px; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">MEDTRACK GLOBAL</div>
+            <div class="subtitle">Technician Maintenance & Compliance Inspection Log</div>
+          </div>
+          <div class="report-meta">
+            <div><strong>Report ID:</strong> RPT-${task.id || "000"}</div>
+            <div><strong>Date:</strong> ${new Date().toLocaleDateString()}</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="box">
+            <div class="box-title">Target Asset / Equipment</div>
+            <p class="val">${task.equipment || task.equipmentName || "N/A"}</p>
+            <p style="font-size: 12px; color: #64748b; margin-top: 4px;">Task ID: ${task.id}</p>
+          </div>
+          <div class="box">
+            <div class="box-title">Hospital / Facility</div>
+            <p class="val">${task.hospital || "N/A"}</p>
+            <p style="font-size: 12px; color: #64748b; margin-top: 4px;">Priority: ${task.priority || "Normal"}</p>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="box">
+            <div class="box-title">Current Status</div>
+            <span class="badge">${form.status || task.status || "In Progress"}</span>
+          </div>
+          <div class="box">
+            <div class="box-title">Invested Labor Time</div>
+            <p class="val">${form.hours ? `${form.hours} Hours` : task.hoursWorked ? `${task.hoursWorked} Hours` : "N/A"}</p>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Original Maintenance Description</div>
+          <p style="font-size: 13px; color: #475569; font-style: italic; margin: 0;">${task.description || "No description provided."}</p>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Technician Maintenance Notes</div>
+          <div class="notes">${form.notes || task.notes || "No maintenance notes recorded."}</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Replacement Parts Installed</div>
+          ${
+            form.parts && form.parts.length > 0
+              ? `<div class="parts-list">${form.parts.map(p => `<span class="part-tag">${p}</span>`).join("")}</div>`
+              : `<p style="font-size: 12px; color: #64748b; font-style: italic;">No parts required for this maintenance task.</p>`
+          }
+        </div>
+
+        ${signatureImgHtml}
+
+        <div class="footer">
+          Confidential Clinical Equipment Record &bull; Generated by MedTrack Technician Portal &bull; ISO 13485 Compliant Audit Trail
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -542,6 +669,16 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
                     />
                   </div>
                 )}
+
+                <div className="pt-4 border-t border-slate-700">
+                  <button
+                    type="button"
+                    onClick={handleExportPdf}
+                    className="w-full px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
+                  >
+                    <span>📄</span> Export to PDF
+                  </button>
+                </div>
               </div>
             </div>
           </div>

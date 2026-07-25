@@ -65,7 +65,8 @@ class MaintenanceControllerIntegrationTest {
     @Test
     @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
     void listTasks_ReturnsEmptyJsonArrayWith200() throws Exception {
-        when(maintenanceService.getAllTasks(any())).thenReturn(Collections.emptyList());
+        when(maintenanceService.getAllTasks(any(), eq(null), eq(null), eq(null), eq(null)))
+                .thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/maintenance"))
                 .andExpect(status().isOk())
@@ -231,6 +232,23 @@ class MaintenanceControllerIntegrationTest {
     }
 
     @Test
+    @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
+    void oversizedSchedulingFieldReturnsValidationError() throws Exception {
+        MaintenanceCreateRequest invalid = validSchedulingRequest();
+        invalid.setDescription("D".repeat(256));
+
+        mockMvc.perform(post("/api/maintenance")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalid)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.description")
+                        .value("Description must not exceed 255 characters"));
+
+        verify(maintenanceService, never()).scheduleTask(any(), any());
+    }
+
+    @Test
     @WithMockUser(username = "tech@medtrack.com", roles = "TECHNICIAN")
     void invalidStatusTextReturns400() throws Exception {
         mockMvc.perform(put("/api/maintenance/42")
@@ -332,12 +350,32 @@ class MaintenanceControllerIntegrationTest {
                 .priority("Normal")
                 .status(MaintenanceStatus.SCHEDULED)
                 .build();
-        when(maintenanceService.getAllTasks(any())).thenReturn(List.of(task));
+        when(maintenanceService.getAllTasks(any(), eq(null), eq(null), eq(null), eq(null)))
+                .thenReturn(List.of(task));
 
         mockMvc.perform(get("/api/maintenance"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].taskCode").value("MNT-42"))
                 .andExpect(jsonPath("$[0].status").value("Scheduled"));
+    }
+
+    @Test
+    @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
+    void hospitalListForwardsOptionalFiltersAndPagination() throws Exception {
+        when(maintenanceService.getAllTasks(
+                any(), eq("In Progress"), eq("EQ-1001"), eq(2), eq(25)))
+                .thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/maintenance")
+                        .param("status", "In Progress")
+                        .param("equipmentId", "EQ-1001")
+                        .param("page", "2")
+                        .param("size", "25"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+
+        verify(maintenanceService).getAllTasks(
+                any(), eq("In Progress"), eq("EQ-1001"), eq(2), eq(25));
     }
 
     private MaintenanceCreateRequest validSchedulingRequest() {

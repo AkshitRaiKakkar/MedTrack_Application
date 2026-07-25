@@ -43,6 +43,7 @@ import {
 } from "../../services/AuthService";
 import ThreatDetectionSoarPanel from "./ThreatDetectionSoarPanel";
 import KeyVaultSecurityPanel from "./KeyVaultSecurityPanel";
+import SiemSecurityAnalyticsPanel from "./SiemSecurityAnalyticsPanel";
 import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
 import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
@@ -375,6 +376,7 @@ export default function EnterpriseSecurityCenter() {
           { id: "audit", label: `Audit Trail (${auditLogs.length})`, icon: History },
           { id: "threats", label: "Threat Engine & SOAR", icon: ShieldAlert },
           { id: "keyvault", label: "Key Vault & Cryptography", icon: Lock },
+          { id: "siem", label: "SIEM & Log Analytics", icon: Activity },
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
           { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network }
@@ -771,9 +773,9 @@ export default function EnterpriseSecurityCenter() {
         <ThreatDetectionSoarPanel />
       )}
 
-      {/* TAB 8: KEY VAULT & CRYPTOGRAPHY */}
-      {selectedTab === "keyvault" && (
-        <KeyVaultSecurityPanel />
+      {/* TAB 8: SIEM & LOG ANALYTICS */}
+      {selectedTab === "siem" && (
+        <SiemSecurityAnalyticsPanel />
       )}
 
       {/* TAB 9: DLP & HIPAA PRIVACY GUARD */}

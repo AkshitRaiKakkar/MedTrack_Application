@@ -138,6 +138,29 @@ public class EquipmentController {
                 equipmentService.getWarrantyExpiringSoon(principal.getName())
         );
     }
+    @GetMapping("/search")
+    public ResponseEntity<List<Equipment>> searchEquipment(
+            @RequestParam String keyword,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.searchEquipment(keyword, principal.getName())
+        );
+    }
+
+    /**
+     * Retrieves all equipment that is currently below the configured stock threshold.
+     *
+     * @param principal the authenticated user's security principal
+     * @return list of low stock equipment
+     */
+    @GetMapping("/low-stock")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> getLowStockEquipment(Principal principal) {
+        return ResponseEntity.ok(
+                equipmentService.getLowStockEquipment(principal.getName())
+        );
+    }
 
     /**
      * Validates that a resource ID is a positive number.

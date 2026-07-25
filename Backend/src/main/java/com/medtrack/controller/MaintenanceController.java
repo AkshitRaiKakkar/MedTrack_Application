@@ -35,9 +35,15 @@ public class MaintenanceController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
-    public ResponseEntity<List<MaintenanceTask>> getAllTasks(Authentication authentication) {
+    public ResponseEntity<List<MaintenanceTask>> getAllTasks(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String equipmentId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication) {
         // Forward the trusted identity so the service can enforce record ownership.
-        return ResponseEntity.ok(maintenanceService.getAllTasks(authentication));
+        return ResponseEntity.ok(maintenanceService.getAllTasks(
+                authentication, status, equipmentId, page, size));
     }
 
     /**

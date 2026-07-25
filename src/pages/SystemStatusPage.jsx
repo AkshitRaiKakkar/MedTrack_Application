@@ -646,7 +646,7 @@ export default function SystemStatusPage() {
             </div>
 
             {/* Interactive Metrics Graph Section */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-[2.5rem] p-8 md:p-12 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-3xl md:rounded-[2.5rem] p-4 sm:p-8 md:p-12 shadow-sm w-full max-w-full overflow-hidden">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
                   <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-500/10 px-2.5 py-1 rounded">
@@ -657,12 +657,12 @@ export default function SystemStatusPage() {
                   </h3>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                   {/* Select Service Dropdown */}
                   <select
                     value={selectedMetricComponent}
                     onChange={(e) => setSelectedMetricComponent(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-350 outline-none"
+                    className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-350 outline-none w-full sm:w-auto"
                   >
                     {componentsList.map((comp) => (
                       <option key={comp.id} value={comp.id}>
@@ -691,8 +691,8 @@ export default function SystemStatusPage() {
               </div>
 
               {/* Pure SVG Line Chart */}
-              <div className="relative border border-slate-100 dark:border-slate-800/85 bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-3xl h-[240px] flex items-center justify-center">
-                <svg className="w-full h-[180px] overflow-visible" viewBox="0 0 800 180" preserveAspectRatio="none">
+              <div className="relative border border-slate-100 dark:border-slate-800/85 bg-slate-50/50 dark:bg-slate-950/40 p-2 sm:p-4 rounded-3xl h-[240px] flex items-center justify-center w-full max-w-full overflow-hidden">
+                <svg className="w-full h-[180px] overflow-hidden" viewBox="0 0 800 180" preserveAspectRatio="none">
                   <defs>
                     <linearGradient id="chartGlow" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
@@ -739,10 +739,10 @@ export default function SystemStatusPage() {
                 </svg>
 
                 {/* Legend Context */}
-                <div className="absolute bottom-2 left-6 right-6 flex justify-between text-[9px] font-mono text-slate-400">
-                  <span>Start (Interval Boundary)</span>
-                  <span>Active Resolution: {timeRange === "1h" ? "5-min points" : timeRange === "24h" ? "Hourly averages" : "Daily averages"}</span>
-                  <span>End (Present)</span>
+                <div className="absolute bottom-2 left-3 right-3 flex flex-wrap justify-between text-[8px] sm:text-[9px] font-mono text-slate-400 gap-1">
+                  <span>Start</span>
+                  <span>Resolution: {timeRange === "1h" ? "5-min" : timeRange === "24h" ? "Hourly" : "Daily"}</span>
+                  <span>End</span>
                 </div>
               </div>
 
