@@ -6,8 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 
 import java.time.LocalDate;
 
@@ -51,14 +49,31 @@ public class Equipment {
     private String department;
 
     /**
-     * Status values: "Operational", "Maintenance", "Retired"
-     * Matches AddEquipmentForm.jsx options
+     * Status values: ACTIVE, UNDER_MAINTENANCE, RETIRED
      */
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private EquipmentStatus status = EquipmentStatus.ACTIVE;
 
-    private String category;
+    /**
+     * Equipment Category
+     */
+    @Enumerated(EnumType.STRING)
+    private EquipmentCategory category;
+
+    /**
+     * Current quantity available in inventory.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer quantity = 0;
+
+    /**
+     * Minimum stock threshold before an alert is generated.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer minimumStock = 10;
 
     private LocalDate purchaseDate;
 
@@ -68,6 +83,6 @@ public class Equipment {
      * Many Equipment items belong to one Hospital.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "hospital_id") // removed insertable=false, updatable=false
+    @JoinColumn(name = "hospital_id")
     private Hospital hospital;
 }

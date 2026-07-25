@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
-import java.time.temporal.ChronoUnit;
+import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -49,6 +49,11 @@ public class EquipmentService {
     public List<Equipment> getAllEquipment(String username) {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findByHospitalId(hospital.getId());
+    }
+
+    public List<Equipment> getLowStockEquipment(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.findLowStockEquipment(hospital.getId());
     }
 
     /**
@@ -109,6 +114,13 @@ public class EquipmentService {
         if (equipment.getEquipmentCode() == null) {
             equipment.setEquipmentCode("EQ-" + UUID.randomUUID().toString());
         }
+        if (equipment.getQuantity() == null) {
+            equipment.setQuantity(0);
+        }
+
+        if (equipment.getMinimumStock() == null) {
+            equipment.setMinimumStock(10);
+        }
         return equipmentRepository.save(equipment);
     }
 
@@ -135,6 +147,8 @@ public class EquipmentService {
         equipment.setSerialNumber(equipmentDetails.getSerialNumber());
         equipment.setDepartment(equipmentDetails.getDepartment());
         equipment.setCategory(equipmentDetails.getCategory());
+        equipment.setQuantity(equipmentDetails.getQuantity());
+        equipment.setMinimumStock(equipmentDetails.getMinimumStock());
         equipment.setStatus(equipmentDetails.getStatus());
         equipment.setPurchaseDate(equipmentDetails.getPurchaseDate());
 
@@ -239,10 +253,30 @@ public class EquipmentService {
                     continue;
                 }
 
+                EquipmentCategory equipmentCategory;
+
                 if (category == null || category.trim().isEmpty()) {
-                    category = "Imaging";
+
+                    equipmentCategory = EquipmentCategory.IMAGING;
+
                 } else {
-                    List<String> validCategories = List.of("Imaging", "Surgical", "Monitoring", "Laboratory", "Respiratory");
+
+                    try {
+                        equipmentCategory = EquipmentCategory.valueOf(
+                                category.trim().toUpperCase()
+                        );
+                    } catch (IllegalArgumentException ex) {
+
+                        failures.add(new EquipmentImportSummary.RowFailure(
+                                rowNum,
+                                line,
+                                "Invalid category"
+                        ));
+
+                        failureCount++;
+                        continue;
+                    }
+                }
                     String finalCat = category.trim();
                     if (validCategories.stream().noneMatch(c -> c.equalsIgnoreCase(finalCat))) {
                         failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Invalid category. Allowed: Imaging, Surgical, Monitoring, Laboratory, Respiratory"));
@@ -288,7 +322,9 @@ public class EquipmentService {
                         .model(model)
                         .serialNumber(serialNumber)
                         .department(department)
-                        .category(category)
+                        .category(equipmentCategory)
+                        .quantity(0)
+                        .minimumStock(10)
                         .status(parsedStatus)
                         .purchaseDate(purchaseDate)
                         .equipmentCode("EQ-" + UUID.randomUUID().toString())
