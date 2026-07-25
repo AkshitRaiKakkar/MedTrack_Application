@@ -30,6 +30,7 @@ import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
 import ComplianceSecurityPage from "../pages/auth/ComplianceSecurityPage";
 import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
 import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
+import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -160,6 +161,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "keyvault-security":
     case "keyvault":
       return ProtectedRoute(SecurityKeyVaultPage);
+    case "siem":
+    case "siem-analytics":
+    case "siem-security":
+      return ProtectedRoute(SiemSecurityAnalyticsPage);
 
     // --- Fallback ---
     default:

@@ -93,6 +93,9 @@ const getRouteStateFromPath = () => {
     keyvault: "keyvault-security",
     "keyvault-security": "keyvault-security",
     certificate: "certificate",
+    siem: "siem-analytics",
+    "siem-analytics": "siem-analytics",
+    "siem-security": "siem-analytics",
   };
 
   return {
