@@ -52,6 +52,11 @@ public class EquipmentService {
         return equipmentRepository.findByHospitalId(hospital.getId());
     }
 
+    public List<Equipment> getLowStockEquipment(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.findLowStockEquipment(hospital.getId());
+    }
+
     /**
      * Retrieves all equipment whose warranty has already expired.
      *
@@ -110,6 +115,13 @@ public class EquipmentService {
         if (equipment.getEquipmentCode() == null) {
             equipment.setEquipmentCode("EQ-" + UUID.randomUUID().toString());
         }
+        if (equipment.getQuantity() == null) {
+            equipment.setQuantity(0);
+        }
+
+        if (equipment.getMinimumStock() == null) {
+            equipment.setMinimumStock(10);
+        }
         return equipmentRepository.save(equipment);
     }
 
@@ -136,6 +148,8 @@ public class EquipmentService {
         equipment.setSerialNumber(equipmentDetails.getSerialNumber());
         equipment.setDepartment(equipmentDetails.getDepartment());
         equipment.setCategory(equipmentDetails.getCategory());
+        equipment.setQuantity(equipmentDetails.getQuantity());
+        equipment.setMinimumStock(equipmentDetails.getMinimumStock());
         equipment.setStatus(equipmentDetails.getStatus());
         equipment.setPurchaseDate(equipmentDetails.getPurchaseDate());
 
