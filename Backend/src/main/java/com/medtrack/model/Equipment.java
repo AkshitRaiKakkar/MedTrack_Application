@@ -58,7 +58,8 @@ public class Equipment {
     @Builder.Default
     private EquipmentStatus status = EquipmentStatus.ACTIVE;
 
-    private String category;
+    @Enumerated(EnumType.STRING)
+    private EquipmentCategory category;
 
     private LocalDate purchaseDate;
 
