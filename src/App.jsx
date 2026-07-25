@@ -94,6 +94,9 @@ const getRouteStateFromPath = () => {
     "key-vault": "keyvault-security",
     "keyvault-security": "keyvault-security",
     certificate: "certificate",
+    dlp: "dlp-privacy",
+    "dlp-privacy": "dlp-privacy",
+    "privacy-guard": "dlp-privacy",
   };
 
   return {
