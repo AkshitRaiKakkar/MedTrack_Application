@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { loginUser } from "../../services/AuthService";
-import logo from "../../assets/logo.png";
+import MedTrackLogo from "../common/MedTrackLogo";
 
 export default function LoginForm({ onNavigate }) {
   const { login } = useAuth();
 
-  const [form, setForm] = useState({ email: "", password: "", role: "hospital" });
+  const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -61,7 +61,9 @@ export default function LoginForm({ onNavigate }) {
 
       {/* Header */}
       <div className="text-center mb-8">
-        <img src={logo} alt="MedTrack Logo" className="h-10 mx-auto mb-4" />
+        <div className="flex justify-center mb-3">
+          <MedTrackLogo size="text-2xl" />
+        </div>
         <h2 className="text-2xl font-extrabold" style={{ color: "#0f172a" }}>
           Welcome back
         </h2>
@@ -81,27 +83,6 @@ export default function LoginForm({ onNavigate }) {
             {error}
           </div>
         )}
-
-        {/* Role */}
-        <div>
-          <label
-            className="block text-xs font-semibold mb-2 tracking-widest uppercase"
-            style={{ color: "#475569" }}
-          >
-            Login As
-          </label>
-          <select
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}
-            style={{ ...inputBase, cursor: "pointer" }}
-            onFocus={focusIn}
-            onBlur={focusOut}
-          >
-            <option value="hospital">Hospital Admin</option>
-            <option value="technician">Technician</option>
-            <option value="supplier">Supplier</option>
-          </select>
-        </div>
 
         {/* Email */}
         <div>

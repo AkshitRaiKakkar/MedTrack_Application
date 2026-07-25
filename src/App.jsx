@@ -4,9 +4,18 @@ import "lenis/dist/lenis.css";
 import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
+import ScrollToTopButton from "./components/common/ScrollToTopButton";
+import CustomCursor from "./components/common/CustomCursor";
 import AppRoutes from "./routes/AppRoutes";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import GuidelinesPage from "./pages/GuidelinesPage";
+import HelpCenterPage from "./pages/HelpCenterPage";
+import AwardsPage from "./pages/AwardsPage";
+import TermsPage from "./pages/TermsPage";
+import GuidesPage from "./pages/GuidesPage";
+import SecurityPage from "./pages/SecurityPage";
+import SystemStatusPage from "./pages/SystemStatusPage";
 import { ThemeProvider } from "./context/ThemeContext";
 
 const getRouteStateFromPath = () => {
@@ -31,6 +40,13 @@ const getRouteStateFromPath = () => {
     };
   }
 
+  if (path.startsWith("apply/")) {
+    return {
+      page: "apply",
+      data: decodeURIComponent(path.slice("apply/".length)),
+    };
+  }
+
   const routeMap = {
     blog: "blog",
     register: "register",
@@ -52,6 +68,26 @@ const getRouteStateFromPath = () => {
     orderstatus: "orderstatus",
     about: "about",
     contact: "contact",
+    guidelines: "guidelines",
+    help: "help",
+    awards: "awards",
+    terms: "terms",
+    guides: "guides",
+    security: "security",
+    status: "status",
+    authority: "authority-security",
+    "authority-security": "authority-security",
+    mfa: "mfa-security",
+    "mfa-security": "mfa-security",
+    sso: "sso-security",
+    "sso-security": "sso-security",
+    rbac: "rbac-security",
+    "rbac-security": "rbac-security",
+    zerotrust: "zerotrust-security",
+    "zerotrust-security": "zerotrust-security",
+    keyvault: "keyvault-security",
+    "keyvault-security": "keyvault-security",
+    certificate: "certificate",
   };
 
   return {
@@ -78,6 +114,8 @@ function AppContent() {
         ? `${basePath}/blog/${encodeURIComponent(data)}`
         : page === "edit-equipment" && data
         ? `${basePath}/edit-equipment/${encodeURIComponent(data)}`
+        : page === "apply" && data
+        ? `${basePath}/apply/${encodeURIComponent(data)}`
         : `${basePath}/${page}`;
 
     window.history.pushState({}, "", nextPath);
@@ -101,6 +139,8 @@ function AppContent() {
     "forgot-password",
     "verify-otp",
     "reset-password",
+    "apply",
+    "dashboard"
   ];
   const isAuthPage = noLayoutPages.includes(currentPage);
 
@@ -110,6 +150,8 @@ function AppContent() {
         className="flex flex-col min-h-screen bg-surface text-primary transition-colors duration-200"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
+
+        <CustomCursor />
         {!isAuthPage && (
           <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
         )}
@@ -119,6 +161,20 @@ function AppContent() {
             <AboutPage />
           ) : currentPage === "contact" ? (
             <ContactPage />
+          ) : currentPage === "guidelines" ? (
+            <GuidelinesPage />
+          ) : currentPage === "help" ? (
+            <HelpCenterPage />
+          ) : currentPage === "awards" ? (
+            <AwardsPage />
+          ) : currentPage === "terms" ? (
+            <TermsPage />
+          ) : currentPage === "guides" ? (
+            <GuidesPage />
+          ) : currentPage === "security" ? (
+            <SecurityPage />
+          ) : currentPage === "status" ? (
+            <SystemStatusPage />
           ) : (
             <AppRoutes
               currentPage={currentPage}
@@ -128,8 +184,8 @@ function AppContent() {
           )}
         </main>
 
-        {!isAuthPage && <Footer />}
-      </div>
+{!isAuthPage && <Footer onNavigate={handleNavigate} />}
+        <ScrollToTopButton />      </div>
     </ReactLenis>
   );
 }

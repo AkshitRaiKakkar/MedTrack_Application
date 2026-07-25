@@ -6,18 +6,28 @@ import { useAuth } from "../context/AuthContext";
 import LandingPage from "../pages/LandingPage";
 import Blog from "../pages/Blog";
 import BlogPost from "../pages/BlogPost";
+import CareersPage from "../pages/CareersPage";
+import JobApplicationPage from "../pages/JobApplicationPage";
+import CertificateGeneratorPage from "../pages/CertificateGeneratorPage";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
 import VerifyOtpPage from "../pages/auth/VerifyOtpPage";
 import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
 import Dashboard from "../pages/hospital/Dashboard";
+import AnalyticsDashboard from "../pages/hospital/AnalyticsDashboard";
 import EquipmentList from "../pages/hospital/EquipmentList";
 import MaintenanceSchedule from "../pages/hospital/MaintenanceSchedule";
 import TaskList from "../pages/technician/TaskList";
 import UpdateTask from "../pages/technician/UpdateTask";
 import OrdersList from "../pages/supplier/OrdersList";
 import OrderStatus from "../pages/supplier/OrderStatus";
+import AuthoritySecurityPage from "../pages/auth/AuthoritySecurityPage";
+import MfaSecurityPage from "../pages/auth/MfaSecurityPage";
+import EnterpriseSsoPage from "../pages/auth/EnterpriseSsoPage";
+import RbacSecurityPage from "../pages/auth/RbacSecurityPage";
+import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
+import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -70,10 +80,16 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return <Blog onNavigate={onNavigate} />;
     case "blog-post":
       return <BlogPost onNavigate={onNavigate} slug={pageData} />;
+    case "careers":
+      return <CareersPage onNavigate={onNavigate} />;
+    case "apply":
+      return <JobApplicationPage onNavigate={onNavigate} jobId={pageData} />;
+    case "certificate":
+      return <CertificateGeneratorPage />;
     case "login":
       return <LoginPage onNavigate={onNavigate} />;
     case "register":
-      return <RegisterPage onNavigate={onNavigate} />;
+      return <RegisterPage onNavigate={onNavigate} defaultRole={pageData} />;
     case "forgot-password":
       return <ForgotPasswordPage onNavigate={onNavigate} />;
     case "verify-otp":
@@ -96,6 +112,8 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return ProtectedRoute(RequestEquipmentPage, {}, ["hospital"]);
     case "maintenance":
       return ProtectedRoute(MaintenanceSchedule);
+    case "analytics":
+      return ProtectedRoute(AnalyticsDashboard, {}, ["hospital"]);
 
     // --- Protected Routes: Technician ---
     case "tasks":
@@ -110,6 +128,29 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return ProtectedRoute(OrdersList);
     case "orderstatus":
       return ProtectedRoute(OrderStatus, { order: pageData });
+
+    // --- Protected Routes: Security & Authority ---
+    // Authority version management, RBAC role/permission matrix, and SSO provider
+    // configuration are Hospital admin-only consoles. 2FA/device management is
+    // self-service and stays open to any authenticated role.
+    case "authority-security":
+    case "authority":
+      return ProtectedRoute(AuthoritySecurityPage, {}, ["hospital"]);
+    case "mfa-security":
+    case "mfa":
+      return ProtectedRoute(MfaSecurityPage);
+    case "sso-security":
+    case "sso":
+      return ProtectedRoute(EnterpriseSsoPage, {}, ["hospital"]);
+    case "rbac-security":
+    case "rbac":
+      return ProtectedRoute(RbacSecurityPage);
+    case "zerotrust-security":
+    case "zerotrust":
+      return ProtectedRoute(ZeroTrustSecurityPage);
+    case "keyvault-security":
+    case "keyvault":
+      return ProtectedRoute(SecurityKeyVaultPage);
 
     // --- Fallback ---
     default:

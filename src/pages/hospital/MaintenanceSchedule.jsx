@@ -1,6 +1,7 @@
 // src/pages/hospital/MaintenanceSchedule.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { getAllTasks, exportTasksToICal } from '../../services/MaintenanceService';
 
 /* ===========================
    BIG TEMPORARY DEMO DATA
@@ -48,23 +49,63 @@ const DEMO_TASKS = [
 export default function MaintenanceSchedule({ onNavigate }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    // 1. Try to load from localStorage
+    fetchTasks();
+  }, []);
+
+  const fetchTasks = async () => {
+    try {
+      const data = await getAllTasks();
+      if (Array.isArray(data) && data.length > 0) {
+        // Map backend task structure to match the component keys (equipmentName, scheduledDate)
+        const mapped = data.map(t => ({
+          id: t.taskCode || `MNT-${t.id}`,
+          equipmentName: t.equipment || "N/A",
+          maintenanceType: t.maintenanceType || "N/A",
+          scheduledDate: t.deadline || "",
+          assignedTechnician: t.assignedTechnician || "Unassigned",
+          status: t.status ? t.status.getDisplayName ? t.status.getDisplayName() : t.status : "Scheduled"
+        }));
+        setTasks(mapped);
+      } else {
+        loadLocalTasks();
+      }
+    } catch (err) {
+      console.error("Failed to load tasks from backend, using local/demo:", err);
+      loadLocalTasks();
+    }
+  };
+
+  const loadLocalTasks = () => {
     const storedTasks = localStorage.getItem("medtrack_maintenance");
     const parsedTasks = storedTasks ? JSON.parse(storedTasks) : [];
-
-    // 2. Logic: If user has created tasks, MERGE them with Demo data
-    // If you want to ONLY show user data when it exists, use: 
-    // if (parsedTasks.length > 0) setTasks(parsedTasks); else setTasks(DEMO_TASKS);
-    
     if (parsedTasks.length > 0) {
-       // Combining demo data with user-created data for a full view
-       setTasks([...DEMO_TASKS, ...parsedTasks]);
+      setTasks([...DEMO_TASKS, ...parsedTasks]);
     } else {
-       setTasks(DEMO_TASKS);
+      setTasks(DEMO_TASKS);
     }
-  }, []);
+  };
+
+  const handleExportICal = async () => {
+    setExporting(true);
+    try {
+      const icalContent = await exportTasksToICal();
+      const blob = new Blob([icalContent], { type: "text/calendar;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute("download", "medtrack_maintenance.ics");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("iCal export failed:", err);
+      alert("Failed to export iCal feed. Please make sure you are logged in.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "N/A";
@@ -76,6 +117,8 @@ export default function MaintenanceSchedule({ onNavigate }) {
   const statusStyles = {
     "Scheduled": "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800",
     "In Progress": "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800",
+    "Needs Part": "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800",
+    "On Hold": "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800/50 dark:text-gray-300 dark:border-gray-700",
     "Completed": "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800",
   };
 
@@ -89,14 +132,23 @@ export default function MaintenanceSchedule({ onNavigate }) {
               <h1 className="text-xl font-bold text-primary">Maintenance Schedule</h1>
               <p className="text-sm text-secondary mt-1">Managing {tasks.length} tasks</p>
             </div>
-            {user?.role === "hospital" && (
+            <div className="flex gap-2">
               <button
-                onClick={() => onNavigate('schedule-maintenance')}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
+                onClick={handleExportICal}
+                disabled={exporting}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-lg shadow-sm transition-colors border border-subtle flex items-center gap-1.5 cursor-pointer"
               >
-                + New Schedule
+                📅 {exporting ? "Exporting..." : "Export iCal Feed"}
               </button>
-            )}
+              {user?.role === "hospital" && (
+                <button
+                  onClick={() => onNavigate('schedule-maintenance')}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+                >
+                  + New Schedule
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
