@@ -138,6 +138,15 @@ public class EquipmentController {
                 equipmentService.getWarrantyExpiringSoon(principal.getName())
         );
     }
+    @GetMapping("/search")
+    public ResponseEntity<List<Equipment>> searchEquipment(
+            @RequestParam String keyword,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.searchEquipment(keyword, principal.getName())
+        );
+    }
 
     /**
      * Validates that a resource ID is a positive number.

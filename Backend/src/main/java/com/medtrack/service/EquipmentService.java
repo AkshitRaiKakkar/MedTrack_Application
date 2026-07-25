@@ -51,6 +51,11 @@ public class EquipmentService {
         return equipmentRepository.findByHospitalId(hospital.getId());
     }
 
+    public List<Equipment> searchEquipment(String keyword, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.searchEquipment(hospital.getId(), keyword);
+    }
+
     /**
      * Retrieves all equipment whose warranty has already expired.
      *
