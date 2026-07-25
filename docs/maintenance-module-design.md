@@ -8,6 +8,7 @@ The project already contains a basic Maintenance Scheduling module. It is implem
 - `model/MaintenanceStatus.java`
 - `dto/MaintenanceCreateRequest.java`
 - `dto/MaintenanceUpdateRequest.java`
+- `validation/MaintenanceValidationLimits.java`
 - `repository/MaintenanceTaskRepository.java`
 - `service/MaintenanceService.java`
 - `controller/MaintenanceController.java`
@@ -41,6 +42,11 @@ JSON shape without gaining write access to those values.
 Its optional report values retain the existing null-means-preserve behavior. The recurrence
 field remains accepted for compatibility but cannot change the hospital-owned schedule.
 
+Both request DTOs and the entity use constants from `MaintenanceValidationLimits` so HTTP
+validation and persistence constraints cannot silently drift apart. API-facing `VARCHAR` fields
+are limited to 255 characters, technician notes to 16,000 characters, and the base64/string
+signature representation to 60,000 characters.
+
 ### MaintenanceTaskRepository.java
 
 `MaintenanceTaskRepository` extends `JpaRepository`, so it already supports basic database operations like save, find all, find by id, and delete by id.
@@ -50,11 +56,12 @@ It also defines simple query methods:
 - `findByTaskCode(String taskCode)`
 - `findByAssignedTechnician(String assignedTechnician)`
 - `findByHospitalId(Long hospitalId)`
+- `findByAssignedTechnicianWithFilters(...)`
+- `findByHospitalIdWithFilters(...)`
 - `findByIdAndHospitalId(Long id, Long hospitalId)`
 - `findByIdAndAssignedTechnician(Long id, String assignedTechnician)`
 - `findByIdAndAssignedTechnicianForUpdate(Long id, String assignedTechnician)`
 - `findByIdAndHospitalIdForUpdate(Long id, Long hospitalId)`
-- `findByStatus(MaintenanceStatus status)`
 
 The hospital and technician ownership queries are already used by the service to prevent one
 user from reading or changing another user's tasks. Every scoped read and write-lock query also
@@ -67,6 +74,11 @@ locked technician-update query, this serializes deletion and completion attempts
 the same task.
 
 An ownership-scoped equipment-history query is now available through `findByEquipmentRecord_IdAndHospitalId`. Technician queries remain email-based because the authenticated technician identity and current frontend assignment field are both emails.
+
+The two list-filter queries accept optional status and equipment-code values plus a Spring Data
+`Pageable`. They retain the same dual ownership checks as the unfiltered queries and order results
+by deadline and database ID. The former global `findByStatus` method was removed because a
+tenant-agnostic status lookup is unsafe for API use.
 
 ### MaintenanceStatus.java
 
@@ -108,6 +120,8 @@ It currently supports:
 - serializing technician updates to the same task so concurrent completion requests cannot create duplicate recurrences
 - serializing hospital deletion with technician completion of the same task
 - exporting hospital tasks as an iCalendar feed
+- filtering hospital or technician lists by status and equipment code without weakening ownership
+- applying opt-in, bounded pagination to filtered or unfiltered list requests
 
 Create and update requests use dedicated DTOs. `MaintenanceTask` remains the response model,
 so existing response JSON fields are unchanged. The service constructs new entities from the
@@ -129,7 +143,12 @@ Current endpoints:
 The controller forwards the authenticated identity to the service, uses role guards for every operation, and validates positive IDs for item-level operations. The list endpoint is automatically scoped to the authenticated hospital or technician and consistently returns HTTP 200 with a JSON array, including `[]` when no tasks exist.
 
 Scheduling and technician-update DTOs use Bean Validation, with business-critical checks also
-retained in the service. Optional status and equipment filters are not yet exposed.
+retained in the service. `GET /api/maintenance` accepts optional `status`, `equipmentId`, `page`,
+and `size` parameters. Status accepts either the display value (for example `In Progress`) or enum
+name (`IN_PROGRESS`), and `equipmentId` is the canonical equipment code stored in the API response.
+Blank filters are treated as absent. Pagination is opt-in: when either paging parameter is supplied,
+`page` defaults to `0`, `size` defaults to `50`, and `size` is limited to `1..100`. Omitting both
+paging parameters preserves the existing unpaged JSON-array behavior.
 
 Controller integration tests verify scheduling, updates, deletion, empty lists, invalid payloads, invalid status text and transitions, positive ID validation, role guards, and hospital-only calendar export. Method-security failures are mapped to HTTP 403 instead of being converted to a generic HTTP 400 response.
 
@@ -216,13 +235,16 @@ Recommended API behavior:
 - `PUT /api/maintenance/{id}`: technician updates maintenance progress
 - `DELETE /api/maintenance/{id}`: hospital deletes its own non-completed maintenance task
 
-Recommended future filters:
+Supported optional filters and pagination:
 
 ```text
-GET /api/maintenance?technicianId=...
 GET /api/maintenance?status=...
 GET /api/maintenance?equipmentId=...
+GET /api/maintenance?page=0&size=50
 ```
+
+Filter values are combined when more than one is supplied. Clients cannot choose a technician or
+hospital scope; those constraints always come from the authenticated identity.
 
 ## Validation Rules
 
@@ -236,6 +258,9 @@ Scheduling should validate:
 - assigned technician exists if technician assignment is required
 - assigned technician has technician role
 - assigned technician is stored using the canonical email from the verified user account
+- equipment ID, maintenance type, assigned technician, description, and image reference do not
+  exceed 255 characters
+- surrounding whitespace is removed from the equipment lookup value and stored maintenance type
 
 Updating should validate:
 
@@ -246,6 +271,9 @@ Updating should validate:
   the current payload, or the previously stored signature when the field is omitted
 - completion time is generated by the server and cannot be supplied by a client
 - hours worked cannot be negative
+- notes do not exceed 16,000 characters
+- parts used do not exceed 255 characters
+- signature does not exceed 60,000 characters
 - only technicians should update technician report fields
 - technician updates cannot change the recurrence period configured when the hospital
   scheduled the task
@@ -331,6 +359,8 @@ The current frontend field names should be preserved unless frontend changes are
 - [x] Enforce non-null maintenance ownership and a restrictive equipment foreign key.
 - [x] Enforce agreement between maintenance ownership and linked-equipment ownership.
 - [x] Canonicalize technician emails and revalidate recurring-task assignment.
+- [x] Add ownership-safe status/equipment filtering with opt-in bounded pagination.
+- [x] Align Maintenance request validation limits with persistence constraints.
 
 ### Completed on 2026-07-14
 
@@ -422,9 +452,27 @@ unchanged. Regression coverage is implemented in `MaintenanceServiceTest` and th
 `MaintenanceTaskRepositoryTest`, which executes the ownership-scoped JPQL against H2 without
 loading unrelated application repositories.
 
+### Completed on 2026-07-25
+
+1. [x] **Added ownership-safe list filtering and opt-in pagination.** The existing
+   `GET /api/maintenance` endpoint now accepts optional `status`, `equipmentId`, `page`, and
+   `size` parameters while retaining its JSON-array response. Hospital and technician filter
+   queries enforce the same linked-equipment ownership invariant as every other Maintenance
+   access path. Pagination remains opt-in for backward compatibility and is capped at 100 rows
+   per page. The unused tenant-agnostic status repository method was removed.
+2. [x] **Aligned request validation with Maintenance persistence limits.** Shared constants now
+   define the maximum lengths used by create/update DTOs and the `MaintenanceTask` entity.
+   Oversized scheduling and technician-report fields are rejected through Bean Validation before
+   persistence instead of surfacing as database failures. Equipment references and maintenance
+   types are trimmed for lookup/storage while free-form report content retains its exact value.
+
+The endpoint path, roles, response fields, and unparameterized list behavior remain unchanged.
+Regression coverage is implemented in `MaintenanceServiceTest`,
+`MaintenanceTaskRepositoryTest`, `MaintenanceRequestValidationTest`, and
+`MaintenanceControllerIntegrationTest`.
+
 ### Recommended future work
 
-- [ ] Add optional status and equipment filters without weakening ownership scoping.
 - [ ] Decide whether to add a `CANCELLED` status.
 - [ ] Replace the technician email string with a direct `User` relationship.
 - [ ] Connect and verify the hospital maintenance list page against the backend API.

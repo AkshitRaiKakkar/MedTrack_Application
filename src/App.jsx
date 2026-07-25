@@ -91,6 +91,7 @@ const getRouteStateFromPath = () => {
     "soar-security": "threat-detection",
     "threat-detection": "threat-detection",
     keyvault: "keyvault-security",
+    "key-vault": "keyvault-security",
     "keyvault-security": "keyvault-security",
     certificate: "certificate",
     siem: "siem-analytics",

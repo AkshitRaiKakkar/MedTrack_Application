@@ -44,23 +44,30 @@ Seed tasks now use `MaintenanceStatus.SCHEDULED` and `MaintenanceStatus.IN_PROGR
 
 ### `Backend/src/main/java/com/medtrack/repository/MaintenanceTaskRepository.java`
 
-The status query now accepts the enum:
+Ownership-scoped list queries accept the enum as an optional filter:
 
 ```java
-List<MaintenanceTask> findByStatus(MaintenanceStatus status);
+List<MaintenanceTask> findByHospitalIdWithFilters(
+        Long hospitalId,
+        MaintenanceStatus status,
+        String equipmentId,
+        Pageable pageable);
 ```
 
-Example:
-
-```java
-maintenanceTaskRepository.findByStatus(MaintenanceStatus.IN_PROGRESS);
-```
+The API also supports status filtering with either a display value such as `In Progress` or an
+enum name such as `IN_PROGRESS`. A global status-only repository lookup is intentionally not
+exposed because Maintenance list access must always retain hospital or technician ownership.
 
 ### Maintenance request DTOs
 
 `MaintenanceCreateRequest` does not expose `status`; every scheduled task starts as
 `SCHEDULED` under server control. `MaintenanceUpdateRequest` requires a valid
 `MaintenanceStatus` and carries only technician-owned partial report fields.
+
+The request DTOs and entity also share Maintenance-specific length constants. Short scheduling
+and report fields are limited to the existing 255-character persistence width, notes to 16,000
+characters, and signatures to 60,000 characters. Oversized values therefore receive a structured
+HTTP 400 validation response before database access.
 
 ## API Compatibility
 
