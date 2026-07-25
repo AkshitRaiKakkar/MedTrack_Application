@@ -13,7 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
-import java.time.temporal.ChronoUnit;
+
+import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -239,17 +240,45 @@ public class EquipmentService {
                     continue;
                 }
 
+                // Category validation
+                EquipmentCategory equipmentCategory;
+
                 if (category == null || category.trim().isEmpty()) {
-                    category = "Imaging";
+
+                    equipmentCategory = EquipmentCategory.IMAGING;
+
                 } else {
-                    List<String> validCategories = List.of("Imaging", "Surgical", "Monitoring", "Laboratory", "Respiratory");
-                    String finalCat = category.trim();
-                    if (validCategories.stream().noneMatch(c -> c.equalsIgnoreCase(finalCat))) {
-                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Invalid category. Allowed: Imaging, Surgical, Monitoring, Laboratory, Respiratory"));
+
+                    List<EquipmentCategory> validCategories = List.of(
+                            EquipmentCategory.IMAGING,
+                            EquipmentCategory.SURGICAL,
+                            EquipmentCategory.MONITORING,
+                            EquipmentCategory.LABORATORY,
+                            EquipmentCategory.RESPIRATORY,
+                            EquipmentCategory.OTHER
+                    );
+
+                    String finalCat = category.trim().toUpperCase();
+
+                    if (validCategories.stream()
+                            .noneMatch(c -> c.name().equals(finalCat))) {
+
+                        failures.add(
+                                new EquipmentImportSummary.RowFailure(
+                                        rowNum,
+                                        line,
+                                        "Invalid category. Allowed: IMAGING, SURGICAL, MONITORING, LABORATORY, RESPIRATORY, OTHER"
+                                )
+                        );
+
                         failureCount++;
                         continue;
                     }
-                    category = validCategories.stream().filter(c -> c.equalsIgnoreCase(finalCat)).findFirst().orElse(category);
+
+                    equipmentCategory = validCategories.stream()
+                            .filter(c -> c.name().equals(finalCat))
+                            .findFirst()
+                            .orElse(EquipmentCategory.OTHER);
                 }
 
                 if (status == null || status.trim().isEmpty()) {
@@ -288,7 +317,7 @@ public class EquipmentService {
                         .model(model)
                         .serialNumber(serialNumber)
                         .department(department)
-                        .category(category)
+                        .category(equipmentCategory)
                         .status(parsedStatus)
                         .purchaseDate(purchaseDate)
                         .equipmentCode("EQ-" + UUID.randomUUID().toString())
