@@ -34,11 +34,27 @@ export default function CookieConsentPage() {
   const [activeTab, setActiveTab] = useState("preferences"); // preferences | audit | policy
 
   // Preferences Toggles
-  const [preferences, setPreferences] = useState({
-    essential: true, // Always true
-    analytics: false,
-    functional: true,
-    telemetry: false
+  const [preferences, setPreferences] = useState(() => {
+    try {
+      const stored = localStorage.getItem("medtrack_cookie_consent");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          essential: true,
+          analytics: Boolean(parsed.analytics),
+          functional: parsed.functional !== undefined ? Boolean(parsed.functional) : true,
+          telemetry: Boolean(parsed.telemetry)
+        };
+      }
+    } catch (err) {
+      console.error("Error reading initial consent in CookieConsentPage:", err);
+    }
+    return {
+      essential: true, // Always true
+      analytics: false,
+      functional: true,
+      telemetry: false
+    };
   });
 
   // Global Privacy Control Simulated Header
@@ -132,12 +148,21 @@ export default function CookieConsentPage() {
       }, 120);
     } else if (deployProgress === 100) {
       setDeploySuccess(true);
+      try {
+        localStorage.setItem("medtrack_cookie_consent", JSON.stringify({
+          ...preferences,
+          status: "custom",
+          timestamp: new Date().toISOString()
+        }));
+      } catch (err) {
+        console.error("Error saving cookie consent to localStorage:", err);
+      }
       timer = setTimeout(() => {
         setDeployProgress(-1);
       }, 4000);
     }
     return () => clearTimeout(timer);
-  }, [deployProgress]);
+  }, [deployProgress, preferences]);
 
   // Simulated Cookie Eraser Loader
   useEffect(() => {
@@ -148,6 +173,11 @@ export default function CookieConsentPage() {
       }, 150);
     } else if (eraseProgress === 100) {
       setEraseSuccess(true);
+      try {
+        localStorage.removeItem("medtrack_cookie_consent");
+      } catch (err) {
+        console.error("Error removing cookie consent from localStorage:", err);
+      }
       setPreferences({
         essential: true,
         analytics: false,

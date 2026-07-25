@@ -6,6 +6,7 @@ import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
 import ScrollToTopButton from "./components/common/ScrollToTopButton";
 import CustomCursor from "./components/common/CustomCursor";
+import CookieBanner from "./components/common/CookieBanner";
 import AppRoutes from "./routes/AppRoutes";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
@@ -194,7 +195,9 @@ function AppContent() {
         </main>
 
 {!isAuthPage && <Footer onNavigate={handleNavigate} />}
-        <ScrollToTopButton />      </div>
+        <ScrollToTopButton />
+        <CookieBanner onNavigate={handleNavigate} />
+      </div>
     </ReactLenis>
   );
 }
