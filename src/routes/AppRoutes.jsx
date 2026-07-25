@@ -27,6 +27,7 @@ import EnterpriseSsoPage from "../pages/auth/EnterpriseSsoPage";
 import RbacSecurityPage from "../pages/auth/RbacSecurityPage";
 import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
 import ComplianceSecurityPage from "../pages/auth/ComplianceSecurityPage";
+import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -145,6 +146,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "compliance-security":
     case "compliance":
       return ProtectedRoute(ComplianceSecurityPage);
+    case "threat-detection":
+    case "soar-security":
+    case "soar":
+      return ProtectedRoute(ThreatDetectionSoarPage);
 
     // --- Fallback ---
     default:

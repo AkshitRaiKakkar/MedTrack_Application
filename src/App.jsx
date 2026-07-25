@@ -87,6 +87,9 @@ const getRouteStateFromPath = () => {
     "zerotrust-security": "zerotrust-security",
     compliance: "compliance-security",
     "compliance-security": "compliance-security",
+    soar: "threat-detection",
+    "soar-security": "threat-detection",
+    "threat-detection": "threat-detection",
   };
 
   return {
