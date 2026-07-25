@@ -8,6 +8,7 @@ import Blog from "../pages/Blog";
 import BlogPost from "../pages/BlogPost";
 import CareersPage from "../pages/CareersPage";
 import JobApplicationPage from "../pages/JobApplicationPage";
+import CertificateGeneratorPage from "../pages/CertificateGeneratorPage";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
@@ -28,6 +29,7 @@ import RbacSecurityPage from "../pages/auth/RbacSecurityPage";
 import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
 import ComplianceSecurityPage from "../pages/auth/ComplianceSecurityPage";
 import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
+import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -84,6 +86,8 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return <CareersPage onNavigate={onNavigate} />;
     case "apply":
       return <JobApplicationPage onNavigate={onNavigate} jobId={pageData} />;
+    case "certificate":
+      return <CertificateGeneratorPage />;
     case "login":
       return <LoginPage onNavigate={onNavigate} />;
     case "register":
@@ -128,15 +132,18 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return ProtectedRoute(OrderStatus, { order: pageData });
 
     // --- Protected Routes: Security & Authority ---
+    // Authority version management, RBAC role/permission matrix, and SSO provider
+    // configuration are Hospital admin-only consoles. 2FA/device management is
+    // self-service and stays open to any authenticated role.
     case "authority-security":
     case "authority":
-      return ProtectedRoute(AuthoritySecurityPage);
+      return ProtectedRoute(AuthoritySecurityPage, {}, ["hospital"]);
     case "mfa-security":
     case "mfa":
       return ProtectedRoute(MfaSecurityPage);
     case "sso-security":
     case "sso":
-      return ProtectedRoute(EnterpriseSsoPage);
+      return ProtectedRoute(EnterpriseSsoPage, {}, ["hospital"]);
     case "rbac-security":
     case "rbac":
       return ProtectedRoute(RbacSecurityPage);
@@ -150,6 +157,9 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "soar-security":
     case "soar":
       return ProtectedRoute(ThreatDetectionSoarPage);
+    case "keyvault-security":
+    case "keyvault":
+      return ProtectedRoute(SecurityKeyVaultPage);
 
     // --- Fallback ---
     default:

@@ -90,6 +90,9 @@ const getRouteStateFromPath = () => {
     soar: "threat-detection",
     "soar-security": "threat-detection",
     "threat-detection": "threat-detection",
+    keyvault: "keyvault-security",
+    "keyvault-security": "keyvault-security",
+    certificate: "certificate",
   };
 
   return {
@@ -141,7 +144,8 @@ function AppContent() {
     "forgot-password",
     "verify-otp",
     "reset-password",
-    "apply"
+    "apply",
+    "dashboard"
   ];
   const isAuthPage = noLayoutPages.includes(currentPage);
 
@@ -151,6 +155,7 @@ function AppContent() {
         className="flex flex-col min-h-screen bg-surface text-primary transition-colors duration-200"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
+
         <CustomCursor />
         {!isAuthPage && (
           <Navbar onNavigate={handleNavigate} currentPage={currentPage} />

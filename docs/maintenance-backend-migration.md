@@ -42,6 +42,13 @@ Migration version `3` rejects records whose hospital ownership cannot be restore
 equipment deletion from orphaning maintenance history. The foreign key uses restrictive delete
 behavior; maintenance evidence is never cascade-deleted with equipment.
 
+The database constraints make both ownership fields present and ensure that
+`equipment_record_id` references real equipment, but they do not by themselves compare
+`maintenance_tasks.hospital_id` with the linked equipment's `hospital_id`. Maintenance repository
+queries therefore enforce both ownership paths on hospital and technician access, and the service
+checks the same invariant before saving direct or recurring tasks. Operators should still repair
+any inconsistent legacy rows rather than relying on them remaining inaccessible.
+
 ## Pre-deployment Checks
 
 Back up the persistent database before enabling the migration.
@@ -147,11 +154,20 @@ Integration tests that manage their own database state disable it.
 - hospital-only calendar export
 
 `MaintenanceServiceTest` continues to verify ownership scoping, scheduling, lifecycle enforcement,
-recurrence, calendar output, locked deletion, and completed-record retention.
+recurrence, calendar output, locked deletion, and completed-record retention. It also verifies
+that mismatched task/equipment hospital ownership is rejected, supplied technician emails are
+replaced with the canonical account email, and a recurrence is left unassigned when the former
+technician is no longer eligible.
+
+`MaintenanceTaskRepositoryTest` initializes only the Maintenance JPA repository and verifies
+against H2 that all hospital-, technician-, lock-, and equipment-history queries exclude an
+inconsistent ownership row while retaining a valid row.
 
 It also verifies that completion requires an effective technician signature, accepts a previously stored signature when a partial completion payload omits the field, rejects an explicit blank signature, records `completedAt`, and preserves hospital-owned recurrence configuration during technician updates. Dedicated request DTOs now prevent client binding of completion timestamps and other server-controlled fields. `AnalyticsServiceTest` verifies that SLA compliance uses actual completion timestamps and excludes unverifiable legacy completions.
 
-The Maintenance regression coverage is present, but the complete backend Maven suite must
-be rerun after the project-wide `EquipmentStatus` compilation errors in `AnalyticsService`
-and `EquipmentService` are resolved. Those unrelated files are outside this Maintenance-only
-change.
+The backend currently compiles and the focused Maintenance service and migration suites pass.
+The complete Maven suite is not green because full-context tests encounter duplicate Spring
+repository bean names in the unrelated authentication compliance and governance packages.
+Allowing bean replacement reveals that those packages also declare the same JPA entity name.
+Those application-context problems prevent `MaintenanceControllerIntegrationTest` from starting
+and are outside this Maintenance-only change.
