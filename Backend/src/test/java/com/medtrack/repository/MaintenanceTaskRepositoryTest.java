@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
@@ -65,6 +66,12 @@ class MaintenanceTaskRepositoryTest {
                 inconsistentTask.getId(), "tech@medtrack.com").isEmpty());
         assertTrue(taskRepository.findByEquipmentRecord_IdAndHospitalId(
                 equipment.getId(), taskHospital.getId()).isEmpty());
+        assertTrue(taskRepository.findByHospitalIdWithFilters(
+                taskHospital.getId(), MaintenanceStatus.SCHEDULED,
+                equipment.getEquipmentCode(), Pageable.unpaged()).isEmpty());
+        assertTrue(taskRepository.findByAssignedTechnicianWithFilters(
+                "tech@medtrack.com", MaintenanceStatus.SCHEDULED,
+                equipment.getEquipmentCode(), Pageable.unpaged()).isEmpty());
 
         assertFalse(taskRepository.findByHospitalId(equipmentHospital.getId()).isEmpty());
         assertFalse(taskRepository.findByAssignedTechnician("valid-tech@medtrack.com").isEmpty());
@@ -72,6 +79,12 @@ class MaintenanceTaskRepositoryTest {
                 validTask.getId(), equipmentHospital.getId()).isPresent());
         assertTrue(taskRepository.findByIdAndAssignedTechnician(
                 validTask.getId(), "valid-tech@medtrack.com").isPresent());
+        assertFalse(taskRepository.findByHospitalIdWithFilters(
+                equipmentHospital.getId(), MaintenanceStatus.SCHEDULED,
+                equipment.getEquipmentCode(), Pageable.unpaged()).isEmpty());
+        assertFalse(taskRepository.findByAssignedTechnicianWithFilters(
+                "valid-tech@medtrack.com", MaintenanceStatus.SCHEDULED,
+                equipment.getEquipmentCode(), Pageable.unpaged()).isEmpty());
     }
 
     private Hospital persistHospital(String name) {
