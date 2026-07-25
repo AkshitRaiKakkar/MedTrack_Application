@@ -41,6 +41,7 @@ import {
   bumpGlobalAuthorityVersion,
   getAuthorityAuditLogs
 } from "../../services/AuthService";
+import ThreatDetectionSoarPanel from "./ThreatDetectionSoarPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -367,7 +368,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "mfa", label: "MFA & Passkeys", icon: KeyRound },
           { id: "jwt", label: "JWT Telemetry", icon: FileText },
           { id: "ip", label: `IP Allowlist (${trustedIps.length})`, icon: Globe },
-          { id: "audit", label: `Audit Trail (${auditLogs.length})`, icon: History }
+          { id: "audit", label: `Audit Trail (${auditLogs.length})`, icon: History },
+          { id: "threats", label: "Threat Engine & SOAR", icon: ShieldAlert }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -756,8 +758,9 @@ export default function EnterpriseSecurityCenter() {
                 </div>
               ))
             )}
-          </div>
-        </div>
+      {/* TAB 7: THREAT ENGINE & SOAR */}
+      {selectedTab === "threats" && (
+        <ThreatDetectionSoarPanel />
       )}
 
       {/* 4. MODALS */}
