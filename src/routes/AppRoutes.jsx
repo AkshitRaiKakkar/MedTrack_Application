@@ -162,6 +162,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "keyvault":
     case "keyvault-security":
       return ProtectedRoute(KeyVaultSecurityPage);
+    case "dlp":
+    case "dlp-privacy":
+    case "privacy-guard":
+      return ProtectedRoute(DlpPrivacyGuardPage);
 
     // --- Fallback ---
     default:

@@ -770,6 +770,11 @@ export default function EnterpriseSecurityCenter() {
         <SiemSecurityAnalyticsPanel />
       )}
 
+      {/* TAB 9: DLP & HIPAA PRIVACY GUARD */}
+      {selectedTab === "dlp" && (
+        <DlpPrivacyGuardPanel />
+      )}
+
       {/* 4. MODALS */}
 
       {/* Revoke Session Modal */}
