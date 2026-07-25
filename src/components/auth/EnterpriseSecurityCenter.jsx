@@ -42,6 +42,7 @@ import {
   getAuthorityAuditLogs
 } from "../../services/AuthService";
 import ThreatDetectionSoarPanel from "./ThreatDetectionSoarPanel";
+import SiemSecurityAnalyticsPanel from "./SiemSecurityAnalyticsPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -369,7 +370,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "jwt", label: "JWT Telemetry", icon: FileText },
           { id: "ip", label: `IP Allowlist (${trustedIps.length})`, icon: Globe },
           { id: "audit", label: `Audit Trail (${auditLogs.length})`, icon: History },
-          { id: "threats", label: "Threat Engine & SOAR", icon: ShieldAlert }
+          { id: "threats", label: "Threat Engine & SOAR", icon: ShieldAlert },
+          { id: "siem", label: "SIEM & Log Analytics", icon: Activity }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -761,6 +763,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 7: THREAT ENGINE & SOAR */}
       {selectedTab === "threats" && (
         <ThreatDetectionSoarPanel />
+      )}
+
+      {/* TAB 8: SIEM & LOG ANALYTICS */}
+      {selectedTab === "siem" && (
+        <SiemSecurityAnalyticsPanel />
       )}
 
       {/* 4. MODALS */}

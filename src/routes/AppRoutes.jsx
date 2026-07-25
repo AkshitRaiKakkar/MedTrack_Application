@@ -30,6 +30,7 @@ import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
 import ComplianceSecurityPage from "../pages/auth/ComplianceSecurityPage";
 import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
 import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
+import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
