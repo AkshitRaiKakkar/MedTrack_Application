@@ -55,25 +55,8 @@ public class Equipment {
     @Builder.Default
     private EquipmentStatus status = EquipmentStatus.ACTIVE;
 
-    /**
-     * Equipment Category
-     */
     @Enumerated(EnumType.STRING)
     private EquipmentCategory category;
-
-    /**
-     * Current quantity available in inventory.
-     */
-    @Column(nullable = false)
-    @Builder.Default
-    private Integer quantity = 0;
-
-    /**
-     * Minimum stock threshold before an alert is generated.
-     */
-    @Column(nullable = false)
-    @Builder.Default
-    private Integer minimumStock = 10;
 
     private LocalDate purchaseDate;
 
