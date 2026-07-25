@@ -159,6 +159,10 @@ that mismatched task/equipment hospital ownership is rejected, supplied technici
 replaced with the canonical account email, and a recurrence is left unassigned when the former
 technician is no longer eligible.
 
+`MaintenanceRequestValidationTest` verifies that create and technician-update payloads reject
+text exceeding the explicit Maintenance persistence limits. `MaintenanceServiceTest` also
+verifies normalization of equipment lookup values and stored maintenance types.
+
 `MaintenanceTaskRepositoryTest` initializes only the Maintenance JPA repository and verifies
 against H2 that all hospital-, technician-, lock-, and equipment-history queries exclude an
 inconsistent ownership row while retaining a valid row.
