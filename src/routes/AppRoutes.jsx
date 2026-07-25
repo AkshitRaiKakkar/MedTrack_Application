@@ -166,6 +166,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "dlp-privacy":
     case "privacy-guard":
       return ProtectedRoute(DlpPrivacyGuardPage);
+    case "passkeys":
+    case "passwordless":
+    case "webauthn":
+      return ProtectedRoute(PasskeyPasswordlessPage);
 
     // --- Fallback ---
     default:

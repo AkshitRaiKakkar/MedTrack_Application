@@ -775,6 +775,11 @@ export default function EnterpriseSecurityCenter() {
         <DlpPrivacyGuardPanel />
       )}
 
+      {/* TAB 10: BIOMETRIC PASSKEYS & WEBAUTHN */}
+      {selectedTab === "passkeys" && (
+        <PasskeyPasswordlessPanel />
+      )}
+
       {/* 4. MODALS */}
 
       {/* Revoke Session Modal */}
