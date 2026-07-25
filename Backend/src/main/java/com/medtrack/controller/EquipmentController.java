@@ -138,6 +138,15 @@ public class EquipmentController {
                 equipmentService.getWarrantyExpiringSoon(principal.getName())
         );
     }
+    @GetMapping("/search")
+    public ResponseEntity<List<Equipment>> searchEquipment(
+            @RequestParam String keyword,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.searchEquipment(keyword, principal.getName())
+        );
+    }
 
     /**
      * Retrieves all equipment that is currently below the configured stock threshold.
