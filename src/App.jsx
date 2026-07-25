@@ -94,12 +94,9 @@ const getRouteStateFromPath = () => {
     "key-vault": "keyvault-security",
     "keyvault-security": "keyvault-security",
     certificate: "certificate",
-    dlp: "dlp-privacy",
-    "dlp-privacy": "dlp-privacy",
-    "privacy-guard": "dlp-privacy",
-    passkeys: "passkeys",
-    passwordless: "passkeys",
-    webauthn: "passkeys",
+    siem: "siem-analytics",
+    "siem-analytics": "siem-analytics",
+    "siem-security": "siem-analytics",
   };
 
   return {

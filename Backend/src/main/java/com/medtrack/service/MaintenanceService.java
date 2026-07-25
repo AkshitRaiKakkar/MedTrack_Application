@@ -5,6 +5,7 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.exception.InvalidStatusTransitionException;
+import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
@@ -13,11 +14,12 @@ import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.medtrack.exception.ResourceNotFoundException;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -36,6 +38,8 @@ import java.util.UUID;
 public class MaintenanceService {
 
     private static final int ICAL_MAX_LINE_OCTETS = 75;
+    private static final int DEFAULT_PAGE_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 100;
     private static final DateTimeFormatter ICAL_UTC_TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
 
@@ -67,6 +71,28 @@ public class MaintenanceService {
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
 
+    public List<MaintenanceTask> getAllTasks(
+            Authentication authentication,
+            String statusValue,
+            String equipmentId,
+            Integer page,
+            Integer size) {
+        MaintenanceStatus status = parseStatusFilter(statusValue);
+        String normalizedEquipmentId = normalizeOptionalFilter(equipmentId);
+        Pageable pageable = resolvePageable(page, size);
+
+        if (hasRole(authentication, "HOSPITAL")) {
+            Long hospitalId = getHospitalForUser(authentication.getName()).getId();
+            return taskRepository.findByHospitalIdWithFilters(
+                    hospitalId, status, normalizedEquipmentId, pageable);
+        }
+        if (hasRole(authentication, "TECHNICIAN")) {
+            return taskRepository.findByAssignedTechnicianWithFilters(
+                    authentication.getName(), status, normalizedEquipmentId, pageable);
+        }
+        throw new AccessDeniedException("This role cannot access maintenance tasks");
+    }
+
     public MaintenanceTask getTaskById(Long id, Authentication authentication) {
         return findOwnedTask(id, authentication);
     }
@@ -75,7 +101,7 @@ public class MaintenanceService {
     public MaintenanceTask scheduleTask(MaintenanceCreateRequest request, Authentication authentication) {
         Hospital hospital = getHospitalForUser(authentication.getName());
         validateSchedulingRequest(request);
-        Equipment equipment = resolveOwnedEquipment(request.getEquipmentId(), hospital.getId());
+        Equipment equipment = resolveOwnedEquipment(request.getEquipmentId().trim(), hospital.getId());
         String assignedTechnician = resolveAssignedTechnician(request.getAssignedTechnician());
 
         MaintenanceTask task = MaintenanceTask.builder()
@@ -85,7 +111,7 @@ public class MaintenanceService {
                 .equipmentRecord(equipment)
                 .hospital(hospital.getName())
                 .hospitalId(hospital.getId())
-                .maintenanceType(request.getMaintenanceType())
+                .maintenanceType(request.getMaintenanceType().trim())
                 .deadline(request.getDeadline())
                 .assignedTechnician(assignedTechnician)
                 .description(request.getDescription())
@@ -179,6 +205,38 @@ public class MaintenanceService {
         if (request.getRecurrencePeriodDays() != null && request.getRecurrencePeriodDays() < 0) {
             throw new IllegalArgumentException("Recurrence period cannot be negative");
         }
+    }
+
+    private MaintenanceStatus parseStatusFilter(String statusValue) {
+        String normalizedStatus = normalizeOptionalFilter(statusValue);
+        if (normalizedStatus == null) {
+            return null;
+        }
+        return MaintenanceStatus.fromValue(normalizedStatus);
+    }
+
+    private String normalizeOptionalFilter(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private Pageable resolvePageable(Integer page, Integer size) {
+        if (page == null && size == null) {
+            return Pageable.unpaged();
+        }
+
+        int resolvedPage = page != null ? page : 0;
+        int resolvedSize = size != null ? size : DEFAULT_PAGE_SIZE;
+        if (resolvedPage < 0) {
+            throw new IllegalArgumentException("Page index cannot be negative");
+        }
+        if (resolvedSize <= 0 || resolvedSize > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException(
+                    "Page size must be between 1 and " + MAX_PAGE_SIZE);
+        }
+        return PageRequest.of(resolvedPage, resolvedSize);
     }
 
     private Equipment resolveOwnedEquipment(String equipmentReference, Long hospitalId) {
