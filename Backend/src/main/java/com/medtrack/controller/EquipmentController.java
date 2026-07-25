@@ -149,6 +149,20 @@ public class EquipmentController {
     }
 
     /**
+     * Retrieves all equipment that is currently below the configured stock threshold.
+     *
+     * @param principal the authenticated user's security principal
+     * @return list of low stock equipment
+     */
+    @GetMapping("/low-stock")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> getLowStockEquipment(Principal principal) {
+        return ResponseEntity.ok(
+                equipmentService.getLowStockEquipment(principal.getName())
+        );
+    }
+
+    /**
      * Validates that a resource ID is a positive number.
      *
      * @param id the resource identifier
