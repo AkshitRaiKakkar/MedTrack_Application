@@ -32,6 +32,7 @@ import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
 import KeyVaultSecurityPage from "../pages/auth/KeyVaultSecurityPage";
 import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
 import DlpPrivacyGuardPage from "../pages/auth/DlpPrivacyGuardPage";
+import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -167,6 +168,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "dlp-privacy":
     case "privacy-guard":
       return ProtectedRoute(DlpPrivacyGuardPage);
+    case "passkeys":
+    case "passwordless":
+    case "webauthn":
+      return ProtectedRoute(PasskeyPasswordlessPage);
 
     // --- Fallback ---
     default:

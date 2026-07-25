@@ -97,6 +97,9 @@ const getRouteStateFromPath = () => {
     dlp: "dlp-privacy",
     "dlp-privacy": "dlp-privacy",
     "privacy-guard": "dlp-privacy",
+    passkeys: "passkeys",
+    passwordless: "passkeys",
+    webauthn: "passkeys",
   };
 
   return {
