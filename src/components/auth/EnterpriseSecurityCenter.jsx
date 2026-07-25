@@ -42,7 +42,6 @@ import {
   getAuthorityAuditLogs
 } from "../../services/AuthService";
 import ThreatDetectionSoarPanel from "./ThreatDetectionSoarPanel";
-import KeyVaultSecurityPanel from "./KeyVaultSecurityPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -370,8 +369,7 @@ export default function EnterpriseSecurityCenter() {
           { id: "jwt", label: "JWT Telemetry", icon: FileText },
           { id: "ip", label: `IP Allowlist (${trustedIps.length})`, icon: Globe },
           { id: "audit", label: `Audit Trail (${auditLogs.length})`, icon: History },
-          { id: "threats", label: "Threat Engine & SOAR", icon: ShieldAlert },
-          { id: "keyvault", label: "Key Vault & Cryptography", icon: Lock }
+          { id: "threats", label: "Threat Engine & SOAR", icon: ShieldAlert }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -763,11 +761,6 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 7: THREAT ENGINE & SOAR */}
       {selectedTab === "threats" && (
         <ThreatDetectionSoarPanel />
-      )}
-
-      {/* TAB 8: KEY VAULT & CRYPTOGRAPHY */}
-      {selectedTab === "keyvault" && (
-        <KeyVaultSecurityPanel />
       )}
 
       {/* 4. MODALS */}

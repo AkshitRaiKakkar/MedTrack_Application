@@ -4,6 +4,12 @@ import com.medtrack.supplier.dto.CreateShipmentRequest;
 import com.medtrack.supplier.dto.ShipmentTrackingResponse;
 import com.medtrack.supplier.dto.UpdateShipmentStatusRequest;
 import com.medtrack.supplier.service.ShipmentTrackingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,6 +23,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/shipments")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('SUPPLIER')")
+@Tag(name = "Shipment Tracking", description = "Endpoints for managing and querying shipment tracking records for supplier orders.")
 public class ShipmentTrackingController {
 
     private final ShipmentTrackingService shipmentTrackingService;

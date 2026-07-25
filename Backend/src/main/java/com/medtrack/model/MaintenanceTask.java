@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +16,10 @@ import lombok.ToString;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+
+import static com.medtrack.validation.MaintenanceValidationLimits.NOTES_MAX_LENGTH;
+import static com.medtrack.validation.MaintenanceValidationLimits.SHORT_TEXT_MAX_LENGTH;
+import static com.medtrack.validation.MaintenanceValidationLimits.SIGNATURE_MAX_LENGTH;
 
 @Entity
 @Table(name = "maintenance_tasks")
@@ -33,7 +38,11 @@ public class MaintenanceTask {
     private String taskCode;
 
     @NotBlank(message = "Equipment ID is required")
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Equipment ID must not exceed 255 characters")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String equipmentId;
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Equipment name must not exceed 255 characters")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String equipment;
 
     // Every migrated and newly-created task must reference a real equipment record.
@@ -44,6 +53,8 @@ public class MaintenanceTask {
     @EqualsAndHashCode.Exclude
     private Equipment equipmentRecord;
 
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Hospital name must not exceed 255 characters")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String hospital;
 
     // Stable ownership key used by the service to isolate one hospital's tasks from another.
@@ -51,15 +62,24 @@ public class MaintenanceTask {
     private Long hospitalId;
 
     @NotBlank(message = "Maintenance type is required")
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Maintenance type must not exceed 255 characters")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String maintenanceType;
 
     @NotNull(message = "Deadline is required")
     private LocalDate deadline;
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Assigned technician must not exceed 255 characters")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String assignedTechnician;
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Description must not exceed 255 characters")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String description;
     @NotBlank(message = "Priority is required")
     @Pattern(regexp = "Normal|High|Critical", message = "Priority must be Normal, High, or Critical")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String priority;
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Image reference must not exceed 255 characters")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String image;
 
     @Enumerated(EnumType.STRING)
@@ -69,14 +89,18 @@ public class MaintenanceTask {
     private MaintenanceStatus status = MaintenanceStatus.SCHEDULED;
 
     @Column(columnDefinition = "TEXT")
+    @Size(max = NOTES_MAX_LENGTH, message = "Notes must not exceed 16000 characters")
     private String notes;
 
     @PositiveOrZero(message = "Hours worked cannot be negative")
     private Double hoursWorked;
 
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Parts used must not exceed 255 characters")
+    @Column(length = SHORT_TEXT_MAX_LENGTH)
     private String partsUsed;
 
     @Column(columnDefinition = "TEXT")
+    @Size(max = SIGNATURE_MAX_LENGTH, message = "Signature must not exceed 60000 characters")
     private String signature;
 
     // Set by the service on the first valid transition to COMPLETED.

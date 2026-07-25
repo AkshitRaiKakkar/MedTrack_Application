@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -109,8 +110,8 @@ public class MaintenanceServiceTest {
         when(taskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         MaintenanceCreateRequest taskToSchedule = MaintenanceCreateRequest.builder()
-                .equipmentId("EQ-100")
-                .maintenanceType("Preventive")
+                .equipmentId("  EQ-100  ")
+                .maintenanceType("  Preventive  ")
                 .deadline(LocalDate.now())
                 .priority("Normal")
                 .build();
@@ -124,6 +125,7 @@ public class MaintenanceServiceTest {
         assertNotNull(result.getTaskCode());
         assertTrue(result.getTaskCode().startsWith("MNT-"));
         assertSame(mockEquipment, result.getEquipmentRecord());
+        assertEquals("Preventive", result.getMaintenanceType());
         assertEquals(MaintenanceStatus.SCHEDULED, result.getStatus());
         assertNull(result.getNotes());
         assertNull(result.getHoursWorked());
@@ -485,6 +487,44 @@ public class MaintenanceServiceTest {
         assertNotNull(result);
         assertEquals(1, result.size());
         assertEquals("MNT-1111", result.get(0).getTaskCode());
+    }
+
+    @Test
+    void getAllTasks_AppliesOwnedHospitalFiltersAndPagination() {
+        when(authentication.getName()).thenReturn(email);
+        doReturn(Collections.singletonList(new SimpleGrantedAuthority("ROLE_HOSPITAL")))
+                .when(authentication).getAuthorities();
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        when(taskRepository.findByHospitalIdWithFilters(
+                eq(mockHospital.getId()),
+                eq(MaintenanceStatus.IN_PROGRESS),
+                eq("EQ-100"),
+                any(Pageable.class)))
+                .thenReturn(Collections.singletonList(mockTask));
+
+        List<MaintenanceTask> result = maintenanceService.getAllTasks(
+                authentication, "In Progress", "  EQ-100  ", 1, 25);
+
+        assertEquals(List.of(mockTask), result);
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(taskRepository).findByHospitalIdWithFilters(
+                eq(mockHospital.getId()),
+                eq(MaintenanceStatus.IN_PROGRESS),
+                eq("EQ-100"),
+                pageableCaptor.capture());
+        assertEquals(1, pageableCaptor.getValue().getPageNumber());
+        assertEquals(25, pageableCaptor.getValue().getPageSize());
+    }
+
+    @Test
+    void getAllTasks_RejectsInvalidPageSizeBeforeRepositoryAccess() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> maintenanceService.getAllTasks(authentication, null, null, 0, 101));
+
+        assertEquals("Page size must be between 1 and 100", exception.getMessage());
+        verifyNoInteractions(taskRepository);
     }
 
     @Test
