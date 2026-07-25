@@ -28,6 +28,7 @@ import RbacSecurityPage from "../pages/auth/RbacSecurityPage";
 import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
 import ComplianceSecurityPage from "../pages/auth/ComplianceSecurityPage";
 import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
+import KeyVaultSecurityPage from "../pages/auth/KeyVaultSecurityPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -150,6 +151,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "soar-security":
     case "soar":
       return ProtectedRoute(ThreatDetectionSoarPage);
+    case "key-vault":
+    case "keyvault":
+    case "keyvault-security":
+      return ProtectedRoute(KeyVaultSecurityPage);
 
     // --- Fallback ---
     default:

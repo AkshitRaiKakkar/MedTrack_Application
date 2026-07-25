@@ -90,6 +90,9 @@ const getRouteStateFromPath = () => {
     soar: "threat-detection",
     "soar-security": "threat-detection",
     "threat-detection": "threat-detection",
+    keyvault: "keyvault-security",
+    "key-vault": "keyvault-security",
+    "keyvault-security": "keyvault-security",
   };
 
   return {
