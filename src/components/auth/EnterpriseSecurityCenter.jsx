@@ -45,6 +45,7 @@ import ThreatDetectionSoarPanel from "./ThreatDetectionSoarPanel";
 import KeyVaultSecurityPanel from "./KeyVaultSecurityPanel";
 import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
 import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
+import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -375,7 +376,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "threats", label: "Threat Engine & SOAR", icon: ShieldAlert },
           { id: "keyvault", label: "Key Vault & Cryptography", icon: Lock },
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
-          { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint }
+          { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
+          { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -782,6 +784,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 10: BIOMETRIC PASSKEYS & WEBAUTHN */}
       {selectedTab === "passkeys" && (
         <PasskeyPasswordlessPanel />
+      )}
+
+      {/* TAB 11: ZTNA & MICROSEGMENTATION */}
+      {selectedTab === "ztna" && (
+        <ZeroTrustNetworkPanel />
       )}
 
       {/* 4. MODALS */}

@@ -100,6 +100,9 @@ const getRouteStateFromPath = () => {
     passkeys: "passkeys",
     passwordless: "passkeys",
     webauthn: "passkeys",
+    ztna: "ztna",
+    microsegmentation: "ztna",
+    "network-access": "ztna",
   };
 
   return {

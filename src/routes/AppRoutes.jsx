@@ -33,6 +33,7 @@ import KeyVaultSecurityPage from "../pages/auth/KeyVaultSecurityPage";
 import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
 import DlpPrivacyGuardPage from "../pages/auth/DlpPrivacyGuardPage";
 import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
+import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -172,6 +173,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "passwordless":
     case "webauthn":
       return ProtectedRoute(PasskeyPasswordlessPage);
+    case "ztna":
+    case "microsegmentation":
+    case "network-access":
+      return ProtectedRoute(ZeroTrustNetworkPage);
 
     // --- Fallback ---
     default:
