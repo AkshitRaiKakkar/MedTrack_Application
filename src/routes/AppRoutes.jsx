@@ -159,7 +159,8 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return ProtectedRoute(ThreatDetectionSoarPage);
     case "keyvault-security":
     case "keyvault":
-      return ProtectedRoute(SecurityKeyVaultPage);
+    case "keyvault-security":
+      return ProtectedRoute(KeyVaultSecurityPage);
 
     // --- Fallback ---
     default:
