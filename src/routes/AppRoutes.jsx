@@ -33,6 +33,7 @@ import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
 import DlpPrivacyGuardPage from "../pages/auth/DlpPrivacyGuardPage";
 import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
 import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
+import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 
 // --- Connected Imports ---
@@ -181,6 +182,9 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "siem-analytics":
     case "siem-security":
       return ProtectedRoute(SiemSecurityAnalyticsPage);
+    case "scim-provisioning":
+    case "scim":
+      return ProtectedRoute(ScimProvisioningPage);
 
     // --- Fallback ---
     default:
