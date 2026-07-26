@@ -133,6 +133,7 @@ public class SecurityConfig {
                     "/api/auth/rbac/**",
                     "/api/auth/zerotrust/**",
                     "/api/auth/keyvault/**",
+                    "/api/auth/evidence/**",
                     "/h2-console/**",
                     "/error",
                     "/v3/api-docs/**",
