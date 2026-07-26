@@ -35,6 +35,7 @@ import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
 import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
 import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
+import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
