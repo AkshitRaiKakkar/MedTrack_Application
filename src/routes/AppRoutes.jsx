@@ -33,8 +33,9 @@ import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
 import DlpPrivacyGuardPage from "../pages/auth/DlpPrivacyGuardPage";
 import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
 import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
+import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
-import ComplianceEvidencePage from "../pages/auth/ComplianceEvidencePage";
+import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -182,9 +183,9 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "siem-analytics":
     case "siem-security":
       return ProtectedRoute(SiemSecurityAnalyticsPage);
-    case "compliance-evidence":
-    case "evidence-vault":
-      return ProtectedRoute(ComplianceEvidencePage);
+    case "scim-provisioning":
+    case "scim":
+      return ProtectedRoute(ScimProvisioningPage);
 
     // --- Fallback ---
     default:

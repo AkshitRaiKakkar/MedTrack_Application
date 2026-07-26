@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.medtrack.exception.ResourceNotFoundException;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -68,7 +69,7 @@ public class OrderService {
         if ("Shipped".equalsIgnoreCase(status) || "Dispatched".equalsIgnoreCase(status)) {
             order.setDispatchedAt(LocalDateTime.now());
             if (order.getTrackingNo() == null) {
-                order.setTrackingNo("TRK-" + (int)(Math.random() * 900000 + 100000));
+                order.setTrackingNo("TRK-" + (new SecureRandom().nextInt(900000) + 100000));
             }
             if (order.getCarrier() == null) {
                 order.setCarrier("MedExpress Logistics");
