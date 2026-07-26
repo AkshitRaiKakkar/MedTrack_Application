@@ -163,6 +163,20 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/auth/sso/**").authenticated()
                 .requestMatchers("/api/auth/audit/**").authenticated()
 
+                // Zero-Trust Security endpoints:
+                // GET requests: Any authenticated user.
+                // Write/Modify: Restricted to Hospital admins.
+                .requestMatchers(HttpMethod.GET, "/api/auth/zerotrust/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/auth/zerotrust/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/auth/zerotrust/**").hasRole("HOSPITAL")
+
+                // Key Vault Security endpoints:
+                // GET requests: Any authenticated user.
+                // Write/Modify: Restricted to Hospital admins.
+                .requestMatchers(HttpMethod.GET, "/api/auth/keyvault/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/auth/keyvault/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/auth/keyvault/**").hasRole("HOSPITAL")
+
                 // Equipment module boundaries:
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.
