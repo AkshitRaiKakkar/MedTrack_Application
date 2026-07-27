@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.medtrack.model.EquipmentCategory;
 
@@ -35,6 +37,8 @@ public class EquipmentService {
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+
+    private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
     private Hospital getHospitalForUser(String username) {
         User user = userRepository.findByUsername(username)
@@ -130,7 +134,16 @@ public class EquipmentService {
         if (equipment.getMinimumStock() == null) {
             equipment.setMinimumStock(10);
         }
-        return equipmentRepository.save(equipment);
+        Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment created | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                savedEquipment.getId(),
+                savedEquipment.getName()
+        );
+
+        return savedEquipment;
     }
 
     /**
@@ -140,6 +153,13 @@ public class EquipmentService {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+
+        logger.info(
+                "Equipment deleted | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                equipment.getId(),
+                equipment.getName()
+        );
         equipmentRepository.delete(equipment);
     }
 
@@ -161,7 +181,16 @@ public class EquipmentService {
         equipment.setStatus(equipmentDetails.getStatus());
         equipment.setPurchaseDate(equipmentDetails.getPurchaseDate());
 
-        return equipmentRepository.save(equipment);
+        Equipment updatedEquipment = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment updated | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                updatedEquipment.getId(),
+                updatedEquipment.getName()
+        );
+
+        return updatedEquipment;
     }
 
     /**
