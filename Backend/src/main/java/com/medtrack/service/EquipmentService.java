@@ -52,12 +52,11 @@ public class EquipmentService {
         return equipmentRepository.findByHospitalId(hospital.getId());
     }
 
-    public List<Equipment> getEquipmentByModel(String model, String username) {
+    public List<Equipment> getEquipmentByDepartment(String department, String username) {
         Hospital hospital = getHospitalForUser(username);
-
-        return equipmentRepository.findByHospitalIdAndModelContainingIgnoreCase(
+        return equipmentRepository.findByHospitalIdAndDepartmentIgnoreCase(
                 hospital.getId(),
-                model
+                department
         );
     }
 

@@ -134,6 +134,8 @@ public class SecurityConfig {
                     "/api/auth/zerotrust/**",
                     "/api/auth/keyvault/**",
                     "/api/auth/scim/**",
+                    "/api/auth/commandcenter/**",
+                    "/api/auth/vulnerability/**",
                     "/h2-console/**",
                     "/error",
                     "/v3/api-docs/**",

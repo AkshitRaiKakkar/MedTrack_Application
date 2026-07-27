@@ -30,14 +30,14 @@ public class EquipmentController {
         return ResponseEntity.ok(equipmentService.getAllEquipment(principal.getName()));
     }
 
-    @GetMapping("/model")
-    public ResponseEntity<List<Equipment>> getEquipmentByModel(
-            @RequestParam String model,
+    @GetMapping("/department")
+    public ResponseEntity<List<Equipment>> getEquipmentByDepartment(
+            @RequestParam String department,
             Principal principal) {
 
         return ResponseEntity.ok(
-                equipmentService.getEquipmentByModel(
-                        model,
+                equipmentService.getEquipmentByDepartment(
+                        department,
                         principal.getName()
                 )
         );

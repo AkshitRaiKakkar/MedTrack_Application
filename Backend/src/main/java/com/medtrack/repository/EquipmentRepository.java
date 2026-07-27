@@ -56,8 +56,5 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long> {
     @Query("SELECT e.name, e.category FROM Equipment e WHERE e.hospital.id = :hospitalId")
     List<Object[]> findNameAndCategoryByHospitalId(@Param("hospitalId") Long hospitalId);
 
-    List<Equipment> findByHospitalIdAndModelContainingIgnoreCase(
-            Long hospitalId,
-            String model
-    );
+    List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 }
