@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 // Page Imports
 import LandingPage from "../pages/LandingPage";
+import NotFoundPage from "../pages/NotFoundPage";
 import Blog from "../pages/Blog";
 import BlogPost from "../pages/BlogPost";
 import CareersPage from "../pages/CareersPage";
@@ -187,8 +188,8 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "scim":
       return ProtectedRoute(ScimProvisioningPage);
 
-    // --- Fallback ---
+    // --- Fallback: 404 ---
     default:
-      return <LandingPage onNavigate={onNavigate} />;
+      return <NotFoundPage onNavigate={onNavigate} />;
   }
 }
