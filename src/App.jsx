@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ReactLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
 import { AuthProvider } from "./context/AuthContext";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
 import ScrollToTopButton from "./components/common/ScrollToTopButton";
@@ -109,9 +110,12 @@ const getRouteStateFromPath = () => {
     "siem-security": "siem-analytics",
     scim: "scim-provisioning",
     "scim-provisioning": "scim-provisioning",
-    "saml-sso": "saml-sso",
-    saml: "saml-sso",
-    "saml-federation": "saml-sso",
+    "command-center": "security-commandcenter",
+    "security-commandcenter": "security-commandcenter",
+    help: "help",
+    "help-center": "help",
+    vulnerability: "vulnerability",
+    "patch-management": "vulnerability",
   };
 
   return {
@@ -220,7 +224,9 @@ export default function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <AppContent />
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
       </ThemeProvider>
     </AuthProvider>
   );
