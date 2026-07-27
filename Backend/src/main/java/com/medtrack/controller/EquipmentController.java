@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.security.Principal;
 import java.util.List;
@@ -28,6 +30,19 @@ public class EquipmentController {
     @GetMapping
     public ResponseEntity<List<Equipment>> getAllEquipment(Principal principal) {
         return ResponseEntity.ok(equipmentService.getAllEquipment(principal.getName()));
+    }
+
+    @GetMapping("/page")
+    public ResponseEntity<Page<Equipment>> getEquipmentPage(
+            Pageable pageable,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentPage(
+                        principal.getName(),
+                        pageable
+                )
+        );
     }
 
     @GetMapping("/department")
