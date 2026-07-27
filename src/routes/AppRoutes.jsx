@@ -36,6 +36,7 @@ import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
 import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
+import SamlIdentityProviderPage from "../pages/auth/SamlIdentityProviderPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -186,6 +187,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "scim-provisioning":
     case "scim":
       return ProtectedRoute(ScimProvisioningPage);
+    case "saml-sso":
+    case "saml":
+    case "saml-federation":
+      return ProtectedRoute(SamlIdentityProviderPage);
 
     // --- Fallback ---
     default:

@@ -109,6 +109,9 @@ const getRouteStateFromPath = () => {
     "siem-security": "siem-analytics",
     scim: "scim-provisioning",
     "scim-provisioning": "scim-provisioning",
+    "saml-sso": "saml-sso",
+    saml: "saml-sso",
+    "saml-federation": "saml-sso",
   };
 
   return {
