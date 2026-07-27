@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -57,4 +59,6 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long> {
     List<Object[]> findNameAndCategoryByHospitalId(@Param("hospitalId") Long hospitalId);
 
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
+
+    Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
 }

@@ -13,8 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import com.medtrack.model.EquipmentCategory;
 
@@ -54,6 +54,10 @@ public class EquipmentService {
     public List<Equipment> getAllEquipment(String username) {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findByHospitalId(hospital.getId());
+    }
+    public Page<Equipment> getEquipmentPage(String username, Pageable pageable) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.findByHospitalId(hospital.getId(), pageable);
     }
 
     public List<Equipment> getEquipmentByDepartment(String department, String username) {
