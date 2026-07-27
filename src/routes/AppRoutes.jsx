@@ -36,6 +36,7 @@ import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
 import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
+import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -186,6 +187,9 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "scim-provisioning":
     case "scim":
       return ProtectedRoute(ScimProvisioningPage);
+    case "security-commandcenter":
+    case "command-center":
+      return ProtectedRoute(SecurityCommandCenterPage);
 
     // --- Fallback ---
     default:
