@@ -112,6 +112,10 @@ const getRouteStateFromPath = () => {
     "scim-provisioning": "scim-provisioning",
     "command-center": "security-commandcenter",
     "security-commandcenter": "security-commandcenter",
+    help: "help",
+    "help-center": "help",
+    vulnerability: "vulnerability",
+    "patch-management": "vulnerability",
   };
 
   return {

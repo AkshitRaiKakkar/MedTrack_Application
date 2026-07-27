@@ -9,6 +9,7 @@ import Blog from "../pages/Blog";
 import BlogPost from "../pages/BlogPost";
 import CareersPage from "../pages/CareersPage";
 import JobApplicationPage from "../pages/JobApplicationPage";
+import HelpPage from "../pages/HelpPage";
 import CertificateGeneratorPage from "../pages/CertificateGeneratorPage";
 import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
@@ -38,6 +39,7 @@ import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
 import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
+import VulnerabilityManagementPage from "../pages/auth/VulnerabilityManagementPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -191,6 +193,12 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "security-commandcenter":
     case "command-center":
       return ProtectedRoute(SecurityCommandCenterPage);
+    case "vulnerability":
+    case "patch-management":
+      return ProtectedRoute(VulnerabilityManagementPage);
+    case "help":
+    case "help-center":
+      return <HelpPage onNavigate={onNavigate} />;
 
     // --- Fallback: 404 ---
     default:
