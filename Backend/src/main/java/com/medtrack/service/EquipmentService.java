@@ -52,6 +52,15 @@ public class EquipmentService {
         return equipmentRepository.findByHospitalId(hospital.getId());
     }
 
+    public List<Equipment> getEquipmentByModel(String model, String username) {
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findByHospitalIdAndModelContainingIgnoreCase(
+                hospital.getId(),
+                model
+        );
+    }
+
     public List<Equipment> getLowStockEquipment(String username) {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findLowStockEquipment(hospital.getId());

@@ -30,6 +30,19 @@ public class EquipmentController {
         return ResponseEntity.ok(equipmentService.getAllEquipment(principal.getName()));
     }
 
+    @GetMapping("/model")
+    public ResponseEntity<List<Equipment>> getEquipmentByModel(
+            @RequestParam String model,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentByModel(
+                        model,
+                        principal.getName()
+                )
+        );
+    }
+
     /**
      * Retrieves a specific equipment record by its ID.
      *
