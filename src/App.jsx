@@ -112,6 +112,9 @@ const getRouteStateFromPath = () => {
     "compliance-reporting": "compliance-reporting",
     "audit-reporting": "compliance-reporting",
     "executive-reporting": "compliance-reporting",
+    "threat-intelligence": "threat-intelligence",
+    threatintel: "threat-intelligence",
+    "stix-taxii": "threat-intelligence",
   };
 
   return {

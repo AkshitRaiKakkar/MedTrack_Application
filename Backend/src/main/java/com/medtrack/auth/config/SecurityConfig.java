@@ -135,6 +135,7 @@ public class SecurityConfig {
                     "/api/auth/keyvault/**",
                     "/api/auth/scim/**",
                     "/api/auth/reporting/**",
+                    "/api/auth/threatintel/**",
                     "/h2-console/**",
                     "/error",
                     "/v3/api-docs/**",

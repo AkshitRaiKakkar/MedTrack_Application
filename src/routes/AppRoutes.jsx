@@ -37,6 +37,7 @@ import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
 import ComplianceReportingPage from "../pages/auth/ComplianceReportingPage";
+import ThreatIntelligencePage from "../pages/auth/ThreatIntelligencePage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -191,6 +192,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "audit-reporting":
     case "executive-reporting":
       return ProtectedRoute(ComplianceReportingPage);
+    case "threat-intelligence":
+    case "threatintel":
+    case "stix-taxii":
+      return ProtectedRoute(ThreatIntelligencePage);
 
     // --- Fallback ---
     default:
