@@ -40,6 +40,7 @@ import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
 import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
 import VulnerabilityManagementPage from "../pages/auth/VulnerabilityManagementPage";
+import MicrosegmentationPage from "../pages/auth/MicrosegmentationPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -196,6 +197,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "vulnerability":
     case "patch-management":
       return ProtectedRoute(VulnerabilityManagementPage);
+    case "microsegmentation":
+    case "sdp":
+    case "perimeter-security":
+      return ProtectedRoute(MicrosegmentationPage);
     case "help":
     case "help-center":
       return <HelpPage onNavigate={onNavigate} />;

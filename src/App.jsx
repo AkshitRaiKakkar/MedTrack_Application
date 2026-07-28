@@ -116,6 +116,9 @@ const getRouteStateFromPath = () => {
     "help-center": "help",
     vulnerability: "vulnerability",
     "patch-management": "vulnerability",
+    microsegmentation: "microsegmentation",
+    sdp: "microsegmentation",
+    "perimeter-security": "microsegmentation",
   };
 
   return {
