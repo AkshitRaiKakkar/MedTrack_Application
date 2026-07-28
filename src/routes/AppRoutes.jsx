@@ -156,10 +156,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return ProtectedRoute(EnterpriseSsoPage, {}, ["hospital"]);
     case "rbac-security":
     case "rbac":
-      return ProtectedRoute(RbacSecurityPage);
+      return ProtectedRoute(RbacSecurityPage, {}, ["hospital"]);
     case "zerotrust-security":
     case "zerotrust":
-      return ProtectedRoute(ZeroTrustSecurityPage);
+      return ProtectedRoute(ZeroTrustSecurityPage, {}, ["hospital"]);
     case "compliance-security":
     case "compliance":
       return ProtectedRoute(ComplianceSecurityPage);
