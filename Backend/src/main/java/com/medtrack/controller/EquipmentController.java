@@ -188,6 +188,19 @@ public class EquipmentController {
         );
     }
 
+    @GetMapping("/export")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<byte[]> exportEquipment(Principal principal) {
+
+        byte[] csv = equipmentService.exportEquipmentCsv(principal.getName());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=equipment.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
+    }
+
     /**
      * Retrieves all equipment that is currently below the configured stock threshold.
      *
