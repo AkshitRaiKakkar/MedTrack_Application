@@ -56,16 +56,18 @@ export default function RbacRoleMatrixPanel() {
       setRoles(roleList);
       setPermissions(permList);
 
-      if (roleList.length > 0 && !selectedRole) {
-        setSelectedRole(roleList[0]);
-        setActivePermissions(roleList[0].grantedPermissionCodes || []);
+      if (roleList.length > 0) {
+        setSelectedRole((prevSelected) => prevSelected || roleList[0]);
+        setActivePermissions((prevPerms) =>
+          prevPerms.length ? prevPerms : roleList[0].grantedPermissionCodes || []
+        );
       }
     } catch (err) {
       console.error("Failed to load RBAC Matrix:", err);
     } finally {
       setLoading(false);
     }
-  }, [selectedRole]);
+  }, []);
 
   useEffect(() => {
     loadRbacData();
