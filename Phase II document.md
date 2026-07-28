@@ -194,11 +194,15 @@ technician-owned progress updates, completion evidence, and completion-driven re
 - Completion-driven recurrence using the hospital-configured interval; concurrent completion is serialized with a database write lock
 - Priority values: Normal / High / Critical
 - Status lifecycle: SCHEDULED → IN_PROGRESS → COMPLETED, with NEEDS_PART and ON_HOLD returning to IN_PROGRESS
+- Versioned H2/MySQL constraints keep persisted task statuses within the same closed enum set and
+  fail deployment when unsupported legacy status data remains
 - POST/GET/PUT/DELETE under `/api/maintenance`, plus ownership-safe status/equipment filters and opt-in pagination on the list endpoint
 - Hospital-only `POST /api/maintenance/{id}/assignment` for assigning or reassigning
   scheduled work, including unassigned recurring tasks
 - Technician assignment is normalized to the authentication email format and requires an
   active account with the technician role
+- Every Maintenance operation revalidates the caller's current database role and requires an
+  active account, so stale JWTs cannot preserve Maintenance access after lockout or disablement
 - `GET /api/maintenance/export/calendar.ics` for hospital calendar export
 - Focused unit/repository/migration tests for ownership, validation, lifecycle, recurrence, locking, and calendar generation
 
@@ -221,6 +225,8 @@ progress/report fields, and closing work orders with a digital sign-off.*
 - Digital sign-off is stored on the task and is required for completion
 - Notes, hours worked, and parts used are stored as partial technician-report updates
 - Only the assigned TECHNICIAN can update a task, enforced by role guards and ownership-scoped repository queries
+- Technician list, read, and update operations also require the current technician account to
+  remain active and retain its technician role
 - Completed task evidence is immutable and records a server-controlled completion timestamp
 
 Automatic inventory deduction, multipart evidence upload/object storage, Kafka assignment
