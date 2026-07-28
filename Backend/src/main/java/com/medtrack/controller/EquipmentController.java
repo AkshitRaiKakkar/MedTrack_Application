@@ -10,7 +10,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-
+import com.medtrack.model.EquipmentCategory;
+import com.medtrack.model.EquipmentStatus;
 import java.security.Principal;
 import java.util.List;
 
@@ -185,6 +186,29 @@ public class EquipmentController {
 
         return ResponseEntity.ok(
                 equipmentService.searchEquipment(keyword, principal.getName())
+        );
+    }
+
+    /**
+     * Retrieves equipment using multiple optional filters.
+     */
+    @GetMapping("/filter")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> filterEquipment(
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) EquipmentCategory category,
+            @RequestParam(required = false) EquipmentStatus status,
+            @RequestParam(required = false) String model,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.filterEquipment(
+                        principal.getName(),
+                        department,
+                        category,
+                        status,
+                        model
+                )
         );
     }
 

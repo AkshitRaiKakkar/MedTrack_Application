@@ -19,6 +19,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import com.medtrack.model.EquipmentCategory;
+import com.medtrack.model.EquipmentStatus;
+import com.medtrack.specification.EquipmentSpecification;
 
 import com.medtrack.model.EquipmentCategory;
 
@@ -88,6 +91,27 @@ public class EquipmentService {
     public List<Equipment> getLowStockEquipment(String username) {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findLowStockEquipment(hospital.getId());
+    }
+
+    public List<Equipment> filterEquipment(
+            String username,
+            String department,
+            EquipmentCategory category,
+            EquipmentStatus status,
+            String model
+    ) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findAll(
+                EquipmentSpecification.filterEquipment(
+                        hospital.getId(),
+                        department,
+                        category,
+                        status,
+                        model
+                )
+        );
     }
 
     /**
