@@ -116,6 +116,9 @@ const getRouteStateFromPath = () => {
     "help-center": "help",
     vulnerability: "vulnerability",
     "patch-management": "vulnerability",
+    sbom: "sbom",
+    "supply-chain": "sbom",
+    "software-bill-of-materials": "sbom",
   };
 
   return {
