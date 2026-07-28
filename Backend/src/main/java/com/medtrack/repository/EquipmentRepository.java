@@ -18,6 +18,7 @@ import java.util.Optional;
 public interface EquipmentRepository extends JpaRepository<Equipment, Long> {
 
     Optional<Equipment> findByEquipmentCode(String equipmentCode);
+    Optional<Equipment> findBySerialNumber(String serialNumber);
 
     // Tenant-specific queries
     List<Equipment> findByHospitalId(Long hospitalId);
