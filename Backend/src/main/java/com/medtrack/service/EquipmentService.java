@@ -15,7 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
+import com.medtrack.dto.EquipmentStatisticsResponse;
 import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
@@ -116,6 +116,38 @@ public class EquipmentService {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+    }
+
+    public EquipmentStatisticsResponse getEquipmentStatistics(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.countByHospitalId(hospital.getId());
+
+        long active = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.ACTIVE);
+
+        long maintenance = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.UNDER_MAINTENANCE);
+
+        long retired = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.RETIRED);
+
+        long expiredWarranty = equipmentRepository
+                .countByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now());
+
+        return new EquipmentStatisticsResponse(
+                total,
+                active,
+                maintenance,
+                retired,
+                expiredWarranty
+        );
     }
 
     /**

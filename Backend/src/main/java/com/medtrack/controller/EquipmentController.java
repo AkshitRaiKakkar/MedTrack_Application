@@ -9,6 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import com.medtrack.dto.EquipmentStatisticsResponse;
 
 import java.security.Principal;
 import java.util.List;
@@ -53,6 +54,17 @@ public class EquipmentController {
         return ResponseEntity.ok(
                 equipmentService.getEquipmentByDepartment(
                         department,
+                        principal.getName()
+                )
+        );
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<EquipmentStatisticsResponse> getStatistics(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentStatistics(
                         principal.getName()
                 )
         );
