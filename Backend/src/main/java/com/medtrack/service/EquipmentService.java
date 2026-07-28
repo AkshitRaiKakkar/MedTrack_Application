@@ -427,4 +427,26 @@ public class EquipmentService {
         }
         return null;
     }
+
+    public byte[] exportEquipmentCsv(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
+
+        StringBuilder csv = new StringBuilder();
+
+        csv.append("Equipment Code,Name,Department,Category,Status,Purchase Date,Warranty Expiry\n");
+
+        for (Equipment equipment : equipmentList) {
+            csv.append(equipment.getEquipmentCode()).append(",")
+                    .append(equipment.getName()).append(",")
+                    .append(equipment.getDepartment()).append(",")
+                    .append(equipment.getCategory()).append(",")
+                    .append(equipment.getStatus()).append(",")
+                    .append(equipment.getPurchaseDate()).append(",")
+                    .append(equipment.getWarrantyExpiry())
+                    .append("\n");
+        }
+
+        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
 }

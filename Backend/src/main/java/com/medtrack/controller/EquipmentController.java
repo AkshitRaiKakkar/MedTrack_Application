@@ -9,6 +9,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 
 import java.security.Principal;
 import java.util.List;
@@ -174,6 +176,19 @@ public class EquipmentController {
         return ResponseEntity.ok(
                 equipmentService.searchEquipment(keyword, principal.getName())
         );
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<byte[]> exportEquipment(Principal principal) {
+
+        byte[] csv = equipmentService.exportEquipmentCsv(principal.getName());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=equipment.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
     }
 
     /**
