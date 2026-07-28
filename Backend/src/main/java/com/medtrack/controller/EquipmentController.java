@@ -9,6 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 
 import java.security.Principal;
 import java.util.List;
@@ -34,7 +35,7 @@ public class EquipmentController {
 
     @GetMapping("/page")
     public ResponseEntity<Page<Equipment>> getEquipmentPage(
-            Pageable pageable,
+            @PageableDefault(sort = "name") Pageable pageable,
             Principal principal) {
 
         return ResponseEntity.ok(
@@ -53,6 +54,17 @@ public class EquipmentController {
         return ResponseEntity.ok(
                 equipmentService.getEquipmentByDepartment(
                         department,
+                        principal.getName()
+                )
+        );
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<EquipmentStatisticsResponse> getStatistics(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentStatistics(
                         principal.getName()
                 )
         );
@@ -174,6 +186,19 @@ public class EquipmentController {
         return ResponseEntity.ok(
                 equipmentService.searchEquipment(keyword, principal.getName())
         );
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<byte[]> exportEquipment(Principal principal) {
+
+        byte[] csv = equipmentService.exportEquipmentCsv(principal.getName());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=equipment.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
     }
 
     /**

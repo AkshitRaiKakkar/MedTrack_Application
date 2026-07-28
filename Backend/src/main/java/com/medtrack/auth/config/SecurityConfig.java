@@ -125,18 +125,10 @@ public class SecurityConfig {
                     "/api/auth/forgot-password",
                     "/api/auth/verify-otp",
                     "/api/auth/reset-password",
-                    "/api/auth/authority/**",
-                    "/api/auth/mfa/**",
-                    "/api/auth/devices/**",
-                    "/api/auth/sso/**",
-                    "/api/auth/audit/**",
-                    "/api/auth/rbac/**",
-                    "/api/auth/zerotrust/**",
-                    "/api/auth/keyvault/**",
                     "/api/auth/scim/**",
                     "/api/auth/commandcenter/**",
                     "/api/auth/vulnerability/**",
-                    "/api/auth/soar/**",
+                    "/api/auth/pam/**",
                     "/h2-console/**",
                     "/error",
                     "/v3/api-docs/**",
@@ -148,11 +140,12 @@ public class SecurityConfig {
                 // has a session, so this single lookup endpoint must stay public.
                 .requestMatchers(HttpMethod.POST, "/api/auth/sso/initiate").permitAll()
 
-                // RBAC/Authority/MFA/Device/SSO/Audit management surface: these APIs can create
-                // roles, grant permissions, revoke sessions, disable MFA, and reconfigure SSO
-                // providers for ANY account, so mutating calls require the HOSPITAL admin role.
-                // Read/self-service calls only require authentication; per-user ownership
-                // (self vs. HOSPITAL admin) is enforced in the controllers via OwnershipAccessGuard.
+                // RBAC/Authority/MFA/Device/SSO/Audit/Zero-Trust/Key-Vault management surface:
+                // these APIs can create roles, grant permissions, revoke sessions, disable MFA,
+                // reconfigure SSO providers, and rotate security policy for ANY account, so
+                // mutating calls require the HOSPITAL admin role. Read/self-service calls only
+                // require authentication; per-user ownership (self vs. HOSPITAL admin) is
+                // enforced in the controllers via OwnershipAccessGuard.
                 .requestMatchers(HttpMethod.POST, "/api/auth/rbac/roles").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.PUT, "/api/auth/rbac/matrix").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.GET, "/api/auth/rbac/**").authenticated()
