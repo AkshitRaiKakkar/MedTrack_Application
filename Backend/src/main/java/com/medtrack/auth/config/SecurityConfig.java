@@ -136,6 +136,7 @@ public class SecurityConfig {
                     "/api/auth/scim/**",
                     "/api/auth/commandcenter/**",
                     "/api/auth/vulnerability/**",
+                    "/api/auth/cspm/**",
                     "/h2-console/**",
                     "/error",
                     "/v3/api-docs/**",
