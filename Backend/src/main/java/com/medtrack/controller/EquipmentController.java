@@ -85,6 +85,18 @@ public class EquipmentController {
         return ResponseEntity.ok(equipmentService.getEquipmentById(id, principal.getName()));
     }
 
+    @GetMapping("/warranty-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<String, Long>> getWarrantySummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getWarrantySummary(
+                        principal.getName()
+                )
+        );
+    }
+
     /**
      * Creates a new equipment record.
      *

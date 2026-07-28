@@ -21,6 +21,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Map;
 import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
@@ -122,6 +124,38 @@ public class EquipmentService {
                 hospital.getId(),
                 today
         );
+    }
+
+
+    public Map<String, Long> getWarrantySummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.findByHospitalId(hospital.getId()).size();
+
+        long expired = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now())
+                .size();
+
+        long expiringSoon = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBetween(
+                        hospital.getId(),
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(30))
+                .size();
+
+        long valid = total - expired;
+
+        Map<String, Long> summary = new HashMap<>();
+
+        summary.put("total", total);
+        summary.put("expired", expired);
+        summary.put("expiringSoon", expiringSoon);
+        summary.put("valid", valid);
+
+        return summary;
     }
 
     /**
