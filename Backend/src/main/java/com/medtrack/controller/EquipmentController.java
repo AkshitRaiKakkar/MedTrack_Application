@@ -202,6 +202,29 @@ public class EquipmentController {
         );
     }
 
+    /**
+     * Retrieves equipment using multiple optional filters.
+     */
+    @GetMapping("/filter")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> filterEquipment(
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) EquipmentCategory category,
+            @RequestParam(required = false) EquipmentStatus status,
+            @RequestParam(required = false) String model,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.filterEquipment(
+                        principal.getName(),
+                        department,
+                        category,
+                        status,
+                        model
+                )
+        );
+    }
+
     @GetMapping("/export")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<byte[]> exportEquipment(Principal principal) {
