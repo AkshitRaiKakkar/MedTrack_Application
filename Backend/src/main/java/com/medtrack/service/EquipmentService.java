@@ -135,6 +135,38 @@ public class EquipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
     }
 
+    public EquipmentStatisticsResponse getEquipmentStatistics(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.countByHospitalId(hospital.getId());
+
+        long active = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.ACTIVE);
+
+        long maintenance = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.UNDER_MAINTENANCE);
+
+        long retired = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.RETIRED);
+
+        long expiredWarranty = equipmentRepository
+                .countByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now());
+
+        return new EquipmentStatisticsResponse(
+                total,
+                active,
+                maintenance,
+                retired,
+                expiredWarranty
+        );
+    }
+
     /**
      * Adds a new equipment record.
      * If no equipmentCode is provided by the caller, auto-generates one

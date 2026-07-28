@@ -63,4 +63,10 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>, Jpa
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
+
+    long countByHospitalId(Long hospitalId);
+
+    long countByHospitalIdAndStatus(Long hospitalId, EquipmentStatus status);
+
+    long countByHospitalIdAndWarrantyExpiryBefore(Long hospitalId, LocalDate date);
 }

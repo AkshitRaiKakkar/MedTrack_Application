@@ -59,6 +59,17 @@ public class EquipmentController {
         );
     }
 
+    @GetMapping("/statistics")
+    public ResponseEntity<EquipmentStatisticsResponse> getStatistics(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentStatistics(
+                        principal.getName()
+                )
+        );
+    }
+
     /**
      * Retrieves a specific equipment record by its ID.
      *
