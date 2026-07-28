@@ -199,6 +199,18 @@ public class EquipmentService {
         return savedEquipment;
     }
 
+    // Validate Equipment Code
+if (equipment.getEquipmentCode() != null &&
+        equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
+        throw new IllegalArgumentException("Equipment Code already exists.");
+    }
+
+// Validate Serial Number
+if (equipment.getSerialNumber() != null &&
+        equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
+        throw new IllegalArgumentException("Serial Number already exists.");
+    }
+
     /**
      * Deletes an equipment record by ID.
      */
@@ -214,6 +226,26 @@ public class EquipmentService {
                 equipment.getName()
         );
         equipmentRepository.delete(equipment);
+    }
+
+    // Validate Equipment Code
+if (equipmentDetails.getEquipmentCode() != null) {
+        equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
+                .ifPresent(existing -> {
+                    if (!existing.getId().equals(id)) {
+                        throw new IllegalArgumentException("Equipment Code already exists.");
+                    }
+                });
+    }
+
+// Validate Serial Number
+if (equipmentDetails.getSerialNumber() != null) {
+        equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
+                .ifPresent(existing -> {
+                    if (!existing.getId().equals(id)) {
+                        throw new IllegalArgumentException("Serial Number already exists.");
+                    }
+                });
     }
 
     /**
