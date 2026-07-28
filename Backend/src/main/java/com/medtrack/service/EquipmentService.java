@@ -13,16 +13,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import com.medtrack.model.EquipmentCategory;
-import com.medtrack.model.EquipmentStatus;
-import com.medtrack.specification.EquipmentSpecification;
-
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Map;
 import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
@@ -64,18 +64,9 @@ public class EquipmentService {
     }
     public Page<Equipment> getEquipmentPage(
             String username,
-            int page,
-            int size,
-            String sortBy,
-            String direction) {
+            Pageable pageable) {
 
         Hospital hospital = getHospitalForUser(username);
-
-        Sort sort = direction.equalsIgnoreCase("desc")
-                ? Sort.by(sortBy).descending()
-                : Sort.by(sortBy).ascending();
-
-        Pageable pageable = PageRequest.of(page, size, sort);
 
         return equipmentRepository.findByHospitalId(hospital.getId(), pageable);
     }
@@ -93,25 +84,21 @@ public class EquipmentService {
         return equipmentRepository.findLowStockEquipment(hospital.getId());
     }
 
-    public List<Equipment> filterEquipment(
-            String username,
-            String department,
-            EquipmentCategory category,
-            EquipmentStatus status,
-            String model
-    ) {
+    public Map<EquipmentStatus, Long> getEquipmentStatusSummary(String username) {
 
         Hospital hospital = getHospitalForUser(username);
 
-        return equipmentRepository.findAll(
-                EquipmentSpecification.filterEquipment(
-                        hospital.getId(),
-                        department,
-                        category,
-                        status,
-                        model
-                )
-        );
+        Map<EquipmentStatus, Long> summary = new EnumMap<>(EquipmentStatus.class);
+
+        for (EquipmentStatus status : EquipmentStatus.values()) {
+            long count = equipmentRepository.countByHospitalIdAndStatus(
+                    hospital.getId(),
+                    status
+            );
+            summary.put(status, count);
+        }
+
+        return summary;
     }
 
     /**
@@ -128,6 +115,38 @@ public class EquipmentService {
                 hospital.getId(),
                 today
         );
+    }
+
+
+    public Map<String, Long> getWarrantySummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.findByHospitalId(hospital.getId()).size();
+
+        long expired = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now())
+                .size();
+
+        long expiringSoon = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBetween(
+                        hospital.getId(),
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(30))
+                .size();
+
+        long valid = total - expired;
+
+        Map<String, Long> summary = new HashMap<>();
+
+        summary.put("total", total);
+        summary.put("expired", expired);
+        summary.put("expiringSoon", expiringSoon);
+        summary.put("valid", valid);
+
+        return summary;
     }
 
     /**
@@ -211,6 +230,17 @@ public class EquipmentService {
         if (equipment.getMinimumStock() == null) {
             equipment.setMinimumStock(10);
         }
+
+        if (equipment.getEquipmentCode() != null &&
+                equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
+            throw new IllegalArgumentException("Equipment Code already exists.");
+        }
+
+        if (equipment.getSerialNumber() != null &&
+                equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
+            throw new IllegalArgumentException("Serial Number already exists.");
+        }
+
         Equipment savedEquipment = equipmentRepository.save(equipment);
 
         logger.info(
@@ -221,18 +251,6 @@ public class EquipmentService {
         );
 
         return savedEquipment;
-    }
-
-    // Validate Equipment Code
-if (equipment.getEquipmentCode() != null &&
-        equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
-        throw new IllegalArgumentException("Equipment Code already exists.");
-    }
-
-// Validate Serial Number
-if (equipment.getSerialNumber() != null &&
-        equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
-        throw new IllegalArgumentException("Serial Number already exists.");
     }
 
     /**
@@ -252,26 +270,6 @@ if (equipment.getSerialNumber() != null &&
         equipmentRepository.delete(equipment);
     }
 
-    // Validate Equipment Code
-if (equipmentDetails.getEquipmentCode() != null) {
-        equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
-                .ifPresent(existing -> {
-                    if (!existing.getId().equals(id)) {
-                        throw new IllegalArgumentException("Equipment Code already exists.");
-                    }
-                });
-    }
-
-// Validate Serial Number
-if (equipmentDetails.getSerialNumber() != null) {
-        equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
-                .ifPresent(existing -> {
-                    if (!existing.getId().equals(id)) {
-                        throw new IllegalArgumentException("Serial Number already exists.");
-                    }
-                });
-    }
-
     /**
      * Updates an existing equipment record's fields.
      */
@@ -279,6 +277,24 @@ if (equipmentDetails.getSerialNumber() != null) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+
+        if (equipmentDetails.getEquipmentCode() != null) {
+            equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
+                    .ifPresent(existing -> {
+                        if (!existing.getId().equals(id)) {
+                            throw new IllegalArgumentException("Equipment Code already exists.");
+                        }
+                    });
+        }
+
+        if (equipmentDetails.getSerialNumber() != null) {
+            equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
+                    .ifPresent(existing -> {
+                        if (!existing.getId().equals(id)) {
+                            throw new IllegalArgumentException("Serial Number already exists.");
+                        }
+                    });
+        }
 
         equipment.setName(equipmentDetails.getName());
         equipment.setModel(equipmentDetails.getModel());
