@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import java.util.Map;
+import com.medtrack.model.EquipmentStatus;
 
 import java.security.Principal;
 import java.util.List;
@@ -81,6 +83,18 @@ public class EquipmentController {
     public ResponseEntity<Equipment> getEquipmentById(@PathVariable Long id, Principal principal) {
         validateId(id);
         return ResponseEntity.ok(equipmentService.getEquipmentById(id, principal.getName()));
+    }
+
+    @GetMapping("/warranty-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<String, Long>> getWarrantySummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getWarrantySummary(
+                        principal.getName()
+                )
+        );
     }
 
     /**
@@ -212,6 +226,18 @@ public class EquipmentController {
     public ResponseEntity<List<Equipment>> getLowStockEquipment(Principal principal) {
         return ResponseEntity.ok(
                 equipmentService.getLowStockEquipment(principal.getName())
+        );
+    }
+
+    @GetMapping("/status-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<EquipmentStatus, Long>> getStatusSummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentStatusSummary(
+                        principal.getName()
+                )
         );
     }
 

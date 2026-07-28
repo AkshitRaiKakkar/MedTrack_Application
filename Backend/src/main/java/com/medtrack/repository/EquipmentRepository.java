@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -70,4 +71,6 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>, Jpa
     long countByHospitalIdAndStatus(Long hospitalId, EquipmentStatus status);
 
     long countByHospitalIdAndWarrantyExpiryBefore(Long hospitalId, LocalDate date);
+
+    long countByHospitalIdAndStatus(Long hospitalId, EquipmentStatus status);
 }

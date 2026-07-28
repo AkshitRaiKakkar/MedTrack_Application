@@ -19,7 +19,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Map;
 import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
@@ -90,6 +93,23 @@ public class EquipmentService {
         return equipmentRepository.findLowStockEquipment(hospital.getId());
     }
 
+    public Map<EquipmentStatus, Long> getEquipmentStatusSummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        Map<EquipmentStatus, Long> summary = new EnumMap<>(EquipmentStatus.class);
+
+        for (EquipmentStatus status : EquipmentStatus.values()) {
+            long count = equipmentRepository.countByHospitalIdAndStatus(
+                    hospital.getId(),
+                    status
+            );
+            summary.put(status, count);
+        }
+
+        return summary;
+    }
+
     /**
      * Retrieves all equipment whose warranty has already expired.
      *
@@ -104,6 +124,38 @@ public class EquipmentService {
                 hospital.getId(),
                 today
         );
+    }
+
+
+    public Map<String, Long> getWarrantySummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.findByHospitalId(hospital.getId()).size();
+
+        long expired = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now())
+                .size();
+
+        long expiringSoon = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBetween(
+                        hospital.getId(),
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(30))
+                .size();
+
+        long valid = total - expired;
+
+        Map<String, Long> summary = new HashMap<>();
+
+        summary.put("total", total);
+        summary.put("expired", expired);
+        summary.put("expiringSoon", expiringSoon);
+        summary.put("valid", valid);
+
+        return summary;
     }
 
     /**
