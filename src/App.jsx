@@ -116,9 +116,9 @@ const getRouteStateFromPath = () => {
     "help-center": "help",
     vulnerability: "vulnerability",
     "patch-management": "vulnerability",
-    cspm: "cspm",
-    "cloud-security": "cspm",
-    "cloud-posture": "cspm",
+    pam: "pam",
+    "privileged-access": "pam",
+    "jit-elevation": "pam",
   };
 
   return {

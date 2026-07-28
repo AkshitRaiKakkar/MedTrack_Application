@@ -219,6 +219,7 @@ public class MaintenanceService {
                     .priority(savedTask.getPriority())
                     .status(MaintenanceStatus.SCHEDULED)
                     .recurrencePeriodDays(savedTask.getRecurrencePeriodDays())
+                    .createdAt(LocalDateTime.now())
                     .build();
 
             validateOwnershipInvariant(nextTask);
