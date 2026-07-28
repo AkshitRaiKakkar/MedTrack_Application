@@ -9,7 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import com.medtrack.dto.EquipmentStatisticsResponse;
+import org.springframework.data.web.PageableDefault;
 
 import java.security.Principal;
 import java.util.List;
@@ -35,7 +35,7 @@ public class EquipmentController {
 
     @GetMapping("/page")
     public ResponseEntity<Page<Equipment>> getEquipmentPage(
-            Pageable pageable,
+            @PageableDefault(sort = "name") Pageable pageable,
             Principal principal) {
 
         return ResponseEntity.ok(

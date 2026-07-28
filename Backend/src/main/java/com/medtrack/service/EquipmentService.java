@@ -15,7 +15,11 @@ import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import com.medtrack.dto.EquipmentStatisticsResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+
 import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
@@ -55,8 +59,21 @@ public class EquipmentService {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findByHospitalId(hospital.getId());
     }
-    public Page<Equipment> getEquipmentPage(String username, Pageable pageable) {
+    public Page<Equipment> getEquipmentPage(
+            String username,
+            int page,
+            int size,
+            String sortBy,
+            String direction) {
+
         Hospital hospital = getHospitalForUser(username);
+
+        Sort sort = direction.equalsIgnoreCase("desc")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
         return equipmentRepository.findByHospitalId(hospital.getId(), pageable);
     }
 
