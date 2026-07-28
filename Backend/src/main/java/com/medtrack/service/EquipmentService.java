@@ -61,18 +61,9 @@ public class EquipmentService {
     }
     public Page<Equipment> getEquipmentPage(
             String username,
-            int page,
-            int size,
-            String sortBy,
-            String direction) {
+            Pageable pageable) {
 
         Hospital hospital = getHospitalForUser(username);
-
-        Sort sort = direction.equalsIgnoreCase("desc")
-                ? Sort.by(sortBy).descending()
-                : Sort.by(sortBy).ascending();
-
-        Pageable pageable = PageRequest.of(page, size, sort);
 
         return equipmentRepository.findByHospitalId(hospital.getId(), pageable);
     }
