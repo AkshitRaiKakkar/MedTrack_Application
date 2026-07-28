@@ -239,6 +239,17 @@ public class EquipmentService {
         if (equipment.getMinimumStock() == null) {
             equipment.setMinimumStock(10);
         }
+
+        if (equipment.getEquipmentCode() != null &&
+                equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
+            throw new IllegalArgumentException("Equipment Code already exists.");
+        }
+
+        if (equipment.getSerialNumber() != null &&
+                equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
+            throw new IllegalArgumentException("Serial Number already exists.");
+        }
+
         Equipment savedEquipment = equipmentRepository.save(equipment);
 
         logger.info(
@@ -249,18 +260,6 @@ public class EquipmentService {
         );
 
         return savedEquipment;
-    }
-
-    // Validate Equipment Code
-if (equipment.getEquipmentCode() != null &&
-        equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
-        throw new IllegalArgumentException("Equipment Code already exists.");
-    }
-
-// Validate Serial Number
-if (equipment.getSerialNumber() != null &&
-        equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
-        throw new IllegalArgumentException("Serial Number already exists.");
     }
 
     /**
@@ -280,26 +279,6 @@ if (equipment.getSerialNumber() != null &&
         equipmentRepository.delete(equipment);
     }
 
-    // Validate Equipment Code
-if (equipmentDetails.getEquipmentCode() != null) {
-        equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
-                .ifPresent(existing -> {
-                    if (!existing.getId().equals(id)) {
-                        throw new IllegalArgumentException("Equipment Code already exists.");
-                    }
-                });
-    }
-
-// Validate Serial Number
-if (equipmentDetails.getSerialNumber() != null) {
-        equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
-                .ifPresent(existing -> {
-                    if (!existing.getId().equals(id)) {
-                        throw new IllegalArgumentException("Serial Number already exists.");
-                    }
-                });
-    }
-
     /**
      * Updates an existing equipment record's fields.
      */
@@ -307,6 +286,24 @@ if (equipmentDetails.getSerialNumber() != null) {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+
+        if (equipmentDetails.getEquipmentCode() != null) {
+            equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
+                    .ifPresent(existing -> {
+                        if (!existing.getId().equals(id)) {
+                            throw new IllegalArgumentException("Equipment Code already exists.");
+                        }
+                    });
+        }
+
+        if (equipmentDetails.getSerialNumber() != null) {
+            equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
+                    .ifPresent(existing -> {
+                        if (!existing.getId().equals(id)) {
+                            throw new IllegalArgumentException("Serial Number already exists.");
+                        }
+                    });
+        }
 
         equipment.setName(equipmentDetails.getName());
         equipment.setModel(equipmentDetails.getModel());
