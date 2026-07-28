@@ -19,7 +19,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-
+import java.util.EnumMap;
+import java.util.Map;
 import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
@@ -88,6 +89,23 @@ public class EquipmentService {
     public List<Equipment> getLowStockEquipment(String username) {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findLowStockEquipment(hospital.getId());
+    }
+
+    public Map<EquipmentStatus, Long> getEquipmentStatusSummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        Map<EquipmentStatus, Long> summary = new EnumMap<>(EquipmentStatus.class);
+
+        for (EquipmentStatus status : EquipmentStatus.values()) {
+            long count = equipmentRepository.countByHospitalIdAndStatus(
+                    hospital.getId(),
+                    status
+            );
+            summary.put(status, count);
+        }
+
+        return summary;
     }
 
     /**
