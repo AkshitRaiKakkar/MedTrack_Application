@@ -49,6 +49,7 @@ import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
 import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import IncidentResponsePlaybookPanel from "./IncidentResponsePlaybookPanel";
+import ScimProvisioningPanel from "./ScimProvisioningPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -383,7 +384,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
           { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
           { id: "grc", label: "GRC & Audit Ledger", icon: Award },
-          { id: "ir", label: "IR Playbooks & Forensics", icon: Zap }
+          { id: "ir", label: "IR Playbooks & Forensics", icon: Zap },
+          { id: "scim", label: "SCIM 2.0 Provisioning", icon: Users }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -805,6 +807,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 13: INCIDENT RESPONSE PLAYBOOKS & FORENSICS */}
       {selectedTab === "ir" && (
         <IncidentResponsePlaybookPanel />
+      )}
+
+      {/* TAB 14: SCIM 2.0 IDENTITY PROVISIONING */}
+      {selectedTab === "scim" && (
+        <ScimProvisioningPanel />
       )}
 
       {/* 4. MODALS */}
