@@ -125,6 +125,9 @@ const getRouteStateFromPath = () => {
     "ir-playbooks": "ir-playbooks",
     "incident-response": "ir-playbooks",
     forensics: "ir-playbooks",
+    pam: "pam",
+    "privileged-access": "pam",
+    "jit-elevation": "pam",
   };
 
   return {

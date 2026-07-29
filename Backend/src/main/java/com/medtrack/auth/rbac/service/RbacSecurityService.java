@@ -164,7 +164,7 @@ public class RbacSecurityService {
                 .map(m -> m.getPermission().getPermissionCode())
                 .collect(Collectors.toList());
 
-        boolean granted = grantedCodes.contains(permissionCode) || roleName.equals("ROLE_ADMIN");
+        boolean granted = grantedCodes.contains(permissionCode);
 
         return UserPermissionCheckResponse.builder()
                 .userId(userId)
