@@ -9,6 +9,7 @@ import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.specifications.EquipmentSpecifications;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -176,6 +177,62 @@ public class EquipmentService {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+    }
+
+    /**
+     * Free-text search across the caller's inventory.
+     *
+     * <p>Matches the keyword as a case-insensitive substring of the asset name, model, serial
+     * number, equipment code or department. Results are always scoped to the authenticated user's
+     * hospital.</p>
+     *
+     * @param keyword  substring to look for; must not be blank
+     * @param username authenticated user's username
+     * @return matching equipment, ordered by name
+     * @throws IllegalArgumentException if the keyword is null or blank
+     */
+    public List<Equipment> searchEquipment(String keyword, String username) {
+        // A blank keyword degrades to "match everything", which is what GET /api/equipment already
+        // does. Rejecting it stops an accidentally-empty search box from pulling the entire
+        // inventory on every keystroke.
+        if (keyword == null || keyword.isBlank()) {
+            throw new IllegalArgumentException("Search keyword must not be blank");
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findAll(
+                EquipmentSpecifications.keywordMatches(hospital.getId(), keyword),
+                Sort.by(Sort.Direction.ASC, "name"));
+    }
+
+    /**
+     * Retrieves the caller's equipment narrowed by any combination of optional filters.
+     *
+     * <p>Every filter is optional; omitting all of them returns the hospital's full inventory. The
+     * hospital predicate is applied by the specification regardless, so no filter combination can
+     * reach another hospital's assets.</p>
+     *
+     * @param username   authenticated user's username
+     * @param department exact department name, matched case-insensitively
+     * @param category   equipment category
+     * @param status     lifecycle status
+     * @param model      case-insensitive substring of the model name
+     * @return matching equipment, ordered by name
+     */
+    public List<Equipment> filterEquipment(
+            String username,
+            String department,
+            EquipmentCategory category,
+            EquipmentStatus status,
+            String model) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findAll(
+                EquipmentSpecifications.filterEquipment(
+                        hospital.getId(), department, category, status, model),
+                Sort.by(Sort.Direction.ASC, "name"));
     }
 
     public EquipmentStatisticsResponse getEquipmentStatistics(String username) {
