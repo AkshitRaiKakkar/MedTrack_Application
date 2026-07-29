@@ -4,6 +4,8 @@ import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.EquipmentImportSummary;
 import com.medtrack.dto.EquipmentStatisticsResponse;
+import com.medtrack.dto.LowStockSummaryResponse;
+import com.medtrack.dto.StockAdjustmentRequest;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
@@ -82,6 +84,110 @@ public class EquipmentService {
     public List<Equipment> getLowStockEquipment(String username) {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findLowStockEquipment(hospital.getId());
+    }
+
+    /**
+     * Applies a signed stock movement to one asset owned by the caller's hospital.
+     *
+     * <p>Expressed as a delta rather than an absolute quantity so that two concurrent movements
+     * compose instead of overwriting each other. The row is re-read inside the transaction and the
+     * resulting quantity is validated before the write, so stock can never go negative.</p>
+     *
+     * @param id       equipment identifier, scoped to the caller's hospital
+     * @param request  the movement to apply
+     * @param username authenticated user's username
+     * @return the updated equipment record
+     * @throws ResourceNotFoundException if the asset does not exist or belongs to another hospital
+     * @throws IllegalArgumentException  if the delta is zero, or would drive quantity negative
+     */
+    @Transactional
+    public Equipment adjustStock(Long id, StockAdjustmentRequest request, String username) {
+        if (request == null || request.getDelta() == null) {
+            throw new IllegalArgumentException("Stock delta is required");
+        }
+        if (request.getDelta() == 0) {
+            throw new IllegalArgumentException("Stock delta must not be zero");
+        }
+        if (request.getMinimumStock() != null && request.getMinimumStock() < 0) {
+            throw new IllegalArgumentException("Minimum stock cannot be negative");
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+        Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Equipment not found or you don't have access"));
+
+        int currentQuantity = equipment.getQuantity() != null ? equipment.getQuantity() : 0;
+        long adjusted = (long) currentQuantity + request.getDelta();
+
+        if (adjusted < 0) {
+            throw new IllegalArgumentException(
+                    "Insufficient stock: cannot remove " + Math.abs(request.getDelta())
+                            + " unit(s) from a quantity of " + currentQuantity);
+        }
+        // Guard the upper bound too. A caller sending Integer.MAX_VALUE as the delta would
+        // otherwise silently overflow the column on narrowing back to int.
+        if (adjusted > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Resulting quantity exceeds the supported maximum");
+        }
+
+        equipment.setQuantity((int) adjusted);
+        if (request.getMinimumStock() != null) {
+            equipment.setMinimumStock(request.getMinimumStock());
+        }
+
+        Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment stock adjusted | User: {} | Equipment ID: {} | Delta: {} | "
+                        + "Quantity: {} -> {} | Reason: {}",
+                username,
+                savedEquipment.getId(),
+                request.getDelta(),
+                currentQuantity,
+                savedEquipment.getQuantity(),
+                request.getReason() != null ? request.getReason() : "not supplied"
+        );
+
+        return savedEquipment;
+    }
+
+    /**
+     * Counts of tracked, low and out-of-stock items for the caller's hospital.
+     *
+     * <p>Serves the dashboard tiles without transferring every low-stock row on each poll.</p>
+     *
+     * @param username authenticated user's username
+     * @return aggregate stock counters
+     */
+    public LowStockSummaryResponse getLowStockSummary(String username) {
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Equipment> inventory = equipmentRepository.findByHospitalId(hospital.getId());
+
+        long lowStock = 0;
+        long outOfStock = 0;
+        long totalUnits = 0;
+
+        for (Equipment equipment : inventory) {
+            int quantity = equipment.getQuantity() != null ? equipment.getQuantity() : 0;
+            int threshold = equipment.getMinimumStock() != null ? equipment.getMinimumStock() : 0;
+
+            totalUnits += quantity;
+            if (quantity <= threshold) {
+                lowStock++;
+            }
+            if (quantity == 0) {
+                outOfStock++;
+            }
+        }
+
+        return LowStockSummaryResponse.builder()
+                .totalTrackedItems(inventory.size())
+                .lowStockItems(lowStock)
+                .outOfStockItems(outOfStock)
+                .totalUnitsInStock(totalUnits)
+                .build();
     }
 
     public Map<EquipmentStatus, Long> getEquipmentStatusSummary(String username) {
@@ -301,8 +407,15 @@ public class EquipmentService {
         equipment.setSerialNumber(equipmentDetails.getSerialNumber());
         equipment.setDepartment(equipmentDetails.getDepartment());
         equipment.setCategory(equipmentDetails.getCategory());
-        equipment.setQuantity(equipmentDetails.getQuantity());
-        equipment.setMinimumStock(equipmentDetails.getMinimumStock());
+        // Stock levels are moved through adjustStock, which applies a signed delta. A general
+        // update must therefore treat an omitted value as "leave alone" rather than as zero,
+        // otherwise any PUT that does not restate the inventory wipes it.
+        if (equipmentDetails.getQuantity() != null) {
+            equipment.setQuantity(equipmentDetails.getQuantity());
+        }
+        if (equipmentDetails.getMinimumStock() != null) {
+            equipment.setMinimumStock(equipmentDetails.getMinimumStock());
+        }
         equipment.setStatus(equipmentDetails.getStatus());
         equipment.setPurchaseDate(equipmentDetails.getPurchaseDate());
 
