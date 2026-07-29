@@ -48,9 +48,6 @@ import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
 import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
 import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
-import IncidentResponsePlaybookPanel from "./IncidentResponsePlaybookPanel";
-import ScimProvisioningPanel from "./ScimProvisioningPanel";
-import CspmPanel from "./CspmPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -384,10 +381,7 @@ export default function EnterpriseSecurityCenter() {
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
           { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
-          { id: "grc", label: "GRC & Audit Ledger", icon: Award },
-          { id: "ir", label: "IR Playbooks & Forensics", icon: Zap },
-          { id: "scim", label: "SCIM 2.0 Provisioning", icon: Users },
-          { id: "cspm", label: "CSPM & Cloud Security", icon: Cloud }
+          { id: "grc", label: "GRC & Audit Ledger", icon: Award }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -804,21 +798,6 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 12: GRC & CONTINUOUS AUDIT LEDGER */}
       {selectedTab === "grc" && (
         <GrcAuditCompliancePanel />
-      )}
-
-      {/* TAB 13: INCIDENT RESPONSE PLAYBOOKS & FORENSICS */}
-      {selectedTab === "ir" && (
-        <IncidentResponsePlaybookPanel />
-      )}
-
-      {/* TAB 14: SCIM 2.0 IDENTITY PROVISIONING */}
-      {selectedTab === "scim" && (
-        <ScimProvisioningPanel />
-      )}
-
-      {/* TAB 15: CSPM & CLOUD SECURITY POSTURE */}
-      {selectedTab === "cspm" && (
-        <CspmPanel />
       )}
 
       {/* 4. MODALS */}

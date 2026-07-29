@@ -38,7 +38,6 @@ import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
 import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
 import GrcAuditCompliancePage from "../pages/auth/GrcAuditCompliancePage";
-import IncidentResponsePlaybookPage from "../pages/auth/IncidentResponsePlaybookPage";
 import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
 import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
 import VulnerabilityManagementPage from "../pages/auth/VulnerabilityManagementPage";
@@ -207,10 +206,6 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "grc-compliance":
     case "audit-ledger":
       return ProtectedRoute(GrcAuditCompliancePage);
-    case "ir-playbooks":
-    case "incident-response":
-    case "forensics":
-      return ProtectedRoute(IncidentResponsePlaybookPage);
     case "pam":
     case "privileged-access":
     case "jit-elevation":
