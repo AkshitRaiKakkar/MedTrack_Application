@@ -95,7 +95,7 @@ export default function SecurityObservabilityPanel() {
       setMessage({ type: "success", text: "OpenTelemetry collector settings saved!" });
     } catch (err) {
       setMessage({ type: "error", text: err.response?.data?.message || "Failed to update policy." });
-    } finaly {
+    } finally {
       setActionLoading(false);
     }
   };

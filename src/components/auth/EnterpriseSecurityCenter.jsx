@@ -770,6 +770,10 @@ export default function EnterpriseSecurityCenter() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
       {/* TAB 7: THREAT ENGINE & SOAR */}
       {selectedTab === "threats" && (
         <ThreatDetectionSoarPanel />
