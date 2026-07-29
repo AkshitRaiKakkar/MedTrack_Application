@@ -70,6 +70,26 @@ class MaintenanceMigrationIntegrationTest {
     }
 
     @Test
+    void migrationFailsWhenLegacyStatusIsUnsupported() throws Exception {
+        String url = createLegacyDatabase(true, "Started");
+
+        assertThrows(Exception.class, () -> migrate(url));
+    }
+
+    @Test
+    void migratedSchemaRejectsUnsupportedStatusWrites() throws Exception {
+        String url = createLegacyDatabase(true);
+        migrate(url);
+
+        try (Connection connection = DriverManager.getConnection(url, "sa", "");
+             Statement statement = connection.createStatement()) {
+            assertThrows(SQLException.class,
+                    () -> statement.executeUpdate(
+                            "UPDATE maintenance_tasks SET status = 'STARTED' WHERE id = 100"));
+        }
+    }
+
+    @Test
     void technicianRelationshipUsesSetNullWhilePreservingHistoricalEmail() throws Exception {
         String url = createLegacyDatabase(true);
         migrate(url);
@@ -90,6 +110,10 @@ class MaintenanceMigrationIntegrationTest {
     }
 
     private String createLegacyDatabase(boolean matchingEquipment) throws Exception {
+        return createLegacyDatabase(matchingEquipment, "In Progress");
+    }
+
+    private String createLegacyDatabase(boolean matchingEquipment, String status) throws Exception {
         String url = "jdbc:h2:mem:maintenance-migration-" + UUID.randomUUID()
                 + ";MODE=MySQL;DB_CLOSE_DELAY=-1";
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
@@ -128,8 +152,10 @@ class MaintenanceMigrationIntegrationTest {
                     INSERT INTO maintenance_tasks (
                         id, equipment_id, hospital_id, status, assigned_technician
                     )
-                    VALUES (100, '%s', NULL, 'In Progress', ' Tech@MedTrack.com ')
-                    """.formatted(matchingEquipment ? "EQ-1001" : "EQ-MISSING"));
+                    VALUES (100, '%s', NULL, '%s', ' Tech@MedTrack.com ')
+                    """.formatted(
+                            matchingEquipment ? "EQ-1001" : "EQ-MISSING",
+                            status));
         }
         return url;
     }

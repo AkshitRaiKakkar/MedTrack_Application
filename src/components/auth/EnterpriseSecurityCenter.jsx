@@ -47,7 +47,7 @@ import SiemSecurityAnalyticsPanel from "./SiemSecurityAnalyticsPanel";
 import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
 import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
-import SbomPanel from "./SbomPanel";
+import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -381,7 +381,7 @@ export default function EnterpriseSecurityCenter() {
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
           { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
-          { id: "sbom", label: "SBOM & Supply Chain", icon: Package }
+          { id: "grc", label: "GRC & Audit Ledger", icon: Award }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -795,9 +795,9 @@ export default function EnterpriseSecurityCenter() {
         <ZeroTrustNetworkPanel />
       )}
 
-      {/* TAB 12: SBOM & SUPPLY CHAIN SECURITY */}
-      {selectedTab === "sbom" && (
-        <SbomPanel />
+      {/* TAB 12: GRC & CONTINUOUS AUDIT LEDGER */}
+      {selectedTab === "grc" && (
+        <GrcAuditCompliancePanel />
       )}
 
       {/* 4. MODALS */}
