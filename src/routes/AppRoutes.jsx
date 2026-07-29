@@ -41,7 +41,7 @@ import GrcAuditCompliancePage from "../pages/auth/GrcAuditCompliancePage";
 import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
 import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
 import VulnerabilityManagementPage from "../pages/auth/VulnerabilityManagementPage";
-import MicrosegmentationPage from "../pages/auth/MicrosegmentationPage";
+import PamPage from "../pages/auth/PamPage";
 
 // --- Connected Imports ---
 import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
@@ -158,10 +158,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
       return ProtectedRoute(EnterpriseSsoPage, {}, ["hospital"]);
     case "rbac-security":
     case "rbac":
-      return ProtectedRoute(RbacSecurityPage);
+      return ProtectedRoute(RbacSecurityPage, {}, ["hospital"]);
     case "zerotrust-security":
     case "zerotrust":
-      return ProtectedRoute(ZeroTrustSecurityPage);
+      return ProtectedRoute(ZeroTrustSecurityPage, {}, ["hospital"]);
     case "compliance-security":
     case "compliance":
       return ProtectedRoute(ComplianceSecurityPage);
@@ -206,6 +206,10 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "grc-compliance":
     case "audit-ledger":
       return ProtectedRoute(GrcAuditCompliancePage);
+    case "pam":
+    case "privileged-access":
+    case "jit-elevation":
+      return ProtectedRoute(PamPage);
     case "help":
     case "help-center":
       return <HelpPage onNavigate={onNavigate} />;

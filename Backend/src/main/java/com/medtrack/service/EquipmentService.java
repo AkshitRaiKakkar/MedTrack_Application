@@ -13,9 +13,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Map;
 import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
@@ -55,8 +62,12 @@ public class EquipmentService {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findByHospitalId(hospital.getId());
     }
-    public Page<Equipment> getEquipmentPage(String username, Pageable pageable) {
+    public Page<Equipment> getEquipmentPage(
+            String username,
+            Pageable pageable) {
+
         Hospital hospital = getHospitalForUser(username);
+
         return equipmentRepository.findByHospitalId(hospital.getId(), pageable);
     }
 
@@ -73,6 +84,23 @@ public class EquipmentService {
         return equipmentRepository.findLowStockEquipment(hospital.getId());
     }
 
+    public Map<EquipmentStatus, Long> getEquipmentStatusSummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        Map<EquipmentStatus, Long> summary = new EnumMap<>(EquipmentStatus.class);
+
+        for (EquipmentStatus status : EquipmentStatus.values()) {
+            long count = equipmentRepository.countByHospitalIdAndStatus(
+                    hospital.getId(),
+                    status
+            );
+            summary.put(status, count);
+        }
+
+        return summary;
+    }
+
     /**
      * Retrieves all equipment whose warranty has already expired.
      *
@@ -87,6 +115,38 @@ public class EquipmentService {
                 hospital.getId(),
                 today
         );
+    }
+
+
+    public Map<String, Long> getWarrantySummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.findByHospitalId(hospital.getId()).size();
+
+        long expired = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now())
+                .size();
+
+        long expiringSoon = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBetween(
+                        hospital.getId(),
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(30))
+                .size();
+
+        long valid = total - expired;
+
+        Map<String, Long> summary = new HashMap<>();
+
+        summary.put("total", total);
+        summary.put("expired", expired);
+        summary.put("expiringSoon", expiringSoon);
+        summary.put("valid", valid);
+
+        return summary;
     }
 
     /**
@@ -118,6 +178,38 @@ public class EquipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
     }
 
+    public EquipmentStatisticsResponse getEquipmentStatistics(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.countByHospitalId(hospital.getId());
+
+        long active = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.ACTIVE);
+
+        long maintenance = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.UNDER_MAINTENANCE);
+
+        long retired = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.RETIRED);
+
+        long expiredWarranty = equipmentRepository
+                .countByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now());
+
+        return new EquipmentStatisticsResponse(
+                total,
+                active,
+                maintenance,
+                retired,
+                expiredWarranty
+        );
+    }
+
     /**
      * Adds a new equipment record.
      * If no equipmentCode is provided by the caller, auto-generates one
@@ -138,6 +230,17 @@ public class EquipmentService {
         if (equipment.getMinimumStock() == null) {
             equipment.setMinimumStock(10);
         }
+
+        if (equipment.getEquipmentCode() != null &&
+                equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
+            throw new IllegalArgumentException("Equipment Code already exists.");
+        }
+
+        if (equipment.getSerialNumber() != null &&
+                equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
+            throw new IllegalArgumentException("Serial Number already exists.");
+        }
+
         Equipment savedEquipment = equipmentRepository.save(equipment);
 
         logger.info(
@@ -174,6 +277,24 @@ public class EquipmentService {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+
+        if (equipmentDetails.getEquipmentCode() != null) {
+            equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
+                    .ifPresent(existing -> {
+                        if (!existing.getId().equals(id)) {
+                            throw new IllegalArgumentException("Equipment Code already exists.");
+                        }
+                    });
+        }
+
+        if (equipmentDetails.getSerialNumber() != null) {
+            equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
+                    .ifPresent(existing -> {
+                        if (!existing.getId().equals(id)) {
+                            throw new IllegalArgumentException("Serial Number already exists.");
+                        }
+                    });
+        }
 
         equipment.setName(equipmentDetails.getName());
         equipment.setModel(equipmentDetails.getModel());
@@ -426,5 +547,27 @@ public class EquipmentService {
             }
         }
         return null;
+    }
+
+    public byte[] exportEquipmentCsv(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
+
+        StringBuilder csv = new StringBuilder();
+
+        csv.append("Equipment Code,Name,Department,Category,Status,Purchase Date,Warranty Expiry\n");
+
+        for (Equipment equipment : equipmentList) {
+            csv.append(equipment.getEquipmentCode()).append(",")
+                    .append(equipment.getName()).append(",")
+                    .append(equipment.getDepartment()).append(",")
+                    .append(equipment.getCategory()).append(",")
+                    .append(equipment.getStatus()).append(",")
+                    .append(equipment.getPurchaseDate()).append(",")
+                    .append(equipment.getWarrantyExpiry())
+                    .append("\n");
+        }
+
+        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 }

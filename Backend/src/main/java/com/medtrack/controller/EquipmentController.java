@@ -9,6 +9,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import java.util.Map;
+import com.medtrack.model.EquipmentStatus;
 
 import java.security.Principal;
 import java.util.List;
@@ -34,7 +37,7 @@ public class EquipmentController {
 
     @GetMapping("/page")
     public ResponseEntity<Page<Equipment>> getEquipmentPage(
-            Pageable pageable,
+            @PageableDefault(sort = "name") Pageable pageable,
             Principal principal) {
 
         return ResponseEntity.ok(
@@ -58,6 +61,17 @@ public class EquipmentController {
         );
     }
 
+    @GetMapping("/statistics")
+    public ResponseEntity<EquipmentStatisticsResponse> getStatistics(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentStatistics(
+                        principal.getName()
+                )
+        );
+    }
+
     /**
      * Retrieves a specific equipment record by its ID.
      *
@@ -69,6 +83,18 @@ public class EquipmentController {
     public ResponseEntity<Equipment> getEquipmentById(@PathVariable Long id, Principal principal) {
         validateId(id);
         return ResponseEntity.ok(equipmentService.getEquipmentById(id, principal.getName()));
+    }
+
+    @GetMapping("/warranty-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<String, Long>> getWarrantySummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getWarrantySummary(
+                        principal.getName()
+                )
+        );
     }
 
     /**
@@ -177,6 +203,42 @@ public class EquipmentController {
     }
 
     /**
+     * Retrieves equipment using multiple optional filters.
+     */
+    @GetMapping("/filter")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> filterEquipment(
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) EquipmentCategory category,
+            @RequestParam(required = false) EquipmentStatus status,
+            @RequestParam(required = false) String model,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.filterEquipment(
+                        principal.getName(),
+                        department,
+                        category,
+                        status,
+                        model
+                )
+        );
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<byte[]> exportEquipment(Principal principal) {
+
+        byte[] csv = equipmentService.exportEquipmentCsv(principal.getName());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=equipment.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
+    }
+
+    /**
      * Retrieves all equipment that is currently below the configured stock threshold.
      *
      * @param principal the authenticated user's security principal
@@ -187,6 +249,18 @@ public class EquipmentController {
     public ResponseEntity<List<Equipment>> getLowStockEquipment(Principal principal) {
         return ResponseEntity.ok(
                 equipmentService.getLowStockEquipment(principal.getName())
+        );
+    }
+
+    @GetMapping("/status-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<EquipmentStatus, Long>> getStatusSummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentStatusSummary(
+                        principal.getName()
+                )
         );
     }
 
