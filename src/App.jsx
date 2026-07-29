@@ -122,6 +122,9 @@ const getRouteStateFromPath = () => {
     grc: "grc-compliance",
     "grc-compliance": "grc-compliance",
     "audit-ledger": "grc-compliance",
+    "ir-playbooks": "ir-playbooks",
+    "incident-response": "ir-playbooks",
+    forensics: "ir-playbooks",
   };
 
   return {
