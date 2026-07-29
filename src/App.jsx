@@ -119,6 +119,9 @@ const getRouteStateFromPath = () => {
     microsegmentation: "microsegmentation",
     sdp: "microsegmentation",
     "perimeter-security": "microsegmentation",
+    grc: "grc-compliance",
+    "grc-compliance": "grc-compliance",
+    "audit-ledger": "grc-compliance",
   };
 
   return {
