@@ -114,6 +114,10 @@ legacy row therefore cannot affect either API results or hospital analytics.
 
 The enum uses Jackson conversion annotations so the REST API continues to accept and return the human-readable values already used by the frontend, such as `"Scheduled"` and `"In Progress"`. Invalid status text is rejected instead of being stored as arbitrary data.
 
+Flyway migration version `5` enforces the same closed status set in persistent H2 and MySQL
+schemas. It fails when unsupported legacy values remain after normalization and prevents invalid
+direct database writes from creating records that Hibernate cannot deserialize.
+
 ### MaintenanceService.java
 
 `MaintenanceService` contains the current business logic for maintenance tasks.
@@ -122,6 +126,8 @@ It currently supports:
 
 - fetching only the authenticated hospital's or technician's tasks
 - fetching one task only when it belongs to the authenticated hospital or assigned technician
+- revalidating the authenticated user's current database role and active account status before
+  every hospital or technician Maintenance operation
 - scheduling a task with hospital ownership derived from the authenticated user
 - always generating the task code on the server
 - allowing a technician to update only a task linked to their authenticated user ID
@@ -142,7 +148,7 @@ It currently supports:
 - requiring technician sign-off and recording `completedAt` on the transition to `COMPLETED`
 - creating one recurring task only when a task transitions to `COMPLETED`
 - revalidating the previous technician before assigning a recurring task and leaving the
-  recurrence unassigned if that account is no longer eligible
+  recurrence unassigned if that account becomes ineligible during completion processing
 - serializing technician updates to the same task so concurrent completion requests cannot create duplicate recurrences
 - serializing hospital deletion with technician completion of the same task
 - exporting hospital tasks as an iCalendar feed
@@ -312,7 +318,9 @@ Updating should validate:
 - omitted or null optional report fields preserve their existing values; an explicit empty
   string remains an update for text fields
 - a recurring task reuses the canonical technician assignment only while the account still
-  exists and has the technician role; otherwise the recurrence is created unassigned
+  exists, remains active, and has the technician role; otherwise the recurrence is created
+  unassigned. A caller already known to be locked, disabled, deleted, or role-changed cannot
+  perform the completion itself.
 
 ## Security Rules
 
@@ -327,6 +335,9 @@ DELETE  hospital users
 
 Current service-level checks ensure:
 
+- every Maintenance operation requires the authenticated account to still exist, retain the
+  expected hospital or technician role, and have `AccountStatus.ACTIVE`; a locked, disabled,
+  deleted, or role-changed account receives HTTP 403 even if it presents an unexpired JWT
 - hospitals can list and read only their own maintenance tasks, and can delete only
   their own non-completed tasks
 - hospitals can assign technicians only to their own scheduled tasks
@@ -399,6 +410,8 @@ The current frontend field names should be preserved unless frontend changes are
 - [x] Align Maintenance request validation limits with persistence constraints.
 - [x] Apply the linked-equipment ownership invariant to Maintenance analytics aggregations.
 - [x] Link technician authorization to a stable `User` relationship without changing response JSON.
+- [x] Revalidate the current account role and active status on every Maintenance operation.
+- [x] Enforce the Maintenance status enum values with a versioned database constraint.
 
 ### Completed on 2026-07-14
 
@@ -521,7 +534,8 @@ Regression coverage is implemented in `MaintenanceServiceTest`,
    and recurring-task generation now trim and lowercase technician email lookup values to
    match authentication behavior. Only an `ACTIVE` account with the technician role can be
    assigned. A recurring completion still succeeds when the previous account is missing,
-   locked, disabled, or no longer a technician; the next scheduled task is left unassigned.
+   locked, disabled, or no longer a technician during completion processing; the next scheduled
+   task is left unassigned. A caller already known to be ineligible is denied before task access.
 
 The existing endpoints and response JSON remain unchanged. Assignment is an additive,
 hospital-only operation, and concurrent assignment versus technician-start attempts serialize
@@ -542,6 +556,21 @@ on the same maintenance row.
 Repository tests cover analytics isolation and assignment access after an email change. Service
 tests cover direct scheduling, hospital assignment, recurrence eligibility, and stable-ID
 locking. Migration tests cover case-insensitive backfill and user-deletion behavior.
+
+### Completed on 2026-07-28
+
+1. [x] **Revalidated current account eligibility for every Maintenance operation.** Hospital and
+   technician paths now reload the caller using normalized identity data and require the current
+   database role plus `AccountStatus.ACTIVE`. Locked, disabled, deleted, or role-changed accounts
+   receive HTTP 403 even if an older JWT still carries a Maintenance role.
+2. [x] **Enforced the closed Maintenance status set in the database.** Migration version `5` adds
+   matching H2 and MySQL check constraints for the five `MaintenanceStatus` values. Unsupported
+   legacy statuses block migration, and invalid direct writes are rejected before they can break
+   JPA reads.
+
+Service regression tests cover stale-authority access by locked and disabled accounts. Migration
+tests cover unsupported legacy data and invalid post-migration status writes. Endpoint paths,
+payloads, response models, successful status codes, and valid lifecycle behavior remain unchanged.
 
 ### Recommended future work
 
