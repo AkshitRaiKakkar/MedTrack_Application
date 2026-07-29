@@ -66,11 +66,8 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
 
-    long countByHospitalId(Long hospitalId);
-
-    long countByHospitalIdAndStatus(Long hospitalId, EquipmentStatus status);
-
+    // countByHospitalId and countByHospitalIdAndStatus are declared above as @Query methods.
+    // They were also declared here as derived queries, which is a duplicate method signature
+    // and is rejected by javac, so only the @Query declarations are kept.
     long countByHospitalIdAndWarrantyExpiryBefore(Long hospitalId, LocalDate date);
-
-    long countByHospitalIdAndStatus(Long hospitalId, EquipmentStatus status);
 }
