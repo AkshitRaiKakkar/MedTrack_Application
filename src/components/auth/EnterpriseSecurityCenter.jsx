@@ -47,6 +47,7 @@ import SiemSecurityAnalyticsPanel from "./SiemSecurityAnalyticsPanel";
 import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
 import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
+import SbomPanel from "./SbomPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -379,7 +380,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "siem", label: "SIEM & Log Analytics", icon: Activity },
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
-          { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network }
+          { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
+          { id: "sbom", label: "SBOM & Supply Chain", icon: Package }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -791,6 +793,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 11: ZTNA & MICROSEGMENTATION */}
       {selectedTab === "ztna" && (
         <ZeroTrustNetworkPanel />
+      )}
+
+      {/* TAB 12: SBOM & SUPPLY CHAIN SECURITY */}
+      {selectedTab === "sbom" && (
+        <SbomPanel />
       )}
 
       {/* 4. MODALS */}
