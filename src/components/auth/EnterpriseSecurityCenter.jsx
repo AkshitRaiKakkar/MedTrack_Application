@@ -32,7 +32,9 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
-  AlertCircle
+  AlertCircle,
+  Network,
+  Award
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {

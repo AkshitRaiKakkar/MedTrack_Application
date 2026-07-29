@@ -1,53 +1,17 @@
 // src/routes/AppRoutes.jsx
+//
+// Resolution is table-driven from routeRegistry.js. The previous implementation was a `switch` with
+// a parallel import list, and the two had drifted: `KeyVaultSecurityPage` and
+// `MicrosegmentationPage` were rendered without ever being imported (an uncaught ReferenceError
+// that the ErrorBoundary turned into a blank screen), `case "keyvault-security"` and
+// `case "microsegmentation"` each appeared twice so the second was unreachable, and fourteen
+// security consoles had no case at all.
+
 import React from "react";
 import { useAuth } from "../context/AuthContext";
-
-// Page Imports
-import LandingPage from "../pages/LandingPage";
-import NotFoundPage from "../pages/NotFoundPage";
-import Blog from "../pages/Blog";
-import BlogPost from "../pages/BlogPost";
-import CareersPage from "../pages/CareersPage";
-import JobApplicationPage from "../pages/JobApplicationPage";
-import HelpPage from "../pages/HelpPage";
-import CertificateGeneratorPage from "../pages/CertificateGeneratorPage";
+import { getRoute, checkAccess } from "./routeRegistry";
 import LoginPage from "../pages/auth/LoginPage";
-import RegisterPage from "../pages/auth/RegisterPage";
-import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
-import VerifyOtpPage from "../pages/auth/VerifyOtpPage";
-import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
-import Dashboard from "../pages/hospital/Dashboard";
-import AnalyticsDashboard from "../pages/hospital/AnalyticsDashboard";
-import EquipmentList from "../pages/hospital/EquipmentList";
-import MaintenanceSchedule from "../pages/hospital/MaintenanceSchedule";
-import TaskList from "../pages/technician/TaskList";
-import UpdateTask from "../pages/technician/UpdateTask";
-import OrdersList from "../pages/supplier/OrdersList";
-import OrderStatus from "../pages/supplier/OrderStatus";
-import AuthoritySecurityPage from "../pages/auth/AuthoritySecurityPage";
-import MfaSecurityPage from "../pages/auth/MfaSecurityPage";
-import EnterpriseSsoPage from "../pages/auth/EnterpriseSsoPage";
-import RbacSecurityPage from "../pages/auth/RbacSecurityPage";
-import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
-import ComplianceSecurityPage from "../pages/auth/ComplianceSecurityPage";
-import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
-import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
-import DlpPrivacyGuardPage from "../pages/auth/DlpPrivacyGuardPage";
-import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
-import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
-import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
-import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
-import GrcAuditCompliancePage from "../pages/auth/GrcAuditCompliancePage";
-import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
-import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
-import VulnerabilityManagementPage from "../pages/auth/VulnerabilityManagementPage";
-import PamPage from "../pages/auth/PamPage";
-
-// --- Connected Imports ---
-import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
-import EditEquipmentForm from "../pages/hospital/EditEquipmentForm";
-import ScheduleMaintenancePage from "../pages/hospital/ScheduleMaintenancePage";
-import RequestEquipmentPage from "../pages/hospital/RequestEquipmentPage";
+import NotFoundPage from "../pages/NotFoundPage";
 
 const UnauthorizedPage = ({ onNavigate, message }) => (
   <div className="min-h-screen bg-slate-900 flex items-center justify-center font-sans text-white p-6">
@@ -57,8 +21,7 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
       </div>
       <h2 className="text-2xl font-black mb-2">Access Denied</h2>
       <p className="text-red-400 font-bold mb-6">
-        {message ||
-          "Your account role is not authorized to access this resource."}
+        {message || "Your account role is not authorized to access this resource."}
       </p>
       <button
         onClick={() => onNavigate("dashboard")}
@@ -73,149 +36,36 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
 export default function AppRouter({ currentPage, onNavigate, pageData }) {
   const { user } = useAuth();
 
-  const ProtectedRoute = (Component, props = {}, allowedRoles = []) => {
-    if (!user) return <LoginPage onNavigate={onNavigate} />;
+  const route = getRoute(currentPage);
 
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.includes(user.role?.toLowerCase())
-    ) {
-      return <UnauthorizedPage onNavigate={onNavigate} />;
-    }
-
-    return <Component onNavigate={onNavigate} {...props} />;
-  };
-
-  switch (currentPage) {
-    // --- Public Routes ---
-    case "landing":
-      return <LandingPage onNavigate={onNavigate} />;
-    case "blog":
-      return <Blog onNavigate={onNavigate} />;
-    case "blog-post":
-      return <BlogPost onNavigate={onNavigate} slug={pageData} />;
-    case "careers":
-      return <CareersPage onNavigate={onNavigate} />;
-    case "apply":
-      return <JobApplicationPage onNavigate={onNavigate} jobId={pageData} />;
-    case "certificate":
-      return <CertificateGeneratorPage />;
-    case "login":
-      return <LoginPage onNavigate={onNavigate} />;
-    case "register":
-      return <RegisterPage onNavigate={onNavigate} defaultRole={pageData} />;
-    case "forgot-password":
-      return <ForgotPasswordPage onNavigate={onNavigate} />;
-    case "verify-otp":
-      return <VerifyOtpPage onNavigate={onNavigate} />;
-    case "reset-password":
-      return <ResetPasswordPage onNavigate={onNavigate} />;
-
-    // --- Protected Routes: Hospital Admin ---
-    case "dashboard":
-      return ProtectedRoute(Dashboard);
-    case "equipment":
-      return ProtectedRoute(EquipmentList);
-    case "add-equipment":
-      return ProtectedRoute(AddEquipmentForm, {}, ["hospital"]);
-    case "edit-equipment":
-      return ProtectedRoute(EditEquipmentForm, { equipmentId: pageData }, ["hospital"]);
-    case "schedule-maintenance":
-      return ProtectedRoute(ScheduleMaintenancePage, {}, ["hospital"]);
-    case "request-equipment":
-      return ProtectedRoute(RequestEquipmentPage, {}, ["hospital"]);
-    case "maintenance":
-      return ProtectedRoute(MaintenanceSchedule);
-    case "analytics":
-      return ProtectedRoute(AnalyticsDashboard, {}, ["hospital"]);
-
-    // --- Protected Routes: Technician ---
-    case "tasks":
-      return ProtectedRoute(TaskList);
-    case "update-task":
-      return ProtectedRoute(UpdateTask, { task: pageData });
-    case "updatetask":
-      return ProtectedRoute(UpdateTask, { task: pageData });
-
-    // --- Protected Routes: Supplier ---
-    case "orders":
-      return ProtectedRoute(OrdersList);
-    case "orderstatus":
-      return ProtectedRoute(OrderStatus, { order: pageData });
-
-    // --- Protected Routes: Security & Authority ---
-    // Authority version management, RBAC role/permission matrix, and SSO provider
-    // configuration are Hospital admin-only consoles. 2FA/device management is
-    // self-service and stays open to any authenticated role.
-    case "authority-security":
-    case "authority":
-      return ProtectedRoute(AuthoritySecurityPage, {}, ["hospital"]);
-    case "mfa-security":
-    case "mfa":
-      return ProtectedRoute(MfaSecurityPage);
-    case "sso-security":
-    case "sso":
-      return ProtectedRoute(EnterpriseSsoPage, {}, ["hospital"]);
-    case "rbac-security":
-    case "rbac":
-      return ProtectedRoute(RbacSecurityPage, {}, ["hospital"]);
-    case "zerotrust-security":
-    case "zerotrust":
-      return ProtectedRoute(ZeroTrustSecurityPage, {}, ["hospital"]);
-    case "compliance-security":
-    case "compliance":
-      return ProtectedRoute(ComplianceSecurityPage);
-    case "threat-detection":
-    case "soar-security":
-    case "soar":
-      return ProtectedRoute(ThreatDetectionSoarPage);
-    case "keyvault-security":
-    case "keyvault":
-    case "keyvault-security":
-      return ProtectedRoute(KeyVaultSecurityPage);
-    case "dlp":
-    case "dlp-privacy":
-    case "privacy-guard":
-      return ProtectedRoute(DlpPrivacyGuardPage);
-    case "passkeys":
-    case "passwordless":
-    case "webauthn":
-      return ProtectedRoute(PasskeyPasswordlessPage);
-    case "ztna":
-    case "microsegmentation":
-    case "network-access":
-      return ProtectedRoute(ZeroTrustNetworkPage);
-    case "siem":
-    case "siem-analytics":
-    case "siem-security":
-      return ProtectedRoute(SiemSecurityAnalyticsPage);
-    case "scim-provisioning":
-    case "scim":
-      return ProtectedRoute(ScimProvisioningPage);
-    case "security-commandcenter":
-    case "command-center":
-      return ProtectedRoute(SecurityCommandCenterPage);
-    case "vulnerability":
-    case "patch-management":
-      return ProtectedRoute(VulnerabilityManagementPage);
-    case "microsegmentation":
-    case "sdp":
-    case "perimeter-security":
-      return ProtectedRoute(MicrosegmentationPage);
-    case "grc":
-    case "grc-compliance":
-    case "audit-ledger":
-      return ProtectedRoute(GrcAuditCompliancePage);
-    case "pam":
-    case "privileged-access":
-    case "jit-elevation":
-      return ProtectedRoute(PamPage);
-    case "help":
-    case "help-center":
-      return <HelpPage onNavigate={onNavigate} />;
-
-    // --- Fallback: 404 ---
-    default:
-      return <NotFoundPage onNavigate={onNavigate} />;
+  if (!route) {
+    return <NotFoundPage onNavigate={onNavigate} />;
   }
+
+  const { allowed, reason } = checkAccess(user, currentPage);
+
+  if (!allowed && reason === "unauthenticated") {
+    return <LoginPage onNavigate={onNavigate} />;
+  }
+
+  if (!allowed) {
+    // The denial now names the roles permitted on the route. UnauthorizedPage has always accepted
+    // a `message` prop, but nothing ever passed one, so every denial showed the same generic line.
+    return <UnauthorizedPage onNavigate={onNavigate} message={reason} />;
+  }
+
+  const Component = route.component;
+  const props = { onNavigate };
+
+  // A parameterised route names the prop its component expects, so the registry stays the only
+  // place that knows `edit-equipment` takes `equipmentId` while `orderstatus` takes `order`.
+  if (route.param) {
+    props[route.param] = pageData;
+  }
+  if (currentPage === "register") {
+    // RegisterPage pre-selects a role passed through navigation state rather than through the URL.
+    props.defaultRole = pageData;
+  }
+
+  return <Component {...props} />;
 }
