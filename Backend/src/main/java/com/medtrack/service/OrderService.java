@@ -5,7 +5,8 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
-import com.medtrack.repository.EquipmentRepository;
+import com.medtrack.supplier.repository.ShipmentTrackingRepository;
+import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.util.PurchaseOrderPdf;
 import com.medtrack.dto.PlaceOrderRequest;
 import com.medtrack.dto.SupplierMetricsDto;
@@ -33,6 +34,8 @@ public class OrderService {
     private final SupplierInvoicePdf supplierInvoicePdf;
     private final EmailService emailService;
     private final UserRepository userRepository;
+    private final ShipmentTrackingRepository shipmentTrackingRepository;
+    private final SupplierAccessGuard supplierAccessGuard;
 
     public byte[] generateInvoicePdf(Long id) {
         EquipmentOrder order = getOrderById(id);
@@ -118,10 +121,21 @@ public class OrderService {
         return orderRepository.save(order);
     }
 
-    public EquipmentOrder updateOrderStatus(Long id, String status, String supplierNotes) {
+    public EquipmentOrder updateOrderStatus(Long id, String status, String supplierNotes,
+                                             Authentication authentication) {
         EquipmentOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-        
+
+        // Mirrors the ownership check enforced on the newer supplier-order-update path:
+        // once a supplier has been assigned to this order (a shipment tracking record
+        // exists), only that supplier - or a HOSPITAL admin - may advance its status here.
+        // An order with no shipment record yet has no assigned supplier to check against,
+        // same as the newer path.
+        Long callerSupplierId = supplierAccessGuard.resolveCallerId(authentication);
+        shipmentTrackingRepository.findByOrderId(id).ifPresent(existingShipment ->
+                supplierAccessGuard.assertSelfOrHospitalAdmin(authentication, callerSupplierId,
+                        existingShipment.getSupplierId()));
+
         order.setStatus(status);
         order.setShippingStatus(status);
         order.setSupplierNotes(supplierNotes);

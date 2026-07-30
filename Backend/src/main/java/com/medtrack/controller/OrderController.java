@@ -111,11 +111,13 @@ public class OrderController {
 
     /**
      * Updates the status of an existing equipment order.
-     * Accessible only to users with the SUPPLIER role.
+     * Accessible only to users with the SUPPLIER role, and only for orders the
+     * caller is assigned to (or by a HOSPITAL admin) once a supplier has been assigned.
      *
      * @param id the order identifier
      * @param status the updated order status
      * @param notes optional supplier notes related to the status update
+     * @param authentication the authenticated supplier making the update
      * @return the updated equipment order
      */
     @PutMapping("/{id}/status")
@@ -123,10 +125,11 @@ public class OrderController {
     public ResponseEntity<EquipmentOrder> updateStatus(
             @PathVariable Long id,
             @RequestParam String status,
-            @RequestParam(required = false) String notes) {
+            @RequestParam(required = false) String notes,
+            Authentication authentication) {
 
         validateId(id);
-        return ResponseEntity.ok(orderService.updateOrderStatus(id, status, notes));
+        return ResponseEntity.ok(orderService.updateOrderStatus(id, status, notes, authentication));
     }
 
     /**
