@@ -224,6 +224,26 @@ public class EquipmentService {
         );
     }
 
+    public List<Equipment> getEquipmentByPurchaseDateRange(
+            String username,
+            LocalDate startDate,
+            LocalDate endDate) {
+
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException(
+                    "Start date cannot be after end date."
+            );
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findByHospitalIdAndPurchaseDateBetween(
+                hospital.getId(),
+                startDate,
+                endDate
+        );
+    }
+
 
     public Map<String, Long> getWarrantySummary(String username) {
 

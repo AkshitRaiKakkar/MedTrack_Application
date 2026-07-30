@@ -18,6 +18,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
+
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
@@ -178,6 +181,28 @@ public class EquipmentController {
             Principal principal) {
         String base64Qr = equipmentService.generateQrCodeBase64(id, principal.getName());
         return ResponseEntity.ok(java.util.Map.of("qrCode", base64Qr));
+    }
+
+    @GetMapping("/purchase-range")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> getEquipmentByPurchaseRange(
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDate,
+
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate endDate,
+
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentByPurchaseDateRange(
+                        principal.getName(),
+                        startDate,
+                        endDate
+                )
+        );
     }
     /**
      * Retrieves equipment whose warranty has already expired.
