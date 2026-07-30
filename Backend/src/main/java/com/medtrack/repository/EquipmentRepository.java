@@ -62,6 +62,14 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     @Query("SELECT e.name, e.category FROM Equipment e WHERE e.hospital.id = :hospitalId")
     List<Object[]> findNameAndCategoryByHospitalId(@Param("hospitalId") Long hospitalId);
 
+    @Query("""
+    SELECT e.category, COUNT(e)
+    FROM Equipment e
+    WHERE e.hospital.id = :hospitalId
+    GROUP BY e.category
+""")
+    List<Object[]> countEquipmentByCategory(@Param("hospitalId") Long hospitalId);
+
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
@@ -71,15 +79,9 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     // and is rejected by javac, so only the @Query declarations are kept.
     long countByHospitalIdAndWarrantyExpiryBefore(Long hospitalId, LocalDate date);
 
-    // Soft delete - archived records (deleted = true)
-    List<Equipment> findByDeletedTrue();
-
-    Page<Equipment> findByDeletedTrue(Pageable pageable);
-
-    Optional<Equipment> findByIdAndDeletedTrue(Long id);
-
-    // Archived equipment for specific hospital
-    List<Equipment> findByHospitalIdAndDeletedTrue(Long hospitalId);
-
-    Page<Equipment> findByHospitalIdAndDeletedTrue(Long hospitalId, Pageable pageable);
+    List<Equipment> findByHospitalIdAndPurchaseDateBetween(
+            Long hospitalId,
+            LocalDate startDate,
+            LocalDate endDate
+    );
 }

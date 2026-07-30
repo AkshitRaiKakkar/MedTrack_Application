@@ -63,7 +63,7 @@ public class AnalyticsService {
 
         // 4. Critical Pending Count — database-level aggregation
         long criticalPending = taskRepository.countByHospitalIdAndStatusNotAndPriority(
-                hospitalId, MaintenanceStatus.COMPLETED, "CRITICAL");
+                hospitalId, MaintenanceStatus.COMPLETED, "Critical");
 
         // 5. Total Spend & Category Spend — DB-level filtered orders + lightweight category mapping
         String hospitalName = hospital.getName();

@@ -204,6 +204,10 @@ technician-owned progress updates, completion evidence, and completion-driven re
 - Every Maintenance operation revalidates the caller's current database role and requires an
   active account, so stale JWTs cannot preserve Maintenance access after lockout or disablement
 - `GET /api/maintenance/export/calendar.ics` for hospital calendar export
+- Calendar events use RFC 5545-valid `VEVENT` status values and expose the exact workflow state
+  through `X-MEDTRACK-STATUS`
+- Critical-pending Maintenance analytics use the documented canonical `Critical` value consistently
+  across persistence and repository aggregation
 - Focused unit/repository/migration tests for ownership, validation, lifecycle, recurrence, locking, and calendar generation
 
 Quartz-based overdue detection, Kafka maintenance events, automatic SLA escalation, and a separate
