@@ -59,8 +59,7 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
       </div>
       <h2 className="text-2xl font-black mb-2">Access Denied</h2>
       <p className="text-red-400 font-bold mb-6">
-        {message ||
-          "Your account role is not authorized to access this resource."}
+        {message || "Your account role is not authorized to access this resource."}
       </p>
       <button
         onClick={() => onNavigate("dashboard")}
@@ -75,15 +74,10 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
 export default function AppRouter({ currentPage, onNavigate, pageData }) {
   const { user } = useAuth();
 
-  const ProtectedRoute = (Component, props = {}, allowedRoles = []) => {
-    if (!user) return <LoginPage onNavigate={onNavigate} />;
-
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.includes(user.role?.toLowerCase())
-    ) {
-      return <UnauthorizedPage onNavigate={onNavigate} />;
-    }
+  // resolveEffectivePage decides which page actually renders: the requested one, or the login
+  // screen for an unauthenticated caller, or the 404 page for an unknown slug. App.jsx calls the
+  // same function to decide layout chrome, so the two cannot disagree about what is on screen.
+  const effectivePage = resolveEffectivePage(user, currentPage);
 
     return <Component onNavigate={onNavigate} {...props} />;
   };

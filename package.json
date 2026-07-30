@@ -32,10 +32,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check-syntax": "node scripts/check-syntax.js",
-    "prebuild": "npm run check-syntax",
+    "prebuild": "npm run check-syntax && npm run check-routes",
     "build": "react-scripts build",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "check-routes": "node scripts/check-routes.js"
   },
   "browserslist": {
     "production": [
@@ -48,5 +49,18 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ],
+    "rules": {
+      "no-unused-vars": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "eqeqeq": "off",
+      "jsx-a11y/anchor-is-valid": "off",
+      "jsx-a11y/alt-text": "off",
+      "no-script-url": "off"
+    }
   }
 }

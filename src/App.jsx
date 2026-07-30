@@ -54,91 +54,28 @@ const getRouteStateFromPath = () => {
     };
   }
 
-  const routeMap = {
-    blog: "blog",
-    register: "register",
-    login: "login",
-    "forgot-password": "forgot-password",
-    "verify-otp": "verify-otp",
-    "reset-password": "reset-password",
-    dashboard: "dashboard",
-    equipment: "equipment",
-    "add-equipment": "add-equipment",
-    "edit-equipment": "edit-equipment",
-    "schedule-maintenance": "schedule-maintenance",
-    "request-equipment": "request-equipment",
-    maintenance: "maintenance",
-    tasks: "tasks",
-    "update-task": "update-task",
-    updatetask: "update-task",
-    orders: "orders",
-    orderstatus: "orderstatus",
-    about: "about",
-    contact: "contact",
-    guidelines: "guidelines",
-    help: "help",
-    awards: "awards",
-    terms: "terms",
-    guides: "guides",
-    security: "security",
-    status: "status",
-    authority: "authority-security",
-    "authority-security": "authority-security",
-    mfa: "mfa-security",
-    "mfa-security": "mfa-security",
-    sso: "sso-security",
-    "sso-security": "sso-security",
-    rbac: "rbac-security",
-    "rbac-security": "rbac-security",
-    zerotrust: "zerotrust-security",
-    "zerotrust-security": "zerotrust-security",
-    compliance: "compliance-security",
-    "compliance-security": "compliance-security",
-    soar: "threat-detection",
-    "soar-security": "threat-detection",
-    "threat-detection": "threat-detection",
-    keyvault: "keyvault-security",
-    "key-vault": "keyvault-security",
-    "keyvault-security": "keyvault-security",
-    certificate: "certificate",
-    dlp: "dlp-privacy",
-    "dlp-privacy": "dlp-privacy",
-    "privacy-guard": "dlp-privacy",
-    passkeys: "passkeys",
-    passwordless: "passkeys",
-    webauthn: "passkeys",
-    ztna: "ztna",
-    microsegmentation: "ztna",
-    "network-access": "ztna",
-    siem: "siem-analytics",
-    "siem-analytics": "siem-analytics",
-    "siem-security": "siem-analytics",
-    scim: "scim-provisioning",
-    "scim-provisioning": "scim-provisioning",
-    "command-center": "security-commandcenter",
-    "security-commandcenter": "security-commandcenter",
-    help: "help",
-    "help-center": "help",
-    vulnerability: "vulnerability",
-    "patch-management": "vulnerability",
-    microsegmentation: "microsegmentation",
-    sdp: "microsegmentation",
-    "perimeter-security": "microsegmentation",
-    grc: "grc-compliance",
-    "grc-compliance": "grc-compliance",
-    "audit-ledger": "grc-compliance",
-    pam: "pam",
-    "privileged-access": "pam",
-    "jit-elevation": "pam",
-  };
+/**
+ * Strips the GitHub Pages base path and surrounding slashes from the current location, leaving the
+ * bare route path for the registry to resolve.
+ */
+const currentRoutePath = () =>
+  window.location.pathname
+    .replace(new RegExp(`^${BASE_PATH}`, "i"), "")
+    .replace(/^\/+|\/+$/g, "");
 
-  return {
-    page: routeMap[path.toLowerCase()] || "landing",
-    data: null,
-  };
-};
+/**
+ * Route resolution is delegated to routeRegistry.js.
+ *
+ * This file used to carry its own `routeMap` object, maintained by hand in parallel with the
+ * `switch` in AppRoutes.jsx. The two drifted, and the map itself contained duplicate keys: `help`
+ * appeared twice, and `microsegmentation` appeared twice with *different* targets ("ztna" and
+ * "microsegmentation"). In an object literal the last wins silently, so `/microsegmentation`
+ * resolved to a page whose switch case was itself unreachable.
+ */
+const getRouteStateFromPath = () => resolvePath(currentRoutePath());
 
 function AppContent() {
+  const { user } = useAuth();
   const initialRoute = getRouteStateFromPath();
   const [currentPage, setCurrentPage] = useState(initialRoute.page);
   const [pageData, setPageData] = useState(initialRoute.data);
@@ -156,20 +93,8 @@ function AppContent() {
     setCurrentPage(page);
     setPageData(data);
 
-    const basePath = window.location.pathname.includes("/MedTrack_Application")
-      ? "/MedTrack_Application"
-      : "";
-
-    const nextPath =
-      page === "blog-post" && data
-        ? `${basePath}/blog/${encodeURIComponent(data)}`
-        : page === "edit-equipment" && data
-        ? `${basePath}/edit-equipment/${encodeURIComponent(data)}`
-        : page === "apply" && data
-        ? `${basePath}/apply/${encodeURIComponent(data)}`
-        : `${basePath}/${page}`;
-
-    window.history.pushState({}, "", nextPath);
+    const basePath = window.location.pathname.includes(BASE_PATH) ? BASE_PATH : "";
+    window.history.pushState({}, "", `${basePath}${buildPath(page, data)}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -184,16 +109,14 @@ function AppContent() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const noLayoutPages = [
-    "login",
-    "register",
-    "forgot-password",
-    "verify-otp",
-    "reset-password",
-    "apply",
-    "dashboard"
-  ];
-  const isAuthPage = noLayoutPages.includes(currentPage);
+  // Whether a page shows the navbar and footer is a property of the route, declared once in the
+  // registry, rather than a hard-coded list here that had to be kept in step with it.
+  //
+  // Evaluated against the *effective* page rather than the requested one. AppRoutes substitutes the
+  // login screen for an unauthenticated hit on a protected route, so keying chrome off currentPage
+  // wrapped the full-bleed login layout in the navbar and footer for a signed-out visit to
+  // /equipment. Both sides now derive the substitution from resolveEffectivePage.
+  const showChrome = hasChrome(resolveEffectivePage(user, currentPage));
 
   return (
     <ReactLenis root>
@@ -201,7 +124,6 @@ function AppContent() {
         className="flex flex-col min-h-screen bg-surface text-primary transition-colors duration-200"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
-
         <CustomCursor />
         <ToastContainer />
         {!isAuthPage && (
@@ -238,7 +160,7 @@ function AppContent() {
           </Suspense>
         </main>
 
-{!isAuthPage && <Footer onNavigate={handleNavigate} />}
+        {showChrome && <Footer onNavigate={handleNavigate} />}
         <ScrollToTopButton />
         <CookieBanner onNavigate={handleNavigate} />
       </div>
