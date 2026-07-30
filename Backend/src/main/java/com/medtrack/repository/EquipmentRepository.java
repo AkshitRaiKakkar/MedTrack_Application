@@ -62,6 +62,14 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     @Query("SELECT e.name, e.category FROM Equipment e WHERE e.hospital.id = :hospitalId")
     List<Object[]> findNameAndCategoryByHospitalId(@Param("hospitalId") Long hospitalId);
 
+    @Query("""
+    SELECT e.category, COUNT(e)
+    FROM Equipment e
+    WHERE e.hospital.id = :hospitalId
+    GROUP BY e.category
+""")
+    List<Object[]> countEquipmentByCategory(@Param("hospitalId") Long hospitalId);
+
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
