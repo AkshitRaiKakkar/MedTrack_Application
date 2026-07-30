@@ -1,5 +1,7 @@
 import axios from "axios";
 
+const errorEmitter = new EventTarget();
+
 const API = axios.create({
   baseURL: process.env.REACT_APP_API_URL || "http://localhost:8081",
   headers: {
@@ -31,7 +33,8 @@ API.interceptors.request.use(
   }
 );
 
-// Intercept responses to handle 403 Forbidden errors globally
+// Intercept responses to handle 401/403 errors globally via toast events
+// instead of blocking alert() dialogs.
 API.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -50,4 +53,6 @@ API.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export { errorEmitter };
 export default API;
