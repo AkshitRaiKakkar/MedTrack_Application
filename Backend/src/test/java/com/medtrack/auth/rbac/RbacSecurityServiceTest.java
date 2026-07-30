@@ -62,7 +62,7 @@ public class RbacSecurityServiceTest {
     }
 
     @Test
-    void checkUserPermission_AdminRole_ReturnsGrantedTrue() {
+    void checkUserPermission_AdminRole_IsNotAutomaticallyGranted() {
         User adminUser = User.builder()
                 .id(100L)
                 .username("admin")
@@ -80,7 +80,16 @@ public class RbacSecurityServiceTest {
 
         UserPermissionCheckResponse response = rbacService.checkUserPermission(100L, "SSO:CONFIGURE");
 
-        assertTrue(response.isGranted());
+        // ROLE_ADMIN used to be short-circuited to "granted" for every permission, regardless of
+        // what was actually mapped to the role. PR #533 removed that shortcut as a security defect:
+        // it meant the RBAC matrix could not restrict an admin from anything, so revoking a
+        // permission from ROLE_ADMIN had no effect.
+        //
+        // This test previously asserted the shortcut, so it was asserting the bug. Inverted, it now
+        // protects the fix: with no permission mapped to the role (findByRoleId returns an empty
+        // list above), the check must deny.
+        assertFalse(response.isGranted(),
+                "ROLE_ADMIN must not be granted a permission that is not mapped to it");
         assertEquals("ROLE_ADMIN", response.getRoleName());
     }
 
