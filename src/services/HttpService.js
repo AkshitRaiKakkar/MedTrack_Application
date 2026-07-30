@@ -36,12 +36,12 @@ API.interceptors.response.use(
   (response) => response,
   (error) => {
     const status=error.response?.status;
-    if(status==401){
+    if(status===401){
       sessionStorage.removeItem("medtrack_user");
       alert("Session expired. Please login again.");
       window.location.href="/login";
     }
-    else if(status==403){
+    else if(status===403){
       alert("Access denied: You are not authorised to perform this action.");
     }
     else{
