@@ -233,6 +233,111 @@ class EquipmentCsvServiceTest {
     }
 
     @Test
+    @DisplayName("equipment code and warranty expiry survive the round trip")
+    void codeAndWarrantySurviveRoundTrip() {
+        // Both columns are written by the export and were never read back on import, so a round trip
+        // minted a fresh equipment code and dropped the warranty date entirely - the two columns were
+        // write-only, which made re-importing an export create duplicates rather than update.
+        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+                Equipment.builder()
+                        .equipmentCode("EQ-1001")
+                        .name("MRI Scanner")
+                        .department("Radiology")
+                        .category(EquipmentCategory.IMAGING)
+                        .status(EquipmentStatus.ACTIVE)
+                        .purchaseDate(LocalDate.of(2024, 3, 1))
+                        .warrantyExpiry(LocalDate.of(2027, 3, 1))
+                        .hospital(hospital)
+                        .build()));
+
+        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+
+        equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
+
+        ArgumentCaptor<List<Equipment>> saved = ArgumentCaptor.forClass(List.class);
+        verify(equipmentRepository).saveAll(saved.capture());
+        Equipment reimported = saved.getValue().get(0);
+
+        assertEquals("EQ-1001", reimported.getEquipmentCode(),
+                "the exported code must be preserved, not replaced with a fresh UUID");
+        assertEquals(LocalDate.of(2027, 3, 1), reimported.getWarrantyExpiry());
+        assertEquals(LocalDate.of(2024, 3, 1), reimported.getPurchaseDate());
+    }
+
+    @Test
+    @DisplayName("an embedded newline survives the round trip")
+    void embeddedNewlineSurvivesRoundTrip() {
+        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+                Equipment.builder()
+                        .equipmentCode("EQ-2")
+                        .name("Ventilator\nSecond line")
+                        .department("ICU")
+                        .category(EquipmentCategory.RESPIRATORY)
+                        .status(EquipmentStatus.ACTIVE)
+                        .hospital(hospital)
+                        .build()));
+
+        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
+
+        assertEquals(0, summary.getFailureCount(), () -> String.valueOf(summary.getFailures()));
+
+        ArgumentCaptor<List<Equipment>> saved = ArgumentCaptor.forClass(List.class);
+        verify(equipmentRepository).saveAll(saved.capture());
+        assertEquals("Ventilator\nSecond line", saved.getValue().get(0).getName(),
+                "the quoted newline must stay in one record; a readLine() loop split it in two");
+    }
+
+    @Test
+    @DisplayName("a non-ASCII asset name survives regardless of the platform charset")
+    void nonAsciiSurvivesRoundTrip() {
+        // The import used InputStreamReader with no charset, so it decoded with the platform default.
+        // On a JVM defaulting to Windows-1252 the BOM decoded to three stray characters and every
+        // non-ASCII name was mangled.
+        when(equipmentRepository.findByHospitalId(HOSPITAL_ID)).thenReturn(List.of(
+                Equipment.builder()
+                        .equipmentCode("EQ-3")
+                        .name("Röntgengerät \u00b5-Scan")
+                        .department("Radiologie")
+                        .category(EquipmentCategory.IMAGING)
+                        .status(EquipmentStatus.ACTIVE)
+                        .hospital(hospital)
+                        .build()));
+
+        byte[] exported = equipmentService.exportEquipmentCsv(USERNAME);
+
+        equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "equipment.csv", "text/csv", exported), USERNAME);
+
+        ArgumentCaptor<List<Equipment>> saved = ArgumentCaptor.forClass(List.class);
+        verify(equipmentRepository).saveAll(saved.capture());
+        assertEquals("Röntgengerät \u00b5-Scan", saved.getValue().get(0).getName());
+    }
+
+    @Test
+    @DisplayName("the invalid-status message lists every accepted value")
+    void invalidStatusMessageIsCurrent() {
+        String csv = "Name,Department,Category,Status\r\nA,Lab,LABORATORY,Exploded\r\n";
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "in.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)),
+                USERNAME);
+
+        String reason = summary.getFailures().get(0).getReason();
+
+        // The message previously listed only the three display names while the import had been
+        // widened to accept the enum constants too, so it told the user a value was invalid while
+        // omitting half the values that would have worked.
+        for (String accepted : new String[] {
+                "Operational", "Maintenance", "Retired", "ACTIVE", "UNDER_MAINTENANCE", "RETIRED"}) {
+            assertTrue(reason.contains(accepted), accepted + " missing from: " + reason);
+        }
+    }
+
+    @Test
     @DisplayName("a leading BOM does not break the first header column")
     void importToleratesBom() {
         String csv = CsvSupport.UTF8_BOM + "Name,Department,Category,Status\r\n"

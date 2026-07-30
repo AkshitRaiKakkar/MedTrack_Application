@@ -186,6 +186,62 @@ class CsvSupportTest {
     }
 
     @Nested
+    @DisplayName("splitRecords")
+    class SplitRecords {
+
+        @Test
+        @DisplayName("splits on CRLF and LF")
+        void splitsOnLineBreaks() {
+            assertEquals(List.of("a,b", "c,d"), CsvSupport.splitRecords("a,b\r\nc,d\r\n"));
+            assertEquals(List.of("a,b", "c,d"), CsvSupport.splitRecords("a,b\nc,d"));
+        }
+
+        @Test
+        @DisplayName("keeps a newline inside a quoted field in the same record")
+        void quotedNewlineStaysInOneRecord() {
+            // The other half of the embedded-newline defect: the writer quoted this correctly, but a
+            // readLine() loop split the single record across two and the import could not read back
+            // what the export had produced.
+            List<String> records = CsvSupport.splitRecords("\"line one\nline two\",ICU\r\nnext,row\r\n");
+
+            assertEquals(2, records.size(), records.toString());
+            assertEquals(List.of("line one\nline two", "ICU"), CsvSupport.parseLine(records.get(0)));
+            assertEquals(List.of("next", "row"), CsvSupport.parseLine(records.get(1)));
+        }
+
+        @Test
+        @DisplayName("an escaped quote does not flip quoting state")
+        void escapedQuoteDoesNotEndQuoting() {
+            List<String> records =
+                    CsvSupport.splitRecords("\"say \"\"hi\"\"\nagain\",x\r\nsecond,row");
+
+            assertEquals(2, records.size(), records.toString());
+            assertEquals(List.of("say \"hi\"\nagain", "x"), CsvSupport.parseLine(records.get(0)));
+        }
+
+        @Test
+        @DisplayName("strips a leading BOM so it cannot land in the first header name")
+        void stripsBom() {
+            List<String> records = CsvSupport.splitRecords(CsvSupport.UTF8_BOM + "Equipment Code,Name\r\n");
+
+            assertEquals(List.of("Equipment Code", "Name"), CsvSupport.parseLine(records.get(0)));
+        }
+
+        @Test
+        @DisplayName("blank records are dropped")
+        void dropsBlankRecords() {
+            assertEquals(List.of("a,b", "c,d"), CsvSupport.splitRecords("a,b\r\n\r\n   \r\nc,d\r\n"));
+        }
+
+        @Test
+        @DisplayName("null and empty input yield no records")
+        void handlesEmptyInput() {
+            assertTrue(CsvSupport.splitRecords(null).isEmpty());
+            assertTrue(CsvSupport.splitRecords("").isEmpty());
+        }
+    }
+
+    @Nested
     @DisplayName("round trip")
     class RoundTrip {
 

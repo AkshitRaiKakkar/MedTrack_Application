@@ -139,6 +139,75 @@ public final class CsvSupport {
     }
 
     /**
+     * Splits a whole CSV document into logical records, honouring newlines inside quoted fields.
+     *
+     * <p>Reading line by line is wrong for CSV and was the remaining half of the embedded-newline
+     * defect: the writer quotes a field containing {@code \n} correctly, but a {@code readLine()}
+     * loop then splits that single record across two, so the export was well-formed and the import
+     * still could not read it back. A record boundary is only a line break encountered
+     * <em>outside</em> quotes.</p>
+     *
+     * <p>A leading UTF-8 BOM is stripped here rather than at the call site, so it cannot end up
+     * embedded in the first header name.</p>
+     *
+     * <p>The whole document is held in memory. Equipment inventories are small and the upload is an
+     * already-buffered {@code MultipartFile}, so this is a deliberate trade for correctness; a
+     * streaming record reader would be the answer if imports ever became large enough to matter.</p>
+     *
+     * @param csv full document text
+     * @return logical records, blank ones omitted, without trailing line breaks
+     */
+    public static List<String> splitRecords(String csv) {
+        List<String> records = new ArrayList<>();
+        if (csv == null || csv.isEmpty()) {
+            return records;
+        }
+
+        String text = csv.startsWith(UTF8_BOM) ? csv.substring(UTF8_BOM.length()) : csv;
+
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int index = 0; index < text.length(); index++) {
+            char character = text.charAt(index);
+
+            if (character == '"') {
+                // A doubled quote is an escaped literal and does not change quoting state.
+                if (inQuotes && index + 1 < text.length() && text.charAt(index + 1) == '"') {
+                    current.append('"').append('"');
+                    index++;
+                    continue;
+                }
+                inQuotes = !inQuotes;
+                current.append(character);
+                continue;
+            }
+
+            if (!inQuotes && (character == '\n' || character == '\r')) {
+                // Consume CRLF as a single boundary.
+                if (character == '\r' && index + 1 < text.length() && text.charAt(index + 1) == '\n') {
+                    index++;
+                }
+                addIfNotBlank(records, current);
+                continue;
+            }
+
+            current.append(character);
+        }
+
+        addIfNotBlank(records, current);
+        return records;
+    }
+
+    private static void addIfNotBlank(List<String> records, StringBuilder current) {
+        String record = current.toString();
+        current.setLength(0);
+        if (!record.isBlank()) {
+            records.add(record);
+        }
+    }
+
+    /**
      * Parses a single CSV record.
      *
      * <p>Handles quoted fields, embedded commas, and the {@code ""} escape for a literal quote.

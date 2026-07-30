@@ -553,30 +553,31 @@ public class EquipmentService {
         int successCount = 0;
         int failureCount = 0;
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
-            String headerLine = reader.readLine();
-            if (headerLine == null) {
+        // UTF-8 explicitly. InputStreamReader with no charset uses the platform default, so on a
+        // JVM defaulting to Windows-1252 the exported BOM decodes to "\u00ef\u00bb\u00bf" rather
+        // than \uFEFF - the BOM strip below silently misses, "Equipment Code" never matches, and
+        // every non-ASCII asset name is mangled on the way in.
+        try (java.io.InputStream input = file.getInputStream()) {
+            String document = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+            // Split on record boundaries rather than line breaks, so a quoted field containing a
+            // newline stays one record. A readLine() loop split it across two, which is why the
+            // export could quote embedded newlines correctly and the import still could not read
+            // them back.
+            List<String> records = CsvSupport.splitRecords(document);
+            if (records.isEmpty()) {
                 throw new IllegalArgumentException("CSV file has no content");
             }
 
-            List<String> headers = parseCsvLine(headerLine);
+            List<String> headers = parseCsvLine(records.get(0));
             if (headers.size() < 4) {
                 throw new IllegalArgumentException("CSV file must contain at least: Name, Department, Category, Status");
             }
-            // A file exported by this application starts with a UTF-8 BOM. Left in place it
-            // becomes part of the first header name, so "Equipment Code" never matches and the
-            // whole first column is read as absent.
-            if (!headers.isEmpty() && headers.get(0).startsWith(CsvSupport.UTF8_BOM)) {
-                headers.set(0, headers.get(0).substring(CsvSupport.UTF8_BOM.length()));
-            }
 
-            String line;
             int rowNum = 1;
-            while ((line = reader.readLine()) != null) {
+            for (int recordIndex = 1; recordIndex < records.size(); recordIndex++) {
+                String line = records.get(recordIndex);
                 rowNum++;
-                if (line.trim().isEmpty()) {
-                    continue;
-                }
 
                 List<String> fields = parseCsvLine(line);
                 if (fields.size() < headers.size()) {
@@ -592,6 +593,11 @@ public class EquipmentService {
                 String category = getFieldValue(fields, headers, "Category");
                 String status = getFieldValue(fields, headers, "Status");
                 String purchaseDateStr = getFieldValue(fields, headers, "Purchase Date");
+                // Both of these are in EQUIPMENT_CSV_HEADERS and were written by the export but
+                // never read back, so a round trip silently minted a fresh equipment code and
+                // dropped the warranty date - the two columns were write-only.
+                String equipmentCode = getFieldValue(fields, headers, "Equipment Code");
+                String warrantyExpiryStr = getFieldValue(fields, headers, "Warranty Expiry");
 
                 if (name == null || name.trim().isEmpty()) {
                     failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Asset Name is required"));
@@ -659,7 +665,7 @@ public class EquipmentService {
                     String finalStatus = status.trim();
                     if (validStatuses.stream().noneMatch(s -> s.equalsIgnoreCase(finalStatus))) {
                         failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
-                                "Invalid condition/status. Allowed: Operational, Maintenance, Retired"));
+                                "Invalid condition/status. Allowed: " + String.join(", ", validStatuses)));
                         failureCount++;
                         continue;
                     }
@@ -672,6 +678,18 @@ public class EquipmentService {
                         purchaseDate = LocalDate.parse(purchaseDateStr.trim());
                     } catch (DateTimeParseException e) {
                         failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Invalid Purchase Date format. Expected YYYY-MM-DD"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                LocalDate warrantyExpiry = null;
+                if (warrantyExpiryStr != null && !warrantyExpiryStr.trim().isEmpty()) {
+                    try {
+                        warrantyExpiry = LocalDate.parse(warrantyExpiryStr.trim());
+                    } catch (DateTimeParseException e) {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Warranty Expiry format. Expected YYYY-MM-DD"));
                         failureCount++;
                         continue;
                     }
@@ -692,7 +710,12 @@ public class EquipmentService {
                         .category(equipmentCategory)
                         .status(parsedStatus)
                         .purchaseDate(purchaseDate)
-                        .equipmentCode("EQ-" + UUID.randomUUID().toString())
+                        .warrantyExpiry(warrantyExpiry)
+                        // Preserve the code when the file carries one, so re-importing an export
+                        // updates the same assets rather than duplicating them under new codes.
+                        .equipmentCode(equipmentCode != null && !equipmentCode.trim().isEmpty()
+                                ? equipmentCode.trim()
+                                : "EQ-" + UUID.randomUUID())
                         .hospital(hospital)
                         .build();
 
