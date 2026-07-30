@@ -36,7 +36,8 @@ import {
   Award,
   Network,
   Package,
-  Sliders
+  Sliders,
+  BrainCircuit
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -55,6 +56,7 @@ import SbomPanel from "./SbomPanel";
 import HipaaDeidentificationPanel from "./HipaaDeidentificationPanel";
 import ZeroTrustGovernancePanel from "./ZeroTrustGovernancePanel";
 import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
+import AiModelGovernancePanel from "./AiModelGovernancePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -391,7 +393,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "grc", label: "GRC & Audit Ledger", icon: Award },
           { id: "sbom", label: "SBOM & Supply Chain", icon: Package },
           { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff },
-          { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders }
+          { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders },
+          { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -827,6 +830,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 15: ZERO TRUST IDENTITY GOVERNANCE */}
       {selectedTab === "ztgovernance" && (
         <ZeroTrustGovernancePanel />
+      )}
+
+      {/* TAB 16: AI MODEL RISK & ALGORITHMIC BIAS GOVERNANCE */}
+      {selectedTab === "aimodel" && (
+        <AiModelGovernancePanel />
       )}
 
       {/* 4. MODALS */}
