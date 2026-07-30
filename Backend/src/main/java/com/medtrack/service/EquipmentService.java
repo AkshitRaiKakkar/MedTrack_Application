@@ -14,6 +14,11 @@ import com.medtrack.repository.HospitalRepository;
 import com.medtrack.specifications.EquipmentSpecifications;
 import com.medtrack.util.CsvSupport;
 import lombok.RequiredArgsConstructor;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,14 +33,16 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import com.medtrack.model.EquipmentCategory;
-
+import com.medtrack.dto.EquipmentUtilizationResponse;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -69,6 +76,60 @@ public class EquipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
+    }
+
+    public EquipmentDashboardResponse getDashboardOverview(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total =
+                equipmentRepository.countByHospitalId(hospital.getId());
+
+        long active =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.ACTIVE
+                );
+
+        long maintenance =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.UNDER_MAINTENANCE
+                );
+
+        long retired =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.RETIRED
+                );
+
+        long expired =
+                equipmentRepository.countByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now()
+                );
+
+        long expiringSoon =
+                equipmentRepository.countByHospitalIdAndWarrantyExpiryBetween(
+                        hospital.getId(),
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(30)
+                );
+
+        long lowStock =
+                equipmentRepository.findLowStockEquipment(
+                        hospital.getId()
+                ).size();
+
+        return new EquipmentDashboardResponse(
+                total,
+                active,
+                maintenance,
+                retired,
+                expired,
+                expiringSoon,
+                lowStock
+        );
     }
 
     /**
@@ -167,6 +228,41 @@ public class EquipmentService {
         return savedEquipment;
     }
 
+
+    public EquipmentUtilizationResponse getEquipmentUtilization(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Equipment> equipmentList =
+                equipmentRepository.findByHospitalId(hospital.getId());
+
+        long total = equipmentList.size();
+
+        long active = equipmentList.stream()
+                .filter(e -> e.getStatus() == EquipmentStatus.ACTIVE)
+                .count();
+
+        long underMaintenance = equipmentList.stream()
+                .filter(e -> e.getStatus() == EquipmentStatus.UNDER_MAINTENANCE)
+                .count();
+
+        long retired = equipmentList.stream()
+                .filter(e -> e.getStatus() == EquipmentStatus.RETIRED)
+                .count();
+
+        double utilization = total == 0
+                ? 0.0
+                : Math.round((active * 100.0 / total) * 100.0) / 100.0;
+
+        return new EquipmentUtilizationResponse(
+                total,
+                active,
+                underMaintenance,
+                retired,
+                utilization
+        );
+    }
+
     /**
      * Counts of tracked, low and out-of-stock items for the caller's hospital.
      *
@@ -238,6 +334,47 @@ public class EquipmentService {
         );
     }
 
+    public List<Equipment> getEquipmentByPurchaseDateRange(
+            String username,
+            LocalDate startDate,
+            LocalDate endDate) {
+
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException(
+                    "Start date cannot be after end date."
+            );
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findByHospitalIdAndPurchaseDateBetween(
+                hospital.getId(),
+                startDate,
+                endDate
+        );
+    }
+
+
+
+    public Map<String, Long> getCategorySummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Object[]> results =
+                equipmentRepository.countEquipmentByCategory(hospital.getId());
+
+        Map<String, Long> summary = new LinkedHashMap<>();
+
+        for (Object[] row : results) {
+            summary.put(
+                    row[0].toString(),
+                    ((Number) row[1]).longValue()
+            );
+        }
+
+        return summary;
+    }
+
 
     public Map<String, Long> getWarrantySummary(String username) {
 
@@ -266,6 +403,52 @@ public class EquipmentService {
         summary.put("expired", expired);
         summary.put("expiringSoon", expiringSoon);
         summary.put("valid", valid);
+
+        return summary;
+    }
+
+    public Map<String, Long> getEquipmentAgeSummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Equipment> equipmentList =
+                equipmentRepository.findByHospitalId(hospital.getId());
+
+        LocalDate today = LocalDate.now();
+
+        long lessThanOneYear = 0;
+        long oneToThreeYears = 0;
+        long threeToFiveYears = 0;
+        long moreThanFiveYears = 0;
+
+        for (Equipment equipment : equipmentList) {
+
+            if (equipment.getPurchaseDate() == null) {
+                continue;
+            }
+
+            long years = ChronoUnit.YEARS.between(
+                    equipment.getPurchaseDate(),
+                    today
+            );
+
+            if (years < 1) {
+                lessThanOneYear++;
+            } else if (years < 3) {
+                oneToThreeYears++;
+            } else if (years < 5) {
+                threeToFiveYears++;
+            } else {
+                moreThanFiveYears++;
+            }
+        }
+
+        Map<String, Long> summary = new LinkedHashMap<>();
+
+        summary.put("lessThanOneYear", lessThanOneYear);
+        summary.put("oneToThreeYears", oneToThreeYears);
+        summary.put("threeToFiveYears", threeToFiveYears);
+        summary.put("moreThanFiveYears", moreThanFiveYears);
 
         return summary;
     }
@@ -553,6 +736,9 @@ public class EquipmentService {
         List<EquipmentImportSummary.RowFailure> failures = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
+        // Serial numbers already claimed by an earlier row in this same file, so a
+        // duplicate further down the file is caught before it ever reaches saveAll.
+        Set<String> serialNumbersInFile = new HashSet<>();
 
         // UTF-8 explicitly. InputStreamReader with no charset uses the platform default, so on a
         // JVM defaulting to Windows-1252 the exported BOM decodes to "\u00ef\u00bb\u00bf" rather
@@ -713,58 +899,33 @@ public class EquipmentService {
                     parsedStatus = EquipmentStatus.RETIRED;
                 }
 
-                // Upsert by equipment code. Preserving the code alone was not enough: equipmentCode
-                // carries a unique constraint, so building a fresh entity for a code that already
-                // exists either violates that constraint and fails the whole batch, or - before the
-                // code was preserved at all - inserted a duplicate asset under a new UUID. Neither
-                // is what re-importing an export should do.
-                String trimmedCode = equipmentCode != null && !equipmentCode.trim().isEmpty()
-                        ? equipmentCode.trim()
-                        : null;
-
-                Equipment existing = null;
-                if (trimmedCode != null) {
-                    Optional<Equipment> byCode = equipmentRepository.findByEquipmentCode(trimmedCode);
-                    if (byCode.isPresent()) {
-                        existing = byCode.get();
-                        // A code owned by another hospital must never be adopted: that would let one
-                        // tenant overwrite another's asset by uploading a file naming its code.
-                        if (existing.getHospital() == null
-                                || !hospital.getId().equals(existing.getHospital().getId())) {
-                            failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
-                                    "Equipment Code " + trimmedCode
-                                            + " belongs to another hospital"));
-                            failureCount++;
-                            continue;
-                        }
+                if (serialNumber != null && !serialNumber.trim().isEmpty()) {
+                    String normalizedSerial = serialNumber.trim();
+                    if (!serialNumbersInFile.add(normalizedSerial)) {
+                        failures.add(new EquipmentImportSummary.RowFailure(
+                                rowNum, line, "Duplicate Serial Number within this file: " + normalizedSerial));
+                        failureCount++;
+                        continue;
+                    }
+                    if (equipmentRepository.findBySerialNumber(normalizedSerial).isPresent()) {
+                        failures.add(new EquipmentImportSummary.RowFailure(
+                                rowNum, line, "Serial Number already exists in inventory: " + normalizedSerial));
+                        failureCount++;
+                        continue;
                     }
                 }
 
-                Equipment equipment;
-                if (existing != null) {
-                    equipment = existing;
-                    equipment.setName(name);
-                    equipment.setModel(model);
-                    equipment.setSerialNumber(serialNumber);
-                    equipment.setDepartment(department);
-                    equipment.setCategory(equipmentCategory);
-                    equipment.setStatus(parsedStatus);
-                    equipment.setPurchaseDate(purchaseDate);
-                    equipment.setWarrantyExpiry(warrantyExpiry);
-                } else {
-                    equipment = Equipment.builder()
-                            .name(name)
-                            .model(model)
-                            .serialNumber(serialNumber)
-                            .department(department)
-                            .category(equipmentCategory)
-                            .status(parsedStatus)
-                            .purchaseDate(purchaseDate)
-                            .warrantyExpiry(warrantyExpiry)
-                            .equipmentCode(trimmedCode != null ? trimmedCode : "EQ-" + UUID.randomUUID())
-                            .hospital(hospital)
-                            .build();
-                }
+                Equipment equipment = Equipment.builder()
+                        .name(name)
+                        .model(model)
+                        .serialNumber(serialNumber)
+                        .department(department)
+                        .category(equipmentCategory)
+                        .status(parsedStatus)
+                        .purchaseDate(purchaseDate)
+                        .equipmentCode("EQ-" + UUID.randomUUID().toString())
+                        .hospital(hospital)
+                        .build();
 
                 equipmentToSave.add(equipment);
                 successCount++;
@@ -850,5 +1011,94 @@ public class EquipmentService {
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Archives (soft deletes) an equipment record.
+     * Sets deleted = true, deletedAt, and deletedBy instead of hard deleting.
+     */
+    @Transactional
+    public Equipment archiveEquipment(Long id, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+
+        equipment.setDeleted(true);
+        equipment.setDeletedAt(LocalDateTime.now());
+        equipment.setDeletedBy(username);
+
+        Equipment archived = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment archived | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                archived.getId(),
+                archived.getName()
+        );
+
+        return archived;
+    }
+
+    /**
+     * Restores an archived equipment record.
+     * Sets deleted = false, clears deletedAt and deletedBy.
+     */
+    @Transactional
+    public Equipment restoreEquipment(Long id, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        Equipment equipment = equipmentRepository.findByIdAndDeletedTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived equipment not found"));
+
+        // Verify it belongs to the user's hospital
+        if (!equipment.getHospital().getId().equals(hospital.getId())) {
+            throw new ResourceNotFoundException("Archived equipment not found or you don't have access");
+        }
+
+        equipment.setDeleted(false);
+        equipment.setDeletedAt(null);
+        equipment.setDeletedBy(null);
+
+        Equipment restored = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment restored | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                restored.getId(),
+                restored.getName()
+        );
+
+        return restored;
+    }
+
+    /**
+     * Lists all archived (soft-deleted) equipment for the user's hospital.
+     */
+    public Page<Equipment> getArchivedEquipment(String username, Pageable pageable) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.findByDeletedTrueAndHospitalId(hospital.getId(), pageable);
+    }
+
+    /**
+     * Permanently deletes an archived equipment record (admin only).
+     * Only callable after 90 days from archival.
+     */
+    @Transactional
+    public void permanentlyDeleteEquipment(Long id, String username) {
+        Equipment equipment = equipmentRepository.findByIdAndDeletedTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived equipment not found"));
+
+        // Check if 90 days have passed since archival
+        if (equipment.getDeletedAt() != null && equipment.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
+            throw new IllegalStateException("Equipment cannot be permanently deleted until 90 days after archival");
+        }
+
+        equipmentRepository.delete(equipment);
+
+        logger.info(
+                "Equipment permanently deleted | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                id,
+                equipment.getName()
+        );
     }
 }

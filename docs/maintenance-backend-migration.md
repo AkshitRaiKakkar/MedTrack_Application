@@ -236,16 +236,21 @@ emails, and stored maintenance types.
 against H2 that all hospital-, technician-, lock-, and equipment-history queries exclude an
 inconsistent ownership row while retaining a valid row. The same test verifies that status
 totals, completed-task SLA inputs, average work hours, and critical-pending analytics also exclude
-rows whose task hospital disagrees with the linked equipment hospital.
+rows whose task hospital disagrees with the linked equipment hospital. Critical-pending aggregation
+also verifies the canonical stored value `Critical`, which is the same value supplied by the
+analytics service.
 
 It also verifies that completion requires an effective technician signature, accepts a previously stored signature when a partial completion payload omits the field, rejects an explicit blank signature, records `completedAt`, and preserves hospital-owned recurrence configuration during technician updates. Dedicated request DTOs now prevent client binding of completion timestamps and other server-controlled fields. `AnalyticsServiceTest` verifies that SLA compliance uses actual completion timestamps and excludes unverifiable legacy completions.
 
-The changed Maintenance service dependency slice and its test source compile in isolation. All
-29 `MaintenanceServiceTest` tests pass, including locked and disabled caller rejection. All 7
-`MaintenanceMigrationIntegrationTest` tests pass against H2, including migration version `5`,
-unsupported legacy data, invalid post-migration writes, and the existing foreign-key behaviors.
+Calendar verification additionally requires each exported `VEVENT` to use the RFC 5545-valid
+`STATUS:CONFIRMED` value and to preserve the exact Maintenance enum name in
+`X-MEDTRACK-STATUS`. Existing escaping, UTC timestamp, injection-resistance, Unicode, and
+content-line-folding coverage remains in place.
 
-The normal Maven build currently stops during main compilation in the unrelated
-`auth/commandcenter/model/SecurityUnifiedAlert.java` source before Maven can execute the standard
-Maintenance lifecycle. That application-wide blocker remains outside this Maintenance-only
-change.
+Main backend compilation succeeds. A fresh isolated compilation and execution of
+`MaintenanceServiceTest`, `MaintenanceTaskRepositoryTest`, and `AnalyticsServiceTest` passes all
+33 tests. The standard Maven test lifecycle currently stops during test compilation in the
+unrelated `EquipmentStockServiceTest`, whose compiled view of `Equipment` cannot resolve the stock
+builder/accessor methods. Maven therefore cannot execute the focused Maintenance tests through the
+normal test goal until that application-wide test-compilation issue is corrected. That unrelated
+blocker remains outside this Maintenance-only change.

@@ -32,7 +32,14 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
-  AlertCircle
+  AlertCircle,
+  Award,
+  Network,
+  Package,
+  Sliders,
+  BrainCircuit,
+  Binary,
+  Radio
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -47,7 +54,13 @@ import SiemSecurityAnalyticsPanel from "./SiemSecurityAnalyticsPanel";
 import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
 import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
+import SbomPanel from "./SbomPanel";
+import HipaaDeidentificationPanel from "./HipaaDeidentificationPanel";
+import ZeroTrustGovernancePanel from "./ZeroTrustGovernancePanel";
 import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
+import AiModelGovernancePanel from "./AiModelGovernancePanel";
+import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
+import IotSecurityPanel from "./IotSecurityPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -381,7 +394,13 @@ export default function EnterpriseSecurityCenter() {
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
           { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
-          { id: "grc", label: "GRC & Audit Ledger", icon: Award }
+          { id: "grc", label: "GRC & Audit Ledger", icon: Award },
+          { id: "sbom", label: "SBOM & Supply Chain", icon: Package },
+          { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff },
+          { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders },
+          { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit },
+          { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary },
+          { id: "iot", label: "IoMT & Medical Device Security", icon: Radio }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -802,6 +821,36 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 12: GRC & CONTINUOUS AUDIT LEDGER */}
       {selectedTab === "grc" && (
         <GrcAuditCompliancePanel />
+      )}
+
+      {/* TAB 13: SBOM & SUPPLY CHAIN SECURITY */}
+      {selectedTab === "sbom" && (
+        <SbomPanel />
+      )}
+
+      {/* TAB 14: HIPAA ANONYMIZATION & PHI DE-IDENTIFICATION */}
+      {selectedTab === "deidentification" && (
+        <HipaaDeidentificationPanel />
+      )}
+
+      {/* TAB 15: ZERO TRUST IDENTITY GOVERNANCE */}
+      {selectedTab === "ztgovernance" && (
+        <ZeroTrustGovernancePanel />
+      )}
+
+      {/* TAB 16: AI MODEL RISK & ALGORITHMIC BIAS GOVERNANCE */}
+      {selectedTab === "aimodel" && (
+        <AiModelGovernancePanel />
+      )}
+
+      {/* TAB 17: POST-QUANTUM CRYPTOGRAPHY & QUANTUM SECURITY ENGINE */}
+      {selectedTab === "pqc" && (
+        <PostQuantumCryptoPanel />
+      )}
+
+      {/* TAB 18: IOMT MEDICAL DEVICE CYBERSECURITY CONSOLE */}
+      {selectedTab === "iot" && (
+        <IotSecurityPanel />
       )}
 
       {/* 4. MODALS */}

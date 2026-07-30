@@ -84,5 +84,28 @@ ruleset where `no-undef`, `no-dupe-keys` and `no-duplicate-case` are errors. Rea
 those kinds are present in `src/routes/AppRoutes.jsx` and `src/App.jsx` today and are not reported
 by any build.
 
-Restoring the field is tracked in #575, together with fixing the errors it surfaces — enabling it
-before those are fixed would simply break the build for everyone.
+The field is now present, extending `react-app`. That enables the rules that matter for
+correctness — `no-undef`, `no-dupe-keys`, `no-duplicate-case` — and enabling it immediately caught
+two more real defects: `Network` and `Award` were used as icon components in
+`EnterpriseSecurityCenter.jsx` without being imported.
+
+Six rule families are explicitly switched **off** in `eslintConfig.rules`:
+
+| Rule | Why it is off |
+| --- | --- |
+| `no-unused-vars` | ~40 files carry pre-existing unused imports |
+| `react-hooks/exhaustive-deps` | ~8 `useEffect` calls have incomplete dependency arrays |
+| `eqeqeq` | `HttpService.js` uses `==` on status codes |
+| `jsx-a11y/anchor-is-valid`, `jsx-a11y/alt-text`, `no-script-url` | pre-existing accessibility warnings |
+
+They are switched off rather than left as warnings because `react-scripts` promotes *every* warning
+to a build error when `CI=true`, so leaving them on would fail the build for reasons unrelated to
+the change that introduced the config. Each is worth fixing, but as its own PR with its own diff —
+turning them on together would bury a real regression in ~200 lines of noise.
+
+## Route consistency
+
+`npm run check-routes` validates `src/routes/routeRegistry.js` against the pages on disk: every
+referenced component is imported, every imported module exists, no page key or slug is claimed
+twice, and every `src/pages/auth/*Page.jsx` is reachable from some URL. It runs from `prebuild`
+alongside `check-syntax`.
