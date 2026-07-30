@@ -286,6 +286,27 @@ public class EquipmentService {
     }
 
 
+
+    public Map<String, Long> getCategorySummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Object[]> results =
+                equipmentRepository.countEquipmentByCategory(hospital.getId());
+
+        Map<String, Long> summary = new LinkedHashMap<>();
+
+        for (Object[] row : results) {
+            summary.put(
+                    row[0].toString(),
+                    ((Number) row[1]).longValue()
+            );
+        }
+
+        return summary;
+    }
+
+
     public Map<String, Long> getWarrantySummary(String username) {
 
         Hospital hospital = getHospitalForUser(username);

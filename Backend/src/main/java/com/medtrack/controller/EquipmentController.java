@@ -57,6 +57,18 @@ public class EquipmentController {
         );
     }
 
+    @GetMapping("/category-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<String, Long>> getCategorySummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getCategorySummary(
+                        principal.getName()
+                )
+        );
+    }
+
     @GetMapping("/department")
     public ResponseEntity<List<Equipment>> getEquipmentByDepartment(
             @RequestParam String department,
