@@ -6,6 +6,7 @@ import com.medtrack.dto.EquipmentImportSummary;
 import com.medtrack.dto.EquipmentStatisticsResponse;
 import com.medtrack.dto.LowStockSummaryResponse;
 import com.medtrack.dto.StockAdjustmentRequest;
+import com.medtrack.dto.WarrantySummaryResponse;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
@@ -376,35 +377,62 @@ public class EquipmentService {
     }
 
 
-    public Map<String, Long> getWarrantySummary(String username) {
+    /** Horizon used to classify a warranty as "expiring soon". */
+    static final int WARRANTY_EXPIRY_HORIZON_DAYS = 30;
+
+    /**
+     * Warranty coverage breakdown for the caller's hospital.
+     *
+     * <p>The four buckets are disjoint and exhaustive:
+     * {@code expired + expiringSoon + valid + unknown == total}.</p>
+     *
+     * <p>Three things were wrong with the previous implementation:</p>
+     *
+     * <ul>
+     *   <li>{@code valid} was computed as {@code total - expired}. Both comparison queries translate
+     *       to SQL comparisons, and {@code NULL < today} is UNKNOWN, so equipment with no warranty
+     *       date was excluded from {@code expired} and absorbed into {@code valid}. Assets with no
+     *       warranty on record were reported as covered - for a warranty-tracking system, the wrong
+     *       direction to be wrong in. Those now land in {@code unknown}.</li>
+     *   <li>{@code expiringSoon} is a subset of "not yet expired", so it was double-counted against
+     *       {@code valid} while being returned as a peer key. Three assets - one expired, one
+     *       expiring in 10 days, one expiring in 3 years - reported
+     *       {@code expired=1, expiringSoon=1, valid=2} for a total of 3. {@code valid} now means
+     *       "expires beyond the horizon", so the buckets partition the inventory.</li>
+     *   <li>Each figure came from loading a {@code List<Equipment>} and calling {@code size()}, so
+     *       every matching row was selected, hydrated into a managed entity and attached to the
+     *       persistence context just to be counted and discarded. The {@code count...} queries used
+     *       here already existed on the repository and are what {@code getEquipmentStatistics}, in
+     *       this same class, has always used.</li>
+     * </ul>
+     *
+     * @param username authenticated user's username
+     * @return the warranty breakdown
+     */
+    public WarrantySummaryResponse getWarrantySummary(String username) {
 
         Hospital hospital = getHospitalForUser(username);
+        Long hospitalId = hospital.getId();
 
-        long total = equipmentRepository.findByHospitalId(hospital.getId()).size();
+        // Captured once. Four separate LocalDate.now() calls could straddle midnight and classify
+        // the same asset into two buckets, or none.
+        LocalDate today = LocalDate.now();
+        LocalDate horizon = today.plusDays(WARRANTY_EXPIRY_HORIZON_DAYS);
 
-        long expired = equipmentRepository
-                .findByHospitalIdAndWarrantyExpiryBefore(
-                        hospital.getId(),
-                        LocalDate.now())
-                .size();
-
+        long total = equipmentRepository.countByHospitalId(hospitalId);
+        long expired = equipmentRepository.countByHospitalIdAndWarrantyExpiryBefore(hospitalId, today);
         long expiringSoon = equipmentRepository
-                .findByHospitalIdAndWarrantyExpiryBetween(
-                        hospital.getId(),
-                        LocalDate.now(),
-                        LocalDate.now().plusDays(30))
-                .size();
+                .countByHospitalIdAndWarrantyExpiryBetween(hospitalId, today, horizon);
+        long valid = equipmentRepository.countByHospitalIdAndWarrantyExpiryAfter(hospitalId, horizon);
+        long unknown = equipmentRepository.countByHospitalIdAndWarrantyExpiryIsNull(hospitalId);
 
-        long valid = total - expired;
-
-        Map<String, Long> summary = new HashMap<>();
-
-        summary.put("total", total);
-        summary.put("expired", expired);
-        summary.put("expiringSoon", expiringSoon);
-        summary.put("valid", valid);
-
-        return summary;
+        return WarrantySummaryResponse.builder()
+                .total(total)
+                .expired(expired)
+                .expiringSoon(expiringSoon)
+                .valid(valid)
+                .unknown(unknown)
+                .build();
     }
 
     public Map<String, Long> getEquipmentAgeSummary(String username) {
