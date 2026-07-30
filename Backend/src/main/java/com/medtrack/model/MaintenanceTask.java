@@ -24,6 +24,7 @@ import static com.medtrack.validation.MaintenanceValidationLimits.SIGNATURE_MAX_
 
 @Entity
 @Table(name = "maintenance_tasks")
+@Where(clause = "deleted = false")
 @Data
 @Builder
 @NoArgsConstructor
@@ -121,4 +122,17 @@ public class MaintenanceTask {
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /**
+     * Soft delete fields - records are never hard deleted for audit compliance
+     */
+    @Builder.Default
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 255)
+    private String deletedBy;
 }

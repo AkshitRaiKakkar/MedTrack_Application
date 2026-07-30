@@ -28,7 +28,8 @@ import java.time.LocalDateTime;
  *   <li>{@code GET /api/orders/**} - Accessible to any authenticated user (Hospital, Technician, Supplier).</li>
  *   <li>{@code POST /api/orders/**} - Restricted to users with the {@code ROLE_HOSPITAL} authority.</li>
  *   <li>{@code PUT /api/orders/{id}/status} - Restricted to users with the {@code ROLE_SUPPLIER} authority.</li>
- *   <li>{@code DELETE /api/orders/**} - Restricted to users with the {@code ROLE_HOSPITAL} authority.</li>
+ *   <li>{@code POST /api/orders/{id}/archive} - Restricted to users with the {@code ROLE_HOSPITAL} authority (soft delete).</li>
+ *   <li>{@code GET /api/orders/archived} - Restricted to users with the {@code ROLE_HOSPITAL} authority (recovery).</li>
  * </ul>
  * </p>
  * 
@@ -43,6 +44,7 @@ import java.time.LocalDateTime;
         @UniqueConstraint(columnNames = "orderCode", name = "uk_order_code")
     }
 )
+@Where(clause = "deleted = false")
 @Data
 @Builder
 @NoArgsConstructor
@@ -191,11 +193,39 @@ public class EquipmentOrder {
      */
     @Column(columnDefinition = "TEXT")
     private String supplierNotes;
-    @PrePersist
+@PrePersist
     @PreUpdate
     void calculateTotalCost() {
         if (quantity != null && unitCost != null) {
             totalCost = unitCost.multiply(BigDecimal.valueOf(quantity.longValue()));
         }
     }
+
+    /**
+     * Soft delete fields - records are never hard deleted for audit compliance
+     */
+    @Builder.Default
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 255)
+    private String deletedBy;
+}
+    }
+
+    /**
+     * Soft delete fields - records are never hard deleted for audit compliance
+     */
+    @Builder.Default
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 255)
+    private String deletedBy;
 }

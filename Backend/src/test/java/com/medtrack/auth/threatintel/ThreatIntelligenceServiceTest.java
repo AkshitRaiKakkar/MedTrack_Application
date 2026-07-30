@@ -62,6 +62,18 @@ public class ThreatIntelligenceServiceTest {
 
     @Test
     void ingestIndicator_Success() {
+        // ingestIndicator consults the feed config to decide whether the indicator crosses the
+        // auto-block confidence threshold. Without this stub getOrCreateConfig() falls through to an
+        // unstubbed save(), which Mockito answers with null, and the method NPEs on
+        // config.isAutoBlockHighConfidence().
+        when(feedConfigRepository.findByFeedName("STIX_TAXII_FEED"))
+                .thenReturn(Optional.of(ThreatIntelFeedConfig.builder()
+                        .id(1L)
+                        .feedName("STIX_TAXII_FEED")
+                        .autoBlockHighConfidence(false)
+                        .minimumConfidenceScore(80)
+                        .build()));
+
         when(indicatorRepository.findByIndicatorValue("203.0.113.19")).thenReturn(Optional.empty());
         when(indicatorRepository.save(any())).thenAnswer(i -> {
             ThreatIndicatorRecord r = i.getArgument(0);

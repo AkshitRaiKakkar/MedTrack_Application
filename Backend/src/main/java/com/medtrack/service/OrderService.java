@@ -2,9 +2,13 @@ package com.medtrack.service;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
+import com.medtrack.supplier.repository.ShipmentTrackingRepository;
+import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.util.PurchaseOrderPdf;
+import com.medtrack.dto.PlaceOrderRequest;
 import com.medtrack.dto.SupplierMetricsDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -20,15 +24,21 @@ import java.util.List;
 import com.medtrack.util.SupplierInvoicePdf;
 import com.medtrack.auth.service.EmailService;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 @Service
 @RequiredArgsConstructor
 public class OrderService {
 
     private final EquipmentOrderRepository orderRepository;
+    private final EquipmentRepository equipmentRepository;
     private final PurchaseOrderPdf purchaseOrderPdf;
     private final SupplierInvoicePdf supplierInvoicePdf;
     private final EmailService emailService;
     private final UserRepository userRepository;
+    private final ShipmentTrackingRepository shipmentTrackingRepository;
+    private final SupplierAccessGuard supplierAccessGuard;
 
     public byte[] generateInvoicePdf(Long id) {
         EquipmentOrder order = getOrderById(id);
@@ -57,11 +67,27 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
+    private User getAuthenticatedUser(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("User not authenticated");
+        }
+        return userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
     private boolean isSupplier() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) return false;
         return authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_SUPPLIER"));
+    }
+
+    private String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("User not authenticated");
+        }
+        return authentication.getName();
     }
 
     public List<EquipmentOrder> getAllOrders() {
@@ -83,17 +109,44 @@ public class OrderService {
         return order;
     }
 
-    public EquipmentOrder placeOrder(EquipmentOrder order) {
-        if (order.getOrderCode() == null) {
-            order.setOrderCode("ORD-" + java.util.UUID.randomUUID().toString());
+    public EquipmentOrder placeOrder(PlaceOrderRequest request, Authentication authentication) {
+        User hospitalUser = getAuthenticatedUser(authentication);
+        if (hospitalUser.getOrganization() == null || hospitalUser.getOrganization().isBlank()) {
+            throw new IllegalArgumentException("Authenticated user has no hospital organization on record");
         }
+
+        Equipment equipment = equipmentRepository.findByEquipmentCode(request.getEquipmentId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Equipment not found with code: " + request.getEquipmentId()));
+
+        EquipmentOrder order = EquipmentOrder.builder()
+                .orderCode("ORD-" + java.util.UUID.randomUUID())
+                .equipmentId(equipment.getEquipmentCode())
+                .equipmentName(equipment.getName())
+                .quantity(request.getQuantity())
+                .notes(request.getNotes())
+                .hospital(hospitalUser.getOrganization())
+                .createdBy(hospitalUser.getName() != null ? hospitalUser.getName() : hospitalUser.getEmail())
+                .build();
+
         return orderRepository.save(order);
     }
 
-    public EquipmentOrder updateOrderStatus(Long id, String status, String supplierNotes) {
+    public EquipmentOrder updateOrderStatus(Long id, String status, String supplierNotes,
+                                             Authentication authentication) {
         EquipmentOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-        
+
+        // Mirrors the ownership check enforced on the newer supplier-order-update path:
+        // once a supplier has been assigned to this order (a shipment tracking record
+        // exists), only that supplier - or a HOSPITAL admin - may advance its status here.
+        // An order with no shipment record yet has no assigned supplier to check against,
+        // same as the newer path.
+        Long callerSupplierId = supplierAccessGuard.resolveCallerId(authentication);
+        shipmentTrackingRepository.findByOrderId(id).ifPresent(existingShipment ->
+                supplierAccessGuard.assertSelfOrHospitalAdmin(authentication, callerSupplierId,
+                        existingShipment.getSupplierId()));
+
         order.setStatus(status);
         order.setShippingStatus(status);
         order.setSupplierNotes(supplierNotes);
@@ -125,6 +178,81 @@ public class OrderService {
     public void deleteOrder(Long id) {
         EquipmentOrder order = getOrderById(id);
         orderRepository.delete(order);
+    }
+
+    /**
+     * Archives (soft deletes) an order by setting deleted = true.
+     * This is used instead of hard delete for audit compliance.
+     */
+    @Transactional
+    public EquipmentOrder archiveOrder(Long id, String deletedBy) {
+        EquipmentOrder order = getOrderById(id);
+        
+        order.setDeleted(true);
+        order.setDeletedAt(LocalDateTime.now());
+        order.setDeletedBy(deletedBy);
+        
+        EquipmentOrder savedOrder = orderRepository.save(order);
+        
+        // Log the archival
+        System.out.println("Order archived | User: " + deletedBy + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
+        
+        return savedOrder;
+    }
+
+    /**
+     * Restores an archived order (admin only).
+     * Only available within 90 days of archival.
+     */
+    @Transactional
+    public EquipmentOrder restoreOrder(Long id, String username) {
+        EquipmentOrder order = orderRepository.findByIdAndDeletedTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived order not found"));
+
+        // Check if 90 days have passed since archival
+        if (order.getDeletedAt() != null && order.getDeletedAt().isBefore(LocalDateTime.now().minusDays(90))) {
+            throw new IllegalStateException("Order cannot be restored after 90 days");
+        }
+
+        order.setDeleted(false);
+        order.setDeletedAt(null);
+        order.setDeletedBy(null);
+
+        EquipmentOrder savedOrder = orderRepository.save(order);
+
+        // Log the restoration
+        System.out.println("Order restored | User: " + username + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
+
+        return savedOrder;
+    }
+
+    /**
+     * Gets paginated archived orders for the current user's hospital.
+     */
+    public Page<EquipmentOrder> getArchivedOrders(Pageable pageable) {
+        if (isSupplier()) {
+            return orderRepository.findByDeletedTrue(pageable);
+        }
+        return orderRepository.findByHospitalAndDeletedTrue(getCurrentUserOrganization(), pageable);
+    }
+
+    /**
+     * Permanently deletes an archived order (admin only).
+     * Only callable after 90 days from archival.
+     */
+    @Transactional
+    public void permanentlyDeleteOrder(Long id) {
+        EquipmentOrder order = orderRepository.findByIdAndDeletedTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived order not found"));
+
+        // Check if 90 days have passed since archival
+        if (order.getDeletedAt() != null && order.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
+            throw new IllegalStateException("Order cannot be permanently deleted until 90 days after archival");
+        }
+
+        orderRepository.delete(order);
+
+        System.out.println("Order permanently deleted | User: " + getCurrentUsername() + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
     }
 
     public SupplierMetricsDto getSupplierMetrics() {

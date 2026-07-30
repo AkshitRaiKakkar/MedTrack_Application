@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { ReactLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext";
+import { ToastProvider, useToast } from "./context/ToastContext";
+import ToastContainer from "./components/common/ToastContainer";
+import { errorEmitter } from "./services/HttpService";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
@@ -9,10 +12,47 @@ import ScrollToTopButton from "./components/common/ScrollToTopButton";
 import CustomCursor from "./components/common/CustomCursor";
 import CookieBanner from "./components/common/CookieBanner";
 import AppRoutes from "./routes/AppRoutes";
-import { resolvePath, buildPath, hasChrome, resolveEffectivePage } from "./routes/routeRegistry";
+import PageLoader from "./components/common/PageLoader";
 import { ThemeProvider } from "./context/ThemeContext";
 
-const BASE_PATH = "/MedTrack_Application";
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const GuidelinesPage = lazy(() => import("./pages/GuidelinesPage"));
+const HelpCenterPage = lazy(() => import("./pages/HelpCenterPage"));
+const AwardsPage = lazy(() => import("./pages/AwardsPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const GuidesPage = lazy(() => import("./pages/GuidesPage"));
+const SecurityPage = lazy(() => import("./pages/SecurityPage"));
+const SystemStatusPage = lazy(() => import("./pages/SystemStatusPage"));
+
+const getRouteStateFromPath = () => {
+  const pathname = window.location.pathname;
+  const path = pathname
+    .replace(/^\/MedTrack_Application/i, "")
+    .replace(/^\/+|\/+$/g, "");
+
+  if (!path) return { page: "landing", data: null };
+
+  if (path.startsWith("blog/")) {
+    return {
+      page: "blog-post",
+      data: decodeURIComponent(path.slice("blog/".length)),
+    };
+  }
+
+  if (path.startsWith("edit-equipment/")) {
+    return {
+      page: "edit-equipment",
+      data: decodeURIComponent(path.slice("edit-equipment/".length)),
+    };
+  }
+
+  if (path.startsWith("apply/")) {
+    return {
+      page: "apply",
+      data: decodeURIComponent(path.slice("apply/".length)),
+    };
+  }
 
 /**
  * Strips the GitHub Pages base path and surrounding slashes from the current location, leaving the
@@ -39,6 +79,15 @@ function AppContent() {
   const initialRoute = getRouteStateFromPath();
   const [currentPage, setCurrentPage] = useState(initialRoute.page);
   const [pageData, setPageData] = useState(initialRoute.data);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    const handler = (e) => {
+      addToast(e.detail.message, e.detail.type);
+    };
+    errorEmitter.addEventListener("toast", handler);
+    return () => errorEmitter.removeEventListener("toast", handler);
+  }, [addToast]);
 
   const handleNavigate = (page, data = null) => {
     setCurrentPage(page);
@@ -76,16 +125,39 @@ function AppContent() {
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
         <CustomCursor />
-        {showChrome && (
+        <ToastContainer />
+        {!isAuthPage && (
           <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
         )}
 
         <main className="flex-1">
-          <AppRoutes
-            currentPage={currentPage}
-            onNavigate={handleNavigate}
-            pageData={pageData}
-          />
+          <Suspense fallback={<PageLoader />}>
+            {currentPage === "about" ? (
+              <AboutPage />
+            ) : currentPage === "contact" ? (
+              <ContactPage />
+            ) : currentPage === "guidelines" ? (
+              <GuidelinesPage />
+            ) : currentPage === "help" ? (
+              <HelpCenterPage />
+            ) : currentPage === "awards" ? (
+              <AwardsPage />
+            ) : currentPage === "terms" ? (
+              <TermsPage />
+            ) : currentPage === "guides" ? (
+              <GuidesPage />
+            ) : currentPage === "security" ? (
+              <SecurityPage />
+            ) : currentPage === "status" ? (
+              <SystemStatusPage />
+            ) : (
+              <AppRoutes
+                currentPage={currentPage}
+                onNavigate={handleNavigate}
+                pageData={pageData}
+              />
+            )}
+          </Suspense>
         </main>
 
         {showChrome && <Footer onNavigate={handleNavigate} />}
@@ -97,11 +169,17 @@ function AppContent() {
 }
 
 export default function App() {
+  // ErrorBoundary is outermost on purpose. It only catches errors thrown inside its own subtree, so
+  // while it sat *inside* AuthProvider a throw during that provider's render - which is exactly what
+  // an unreadable sessionStorage value produced - unmounted the entire tree to a blank page with
+  // nothing left that could catch it or offer a way out.
   return (
     <AuthProvider>
       <ThemeProvider>
         <ErrorBoundary>
-          <AppContent />
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
         </ErrorBoundary>
       </ThemeProvider>
     </AuthProvider>

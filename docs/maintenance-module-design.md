@@ -100,7 +100,9 @@ tenant-agnostic status lookup is unsafe for API use.
 Maintenance analytics queries enforce the same dual ownership invariant. Status totals, completed
 task SLA inputs, average work hours, and critical-pending counts require both the task's
 `hospitalId` and the linked equipment's hospital to match the requested hospital. An inconsistent
-legacy row therefore cannot affect either API results or hospital analytics.
+legacy row therefore cannot affect either API results or hospital analytics. The critical-pending
+analytics caller uses the canonical API and persistence value `Critical`, preventing a
+case-sensitive query mismatch.
 
 ### MaintenanceStatus.java
 
@@ -151,7 +153,8 @@ It currently supports:
   recurrence unassigned if that account becomes ineligible during completion processing
 - serializing technician updates to the same task so concurrent completion requests cannot create duplicate recurrences
 - serializing hospital deletion with technician completion of the same task
-- exporting hospital tasks as an iCalendar feed
+- exporting hospital tasks as an RFC 5545 iCalendar feed whose `VEVENT` components use
+  `STATUS:CONFIRMED` and retain the exact Maintenance lifecycle state in `X-MEDTRACK-STATUS`
 - filtering hospital or technician lists by status and equipment code without weakening ownership
 - applying opt-in, bounded pagination to filtered or unfiltered list requests
 
@@ -412,6 +415,8 @@ The current frontend field names should be preserved unless frontend changes are
 - [x] Link technician authorization to a stable `User` relationship without changing response JSON.
 - [x] Revalidate the current account role and active status on every Maintenance operation.
 - [x] Enforce the Maintenance status enum values with a versioned database constraint.
+- [x] Align critical-pending analytics with the canonical `Critical` priority value.
+- [x] Emit RFC 5545-valid `VEVENT` statuses while preserving Maintenance status metadata.
 
 ### Completed on 2026-07-14
 
@@ -571,6 +576,22 @@ locking. Migration tests cover case-insensitive backfill and user-deletion behav
 Service regression tests cover stale-authority access by locked and disabled accounts. Migration
 tests cover unsupported legacy data and invalid post-migration status writes. Endpoint paths,
 payloads, response models, successful status codes, and valid lifecycle behavior remain unchanged.
+
+### Completed on 2026-07-30
+
+1. [x] **Corrected critical-pending Maintenance analytics.** The analytics service now supplies
+   the canonical `Critical` value expected by the ownership-scoped repository query. Valid critical
+   tasks are therefore counted without changing request validation, persistence values, repository
+   signatures, or API payloads.
+2. [x] **Made Maintenance calendar event statuses RFC 5545 compliant.** Exported `VEVENT`
+   components now use the valid `STATUS:CONFIRMED` value. The exact Maintenance enum name remains
+   available in `X-MEDTRACK-STATUS`, while the existing description also retains the human-readable
+   status. Endpoint path, media type, filename, dates, summaries, and event identifiers are
+   unchanged.
+
+Repository regression coverage verifies the canonical stored priority and ownership scope.
+Calendar regression coverage verifies the valid `VEVENT` status, Maintenance extension property,
+escaping, UTC timestamps, and UTF-8 content-line folding.
 
 ### Recommended future work
 
