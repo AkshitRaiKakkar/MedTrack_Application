@@ -13,6 +13,11 @@ import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.specifications.EquipmentSpecifications;
 import lombok.RequiredArgsConstructor;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -33,7 +38,9 @@ import java.io.InputStreamReader;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -55,6 +62,60 @@ public class EquipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
+    }
+
+    public EquipmentDashboardResponse getDashboardOverview(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total =
+                equipmentRepository.countByHospitalId(hospital.getId());
+
+        long active =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.ACTIVE
+                );
+
+        long maintenance =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.UNDER_MAINTENANCE
+                );
+
+        long retired =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.RETIRED
+                );
+
+        long expired =
+                equipmentRepository.countByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now()
+                );
+
+        long expiringSoon =
+                equipmentRepository.countByHospitalIdAndWarrantyExpiryBetween(
+                        hospital.getId(),
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(30)
+                );
+
+        long lowStock =
+                equipmentRepository.findLowStockEquipment(
+                        hospital.getId()
+                ).size();
+
+        return new EquipmentDashboardResponse(
+                total,
+                active,
+                maintenance,
+                retired,
+                expired,
+                expiringSoon,
+                lowStock
+        );
     }
 
     /**
@@ -224,6 +285,47 @@ public class EquipmentService {
         );
     }
 
+    public List<Equipment> getEquipmentByPurchaseDateRange(
+            String username,
+            LocalDate startDate,
+            LocalDate endDate) {
+
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException(
+                    "Start date cannot be after end date."
+            );
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findByHospitalIdAndPurchaseDateBetween(
+                hospital.getId(),
+                startDate,
+                endDate
+        );
+    }
+
+
+
+    public Map<String, Long> getCategorySummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Object[]> results =
+                equipmentRepository.countEquipmentByCategory(hospital.getId());
+
+        Map<String, Long> summary = new LinkedHashMap<>();
+
+        for (Object[] row : results) {
+            summary.put(
+                    row[0].toString(),
+                    ((Number) row[1]).longValue()
+            );
+        }
+
+        return summary;
+    }
+
 
     public Map<String, Long> getWarrantySummary(String username) {
 
@@ -252,6 +354,52 @@ public class EquipmentService {
         summary.put("expired", expired);
         summary.put("expiringSoon", expiringSoon);
         summary.put("valid", valid);
+
+        return summary;
+    }
+
+    public Map<String, Long> getEquipmentAgeSummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Equipment> equipmentList =
+                equipmentRepository.findByHospitalId(hospital.getId());
+
+        LocalDate today = LocalDate.now();
+
+        long lessThanOneYear = 0;
+        long oneToThreeYears = 0;
+        long threeToFiveYears = 0;
+        long moreThanFiveYears = 0;
+
+        for (Equipment equipment : equipmentList) {
+
+            if (equipment.getPurchaseDate() == null) {
+                continue;
+            }
+
+            long years = ChronoUnit.YEARS.between(
+                    equipment.getPurchaseDate(),
+                    today
+            );
+
+            if (years < 1) {
+                lessThanOneYear++;
+            } else if (years < 3) {
+                oneToThreeYears++;
+            } else if (years < 5) {
+                threeToFiveYears++;
+            } else {
+                moreThanFiveYears++;
+            }
+        }
+
+        Map<String, Long> summary = new LinkedHashMap<>();
+
+        summary.put("lessThanOneYear", lessThanOneYear);
+        summary.put("oneToThreeYears", oneToThreeYears);
+        summary.put("threeToFiveYears", threeToFiveYears);
+        summary.put("moreThanFiveYears", moreThanFiveYears);
 
         return summary;
     }
@@ -539,6 +687,9 @@ public class EquipmentService {
         List<EquipmentImportSummary.RowFailure> failures = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
+        // Serial numbers already claimed by an earlier row in this same file, so a
+        // duplicate further down the file is caught before it ever reaches saveAll.
+        Set<String> serialNumbersInFile = new HashSet<>();
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String headerLine = reader.readLine();
@@ -656,6 +807,22 @@ public class EquipmentService {
                     parsedStatus = EquipmentStatus.UNDER_MAINTENANCE;
                 } else if ("Retired".equalsIgnoreCase(status) || "RETIRED".equalsIgnoreCase(status)) {
                     parsedStatus = EquipmentStatus.RETIRED;
+                }
+
+                if (serialNumber != null && !serialNumber.trim().isEmpty()) {
+                    String normalizedSerial = serialNumber.trim();
+                    if (!serialNumbersInFile.add(normalizedSerial)) {
+                        failures.add(new EquipmentImportSummary.RowFailure(
+                                rowNum, line, "Duplicate Serial Number within this file: " + normalizedSerial));
+                        failureCount++;
+                        continue;
+                    }
+                    if (equipmentRepository.findBySerialNumber(normalizedSerial).isPresent()) {
+                        failures.add(new EquipmentImportSummary.RowFailure(
+                                rowNum, line, "Serial Number already exists in inventory: " + normalizedSerial));
+                        failureCount++;
+                        continue;
+                    }
                 }
 
                 Equipment equipment = Equipment.builder()
