@@ -247,6 +247,10 @@ function AppContent() {
 }
 
 export default function App() {
+  // ErrorBoundary is outermost on purpose. It only catches errors thrown inside its own subtree, so
+  // while it sat *inside* AuthProvider a throw during that provider's render - which is exactly what
+  // an unreadable sessionStorage value produced - unmounted the entire tree to a blank page with
+  // nothing left that could catch it or offer a way out.
   return (
     <AuthProvider>
       <ThemeProvider>
