@@ -418,7 +418,7 @@ public class MaintenanceService {
             String dtStart = task.getDeadline().format(basicDate);
             String dtEnd = task.getDeadline().plusDays(1).format(basicDate);
             String summary = (task.getEquipment() != null ? task.getEquipment() : "Equipment") + " - " + (task.getMaintenanceType() != null ? task.getMaintenanceType() : "Maintenance");
-            String status = task.getStatus() == com.medtrack.model.MaintenanceStatus.COMPLETED ? "COMPLETED" : "NEEDS-ACTION";
+            String maintenanceStatus = task.getStatus().name();
 
             String description = String.format("Task Code: %s\nStatus: %s\nTechnician: %s\nPriority: %s\nDescription: %s",
                     task.getTaskCode(),
@@ -436,7 +436,10 @@ public class MaintenanceService {
             appendICalLine(ical, "DTEND;VALUE=DATE:" + dtEnd);
             appendICalLine(ical, "SUMMARY:" + escapeICalText(summary));
             appendICalLine(ical, "DESCRIPTION:" + escapeICalText(description));
-            appendICalLine(ical, "STATUS:" + status);
+            // RFC 5545 allows TENTATIVE, CONFIRMED, or CANCELLED for VEVENT.
+            // Preserve the Maintenance lifecycle value in a standards-compliant extension.
+            appendICalLine(ical, "STATUS:CONFIRMED");
+            appendICalLine(ical, "X-MEDTRACK-STATUS:" + maintenanceStatus);
             appendICalLine(ical, "END:VEVENT");
         }
 

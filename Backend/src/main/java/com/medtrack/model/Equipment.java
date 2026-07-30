@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * Equipment Entity - Matches frontend EquipmentList.jsx, AddEquipmentForm.jsx
@@ -16,10 +17,12 @@ import java.time.LocalDate;
  * API: GET  /api/equipment/{id}  - Get by ID
  * API: POST /api/equipment       - Add new
  * API: PUT  /api/equipment/{id}  - Update
- * API: DELETE /api/equipment/{id} - Delete
+ * API: POST /api/equipment/{id}/archive - Archive (soft delete)
+ * API: GET  /api/equipment/archived - List archived (admin only)
  */
 @Entity
 @Table(name = "equipment")
+@Where(clause = "deleted = false")
 @Data
 @Builder
 @NoArgsConstructor
@@ -94,4 +97,17 @@ public class Equipment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "hospital_id")
     private Hospital hospital;
+
+    /**
+     * Soft delete fields - records are never hard deleted for audit compliance
+     */
+    @Builder.Default
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 255)
+    private String deletedBy;
 }

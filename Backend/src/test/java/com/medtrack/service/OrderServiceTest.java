@@ -28,6 +28,7 @@ import com.medtrack.auth.service.EmailService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -161,6 +162,11 @@ public class OrderServiceTest {
 
     @Test
     void getSupplierMetrics_CalculatesCorrectKPIs() {
+        // Authenticated as a supplier on purpose: getSupplierMetrics goes through getAllOrders,
+        // which returns findAll() for ROLE_SUPPLIER and an organisation-scoped query for everyone
+        // else. The fixture stubs findAll(), so a hospital caller would correctly see zero orders
+        // and the KPI assertions would all read 0.
+        authenticateAs("supplier@medtrack.com", "Global Suppliers Ltd", "ROLE_SUPPLIER");
         // Order 1: Delivered in 5 days (On-Time)
         EquipmentOrder order1 = EquipmentOrder.builder()
                 .id(10L)
@@ -214,6 +220,7 @@ public class OrderServiceTest {
 
      @Test
      void generateInvoicePdf_ReturnsPdfBytes() {
+        authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
          byte[] expectedPdfBytes = new byte[]{1, 2, 3};
          when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
          when(supplierInvoicePdf.generate(mockOrder)).thenReturn(expectedPdfBytes);
@@ -227,6 +234,7 @@ public class OrderServiceTest {
 
      @Test
      void emailInvoice_TriggersEmailService() {
+        authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
          byte[] expectedPdfBytes = new byte[]{1, 2, 3};
          when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
          when(supplierInvoicePdf.generate(mockOrder)).thenReturn(expectedPdfBytes);
