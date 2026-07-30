@@ -12,6 +12,7 @@ import com.medtrack.model.Hospital;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.specifications.EquipmentSpecifications;
+import com.medtrack.util.CsvSupport;
 import lombok.RequiredArgsConstructor;
 
 import java.time.LocalDate;
@@ -57,6 +58,18 @@ public class EquipmentService {
     private final UserRepository userRepository;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
+
+    /**
+     * Column order for both the export and the import template.
+     *
+     * <p>Shared so the two cannot drift again. Previously the export emitted
+     * "Equipment Code, Name, Department, Category, Status, Purchase Date, Warranty Expiry" while
+     * the template offered by the UI used a different set, and neither matched the other.</p>
+     */
+    static final String[] EQUIPMENT_CSV_HEADERS = {
+            "Equipment Code", "Name", "Model", "Serial Number", "Department",
+            "Category", "Status", "Purchase Date", "Warranty Expiry"
+    };
 
     private Hospital getHospitalForUser(String username) {
         User user = userRepository.findByUsername(username)
@@ -727,26 +740,43 @@ public class EquipmentService {
         // duplicate further down the file is caught before it ever reaches saveAll.
         Set<String> serialNumbersInFile = new HashSet<>();
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
-            String headerLine = reader.readLine();
-            if (headerLine == null) {
+        // UTF-8 explicitly. InputStreamReader with no charset uses the platform default, so on a
+        // JVM defaulting to Windows-1252 the exported BOM decodes to "\u00ef\u00bb\u00bf" rather
+        // than \uFEFF - the BOM strip below silently misses, "Equipment Code" never matches, and
+        // every non-ASCII asset name is mangled on the way in.
+        try (java.io.InputStream input = file.getInputStream()) {
+            String document = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+            // Split on record boundaries rather than line breaks, so a quoted field containing a
+            // newline stays one record. A readLine() loop split it across two, which is why the
+            // export could quote embedded newlines correctly and the import still could not read
+            // them back.
+            List<String> records = CsvSupport.splitRecords(document);
+            if (records.isEmpty()) {
                 throw new IllegalArgumentException("CSV file has no content");
             }
 
-            List<String> headers = parseCsvLine(headerLine);
+            List<String> headers = parseCsvLine(records.get(0));
             if (headers.size() < 4) {
                 throw new IllegalArgumentException("CSV file must contain at least: Name, Department, Category, Status");
             }
 
-            String line;
             int rowNum = 1;
-            while ((line = reader.readLine()) != null) {
+            for (int recordIndex = 1; recordIndex < records.size(); recordIndex++) {
+                String line = records.get(recordIndex);
                 rowNum++;
-                if (line.trim().isEmpty()) {
+
+                List<String> fields;
+                try {
+                    fields = parseCsvLine(line);
+                } catch (CsvSupport.MalformedCsvException e) {
+                    // A malformed row is the caller's data problem, not a server fault. Recorded as
+                    // a row failure with the reason so the rest of the file still imports; the
+                    // parser used to silently repair such rows into valid-looking values instead.
+                    failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, e.getMessage()));
+                    failureCount++;
                     continue;
                 }
-
-                List<String> fields = parseCsvLine(line);
                 if (fields.size() < headers.size()) {
                     failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Row has fewer columns than headers"));
                     failureCount++;
@@ -760,6 +790,11 @@ public class EquipmentService {
                 String category = getFieldValue(fields, headers, "Category");
                 String status = getFieldValue(fields, headers, "Status");
                 String purchaseDateStr = getFieldValue(fields, headers, "Purchase Date");
+                // Both of these are in EQUIPMENT_CSV_HEADERS and were written by the export but
+                // never read back, so a round trip silently minted a fresh equipment code and
+                // dropped the warranty date - the two columns were write-only.
+                String equipmentCode = getFieldValue(fields, headers, "Equipment Code");
+                String warrantyExpiryStr = getFieldValue(fields, headers, "Warranty Expiry");
 
                 if (name == null || name.trim().isEmpty()) {
                     failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Asset Name is required"));
@@ -817,14 +852,21 @@ public class EquipmentService {
                 if (status == null || status.trim().isEmpty()) {
                     status = "Operational";
                 } else {
-                    List<String> validStatuses = List.of("Operational", "Maintenance", "Retired");
+                    // Accept both the display names the UI template hands out and the enum
+                    // constants this application exports, so a file exported by /api/equipment/export
+                    // can be re-imported. Previously the export emitted ACTIVE and the import only
+                    // accepted "Operational", so every row of a self-exported file was rejected.
+                    List<String> validStatuses = List.of(
+                            "Operational", "Maintenance", "Retired",
+                            "ACTIVE", "UNDER_MAINTENANCE", "RETIRED");
                     String finalStatus = status.trim();
                     if (validStatuses.stream().noneMatch(s -> s.equalsIgnoreCase(finalStatus))) {
-                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Invalid condition/status. Allowed: Operational, Maintenance, Retired"));
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid condition/status. Allowed: " + String.join(", ", validStatuses)));
                         failureCount++;
                         continue;
                     }
-                    status = validStatuses.stream().filter(s -> s.equalsIgnoreCase(finalStatus)).findFirst().orElse(status);
+                    status = finalStatus;
                 }
 
                 LocalDate purchaseDate = null;
@@ -833,6 +875,18 @@ public class EquipmentService {
                         purchaseDate = LocalDate.parse(purchaseDateStr.trim());
                     } catch (DateTimeParseException e) {
                         failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Invalid Purchase Date format. Expected YYYY-MM-DD"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                LocalDate warrantyExpiry = null;
+                if (warrantyExpiryStr != null && !warrantyExpiryStr.trim().isEmpty()) {
+                    try {
+                        warrantyExpiry = LocalDate.parse(warrantyExpiryStr.trim());
+                    } catch (DateTimeParseException e) {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Warranty Expiry format. Expected YYYY-MM-DD"));
                         failureCount++;
                         continue;
                     }
@@ -881,7 +935,11 @@ public class EquipmentService {
                 equipmentRepository.saveAll(equipmentToSave);
             }
 
-        } catch (Exception e) {
+        } catch (java.io.IOException e) {
+            // Only genuine I/O failures become a 500. The try block also raises
+            // IllegalArgumentException for "CSV file has no content" and for a missing header
+            // column; catching Exception here rewrapped those into a RuntimeException, so a
+            // user-fixable input problem was reported as a server error with the reason lost.
             throw new RuntimeException("Error reading CSV file", e);
         }
 
@@ -892,23 +950,16 @@ public class EquipmentService {
                 .build();
     }
 
+    /**
+     * Parses one CSV record.
+     *
+     * <p>Delegates to {@link CsvSupport#parseLine(String)}. The previous implementation toggled a
+     * boolean on every quote and never emitted the character, so the RFC 4180 escape {@code ""}
+     * toggled twice and was deleted: {@code "Monitor 15"" Display"} parsed as
+     * {@code Monitor 15 Display}.</p>
+     */
     private List<String> parseCsvLine(String line) {
-        List<String> result = new ArrayList<>();
-        StringBuilder currentToken = new StringBuilder();
-        boolean inQuotes = false;
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-            if (c == '"') {
-                inQuotes = !inQuotes;
-            } else if (c == ',' && !inQuotes) {
-                result.add(currentToken.toString().trim());
-                currentToken.setLength(0);
-            } else {
-                currentToken.append(c);
-            }
-        }
-        result.add(currentToken.toString().trim());
-        return result;
+        return CsvSupport.parseLine(line);
     }
 
     private String getFieldValue(List<String> fields, List<String> headers, String columnName) {
@@ -922,23 +973,41 @@ public class EquipmentService {
         return null;
     }
 
+    /**
+     * Exports the caller's inventory as RFC 4180 CSV.
+     *
+     * <p>Every field goes through {@link CsvSupport#encodeField(Object)}, which quotes and escapes
+     * as required and neutralises spreadsheet formulas. The previous implementation concatenated
+     * raw values with commas, so an asset named "Ventilator, Portable" produced eight fields under
+     * a seven-column header and shifted every column after it.</p>
+     *
+     * <p>The column set matches {@link #EQUIPMENT_CSV_HEADERS}, which is also what the import
+     * accepts, so a file exported here can be fed straight back into
+     * {@link #importEquipmentFromCsv}.</p>
+     *
+     * @param username authenticated user's username
+     * @return UTF-8 encoded CSV, prefixed with a byte order mark for Excel
+     */
     public byte[] exportEquipmentCsv(String username) {
         Hospital hospital = getHospitalForUser(username);
         List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
 
-        StringBuilder csv = new StringBuilder();
-
-        csv.append("Equipment Code,Name,Department,Category,Status,Purchase Date,Warranty Expiry\n");
+        StringBuilder csv = new StringBuilder(CsvSupport.UTF8_BOM);
+        csv.append(CsvSupport.encodeRow((Object[]) EQUIPMENT_CSV_HEADERS));
 
         for (Equipment equipment : equipmentList) {
-            csv.append(equipment.getEquipmentCode()).append(",")
-                    .append(equipment.getName()).append(",")
-                    .append(equipment.getDepartment()).append(",")
-                    .append(equipment.getCategory()).append(",")
-                    .append(equipment.getStatus()).append(",")
-                    .append(equipment.getPurchaseDate()).append(",")
-                    .append(equipment.getWarrantyExpiry())
-                    .append("\n");
+            csv.append(CsvSupport.encodeRow(
+                    equipment.getEquipmentCode(),
+                    equipment.getName(),
+                    equipment.getModel(),
+                    equipment.getSerialNumber(),
+                    equipment.getDepartment(),
+                    // Enum constants, not display names. The import accepts both, so the round
+                    // trip works either way, but the constant is the stable identifier.
+                    equipment.getCategory(),
+                    equipment.getStatus(),
+                    equipment.getPurchaseDate(),
+                    equipment.getWarrantyExpiry()));
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
