@@ -18,6 +18,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import com.medtrack.dto.EquipmentDashboardResponse;
+import java.time.LocalDate;
+
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +76,18 @@ public class EquipmentController {
 
         return ResponseEntity.ok(
                 equipmentService.getEquipmentStatistics(
+                        principal.getName()
+                )
+        );
+    }
+
+    @GetMapping("/dashboard")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<EquipmentDashboardResponse> getDashboard(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getDashboardOverview(
                         principal.getName()
                 )
         );

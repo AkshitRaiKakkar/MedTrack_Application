@@ -57,6 +57,60 @@ public class EquipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
     }
 
+    public EquipmentDashboardResponse getDashboardOverview(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total =
+                equipmentRepository.countByHospitalId(hospital.getId());
+
+        long active =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.ACTIVE
+                );
+
+        long maintenance =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.UNDER_MAINTENANCE
+                );
+
+        long retired =
+                equipmentRepository.countByHospitalIdAndStatus(
+                        hospital.getId(),
+                        EquipmentStatus.RETIRED
+                );
+
+        long expired =
+                equipmentRepository.countByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now()
+                );
+
+        long expiringSoon =
+                equipmentRepository.countByHospitalIdAndWarrantyExpiryBetween(
+                        hospital.getId(),
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(30)
+                );
+
+        long lowStock =
+                equipmentRepository.findLowStockEquipment(
+                        hospital.getId()
+                ).size();
+
+        return new EquipmentDashboardResponse(
+                total,
+                active,
+                maintenance,
+                retired,
+                expired,
+                expiringSoon,
+                lowStock
+        );
+    }
+
     /**
      * Fetches all equipment records from the database.
      * Used by the "get all equipment" list view on the frontend.
