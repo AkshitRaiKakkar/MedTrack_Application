@@ -13,6 +13,11 @@ import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.specifications.EquipmentSpecifications;
 import lombok.RequiredArgsConstructor;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -308,6 +313,52 @@ public class EquipmentService {
         summary.put("expired", expired);
         summary.put("expiringSoon", expiringSoon);
         summary.put("valid", valid);
+
+        return summary;
+    }
+
+    public Map<String, Long> getEquipmentAgeSummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Equipment> equipmentList =
+                equipmentRepository.findByHospitalId(hospital.getId());
+
+        LocalDate today = LocalDate.now();
+
+        long lessThanOneYear = 0;
+        long oneToThreeYears = 0;
+        long threeToFiveYears = 0;
+        long moreThanFiveYears = 0;
+
+        for (Equipment equipment : equipmentList) {
+
+            if (equipment.getPurchaseDate() == null) {
+                continue;
+            }
+
+            long years = ChronoUnit.YEARS.between(
+                    equipment.getPurchaseDate(),
+                    today
+            );
+
+            if (years < 1) {
+                lessThanOneYear++;
+            } else if (years < 3) {
+                oneToThreeYears++;
+            } else if (years < 5) {
+                threeToFiveYears++;
+            } else {
+                moreThanFiveYears++;
+            }
+        }
+
+        Map<String, Long> summary = new LinkedHashMap<>();
+
+        summary.put("lessThanOneYear", lessThanOneYear);
+        summary.put("oneToThreeYears", oneToThreeYears);
+        summary.put("threeToFiveYears", threeToFiveYears);
+        summary.put("moreThanFiveYears", moreThanFiveYears);
 
         return summary;
     }
