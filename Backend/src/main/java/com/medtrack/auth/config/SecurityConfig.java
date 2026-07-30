@@ -125,10 +125,14 @@ public class SecurityConfig {
                     "/api/auth/forgot-password",
                     "/api/auth/verify-otp",
                     "/api/auth/reset-password",
-                    "/api/auth/scim/**",
-                    "/api/auth/commandcenter/**",
-                    "/api/auth/vulnerability/**",
-                    "/api/auth/pam/**",
+                    // /api/auth/scim/**, /api/auth/commandcenter/**, /api/auth/vulnerability/**
+                    // and /api/auth/pam/** used to be listed here. None of them is an
+                    // authentication endpoint: they provision and deprovision user accounts,
+                    // request and approve privilege elevation, acknowledge security alerts and
+                    // govern CVE patching. Because permitAll() matchers are evaluated before the
+                    // trailing .anyRequest().authenticated() rule, every route under them -
+                    // including every mutating one - was reachable with no token at all. Explicit
+                    // rules for all four trees are declared below.
                     "/h2-console/**",
                     "/error",
                     "/v3/api-docs/**",
@@ -172,6 +176,42 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/auth/keyvault/**").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/keyvault/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.PUT, "/api/auth/keyvault/**").hasRole("HOSPITAL")
+
+                // Privileged Access Management:
+                // Elevation requests can be raised and approved here, the PAM policy can be
+                // rewritten, and privileged-session evidence can be written. Approving your own
+                // elevation is exactly the thing PAM exists to prevent, so every mutating route
+                // is admin-only.
+                .requestMatchers(HttpMethod.GET, "/api/auth/pam/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/auth/pam/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/auth/pam/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/auth/pam/**").hasRole("HOSPITAL")
+
+                // SCIM identity provisioning:
+                // POST /users/provision creates accounts and POST /users/deprovision disables
+                // them, so an anonymous caller could both mint accounts and lock out any existing
+                // user. GET /users and GET /audit-logs disclose the full user directory.
+                .requestMatchers(HttpMethod.GET, "/api/auth/scim/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/auth/scim/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/auth/scim/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/auth/scim/**").hasRole("HOSPITAL")
+
+                // Security Command Center:
+                // /summary aggregates the security posture of the whole deployment, and
+                // /alerts/acknowledge suppresses alerts raised by every other subsystem.
+                .requestMatchers(HttpMethod.GET, "/api/auth/commandcenter/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/auth/commandcenter/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/auth/commandcenter/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/auth/commandcenter/**").hasRole("HOSPITAL")
+
+                // Vulnerability management and CVE patch governance:
+                // GET routes disclose the full known-CVE inventory for this deployment, which is a
+                // map of how to attack it. Mutating routes can disable auto-patching and trigger
+                // patch executions.
+                .requestMatchers(HttpMethod.GET, "/api/auth/vulnerability/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/auth/vulnerability/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/auth/vulnerability/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/auth/vulnerability/**").hasRole("HOSPITAL")
 
                 // Equipment module boundaries:
                 // GET requests: Authorized users.

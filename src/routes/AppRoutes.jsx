@@ -37,6 +37,7 @@ import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
 import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
 import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
 import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
+import GrcAuditCompliancePage from "../pages/auth/GrcAuditCompliancePage";
 import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
 import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
 import VulnerabilityManagementPage from "../pages/auth/VulnerabilityManagementPage";
@@ -197,6 +198,14 @@ export default function AppRouter({ currentPage, onNavigate, pageData }) {
     case "vulnerability":
     case "patch-management":
       return ProtectedRoute(VulnerabilityManagementPage);
+    case "microsegmentation":
+    case "sdp":
+    case "perimeter-security":
+      return ProtectedRoute(MicrosegmentationPage);
+    case "grc":
+    case "grc-compliance":
+    case "audit-ledger":
+      return ProtectedRoute(GrcAuditCompliancePage);
     case "pam":
     case "privileged-access":
     case "jit-elevation":

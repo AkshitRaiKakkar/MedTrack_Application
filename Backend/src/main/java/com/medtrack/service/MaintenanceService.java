@@ -66,7 +66,7 @@ public class MaintenanceService {
     public List<MaintenanceTask> getAllTasks(Authentication authentication) {
         // Scope lists from the trusted JWT identity instead of a client-supplied filter.
         if (hasRole(authentication, "HOSPITAL")) {
-            return taskRepository.findByHospitalId(getHospitalForUser(authentication.getName()).getId());
+            return taskRepository.findByHospitalId(getHospitalForUser(authentication).getId());
         }
         if (hasRole(authentication, "TECHNICIAN")) {
             return taskRepository.findByAssignedTechnicianId(
@@ -86,7 +86,7 @@ public class MaintenanceService {
         Pageable pageable = resolvePageable(page, size);
 
         if (hasRole(authentication, "HOSPITAL")) {
-            Long hospitalId = getHospitalForUser(authentication.getName()).getId();
+            Long hospitalId = getHospitalForUser(authentication).getId();
             return taskRepository.findByHospitalIdWithFilters(
                     hospitalId, status, normalizedEquipmentId, pageable);
         }
@@ -106,7 +106,7 @@ public class MaintenanceService {
 
     @Transactional
     public MaintenanceTask scheduleTask(MaintenanceCreateRequest request, Authentication authentication) {
-        Hospital hospital = getHospitalForUser(authentication.getName());
+        Hospital hospital = getHospitalForUser(authentication);
         validateSchedulingRequest(request);
         Equipment equipment = resolveOwnedEquipment(request.getEquipmentId().trim(), hospital.getId());
         User assignedTechnician = resolveEligibleTechnician(request.getAssignedTechnician());
@@ -144,7 +144,7 @@ public class MaintenanceService {
             throw new IllegalArgumentException("Assigned technician is required");
         }
 
-        Long hospitalId = getHospitalForUser(authentication.getName()).getId();
+        Long hospitalId = getHospitalForUser(authentication).getId();
         MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Maintenance task not found or access denied"));
@@ -322,9 +322,25 @@ public class MaintenanceService {
     }
 
     private User getAuthenticatedTechnician(Authentication authentication) {
+        return getActiveUserForRole(authentication, "technician");
+    }
+
+    private User getActiveUserForRole(Authentication authentication, String expectedRole) {
+        if (authentication == null
+                || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+            throw new AccessDeniedException("An active " + expectedRole + " account is required");
+        }
+
         String normalizedEmail = authentication.getName().trim().toLowerCase(Locale.ROOT);
-        return userRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Technician account not found"));
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new AccessDeniedException(
+                        "An active " + expectedRole + " account is required"));
+        if (!expectedRole.equalsIgnoreCase(user.getRole())
+                || user.getAccountStatus() != AccountStatus.ACTIVE) {
+            throw new AccessDeniedException("An active " + expectedRole + " account is required");
+        }
+        return user;
     }
 
     private void validateTechnicianEligibility(User technician) {
@@ -480,7 +496,7 @@ public class MaintenanceService {
     public void deleteTask(Long id, Authentication authentication) {
         // Lock the owned row so deletion cannot race with technician completion.
         MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(
-                        id, getHospitalForUser(authentication.getName()).getId())
+                        id, getHospitalForUser(authentication).getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or access denied"));
         if (task.getStatus() == MaintenanceStatus.COMPLETED) {
             throw new InvalidStatusTransitionException("Completed maintenance tasks cannot be deleted");
@@ -490,7 +506,7 @@ public class MaintenanceService {
 
     private MaintenanceTask findOwnedTask(Long id, Authentication authentication) {
         if (hasRole(authentication, "HOSPITAL")) {
-            return taskRepository.findByIdAndHospitalId(id, getHospitalForUser(authentication.getName()).getId())
+            return taskRepository.findByIdAndHospitalId(id, getHospitalForUser(authentication).getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or access denied"));
         }
         if (hasRole(authentication, "TECHNICIAN")) {
@@ -501,9 +517,8 @@ public class MaintenanceService {
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
 
-    private Hospital getHospitalForUser(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    private Hospital getHospitalForUser(Authentication authentication) {
+        User user = getActiveUserForRole(authentication, "hospital");
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
     }

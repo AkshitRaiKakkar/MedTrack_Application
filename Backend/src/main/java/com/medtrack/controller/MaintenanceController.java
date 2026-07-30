@@ -49,7 +49,7 @@ public class MaintenanceController {
 
     /**
      * Retrieves a maintenance task by its unique identifier.
-     *
+     *completed
      * @param id the maintenance task identifier
      * @return the requested maintenance task
      */

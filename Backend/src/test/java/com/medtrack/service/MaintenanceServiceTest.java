@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import com.medtrack.exception.ResourceNotFoundException;
@@ -70,6 +71,8 @@ public class MaintenanceServiceTest {
         mockUser = User.builder()
                 .id(1L)
                 .email(email)
+                .role("hospital")
+                .accountStatus(AccountStatus.ACTIVE)
                 .build();
 
         mockTechnician = User.builder()
@@ -331,7 +334,7 @@ public class MaintenanceServiceTest {
     }
 
     @Test
-    void updateTask_LeavesRecurrenceUnassignedWhenTechnicianAccountIsLocked() {
+    void updateTask_RejectsLockedTechnicianWithExistingAuthority() {
         mockTask.setSignature("stored-technician-signature");
         User technician = User.builder()
                 .id(2L)
@@ -341,24 +344,20 @@ public class MaintenanceServiceTest {
                 .build();
         when(authentication.getName()).thenReturn("tech@medtrack.com");
         mockTask.setAssignedTechnicianRecord(technician);
-        when(taskRepository.findByIdAndAssignedTechnicianIdForUpdate(50L, technician.getId()))
-                .thenReturn(Optional.of(mockTask));
         when(userRepository.findByEmail("tech@medtrack.com")).thenReturn(Optional.of(technician));
-        when(taskRepository.save(any(MaintenanceTask.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        MaintenanceTask result = maintenanceService.updateTask(
-                50L,
-                MaintenanceUpdateRequest.builder()
-                        .status(MaintenanceStatus.COMPLETED)
-                        .build(),
-                authentication);
+        AccessDeniedException exception = assertThrows(
+                AccessDeniedException.class,
+                () -> maintenanceService.updateTask(
+                        50L,
+                        MaintenanceUpdateRequest.builder()
+                                .status(MaintenanceStatus.COMPLETED)
+                                .build(),
+                        authentication));
 
-        assertEquals(MaintenanceStatus.COMPLETED, result.getStatus());
-        ArgumentCaptor<MaintenanceTask> taskCaptor = ArgumentCaptor.forClass(MaintenanceTask.class);
-        verify(taskRepository, times(2)).save(taskCaptor.capture());
-        assertNull(taskCaptor.getAllValues().get(1).getAssignedTechnician());
-        assertNull(taskCaptor.getAllValues().get(1).getAssignedTechnicianRecord());
+        assertEquals("An active technician account is required", exception.getMessage());
+        verify(taskRepository, never()).findByIdAndAssignedTechnicianIdForUpdate(any(), any());
+        verify(taskRepository, never()).save(any());
     }
 
     @Test
@@ -622,6 +621,41 @@ public class MaintenanceServiceTest {
         assertEquals(1, result.size());
         assertEquals("MNT-1111", result.get(0).getTaskCode());
         verify(taskRepository).findByAssignedTechnicianId(mockTechnician.getId());
+    }
+
+    @Test
+    void getAllTasks_RejectsLockedHospitalAccountWithExistingAuthority() {
+        mockUser.setAccountStatus(AccountStatus.LOCKED);
+        when(authentication.getName()).thenReturn(email);
+        doReturn(Collections.singletonList(new SimpleGrantedAuthority("ROLE_HOSPITAL")))
+                .when(authentication).getAuthorities();
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
+
+        AccessDeniedException exception = assertThrows(
+                AccessDeniedException.class,
+                () -> maintenanceService.getAllTasks(authentication));
+
+        assertEquals("An active hospital account is required", exception.getMessage());
+        verifyNoInteractions(hospitalRepository, taskRepository);
+    }
+
+    @Test
+    void updateTask_RejectsDisabledTechnicianWithExistingAuthority() {
+        mockTechnician.setAccountStatus(AccountStatus.DISABLED);
+        when(authentication.getName()).thenReturn("tech@medtrack.com");
+
+        AccessDeniedException exception = assertThrows(
+                AccessDeniedException.class,
+                () -> maintenanceService.updateTask(
+                        50L,
+                        MaintenanceUpdateRequest.builder()
+                                .status(MaintenanceStatus.IN_PROGRESS)
+                                .build(),
+                        authentication));
+
+        assertEquals("An active technician account is required", exception.getMessage());
+        verify(taskRepository, never()).findByIdAndAssignedTechnicianIdForUpdate(any(), any());
+        verify(taskRepository, never()).save(any());
     }
 
     @Test
