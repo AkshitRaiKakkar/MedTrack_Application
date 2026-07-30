@@ -38,7 +38,8 @@ import {
   Package,
   Sliders,
   BrainCircuit,
-  Binary
+  Binary,
+  Radio
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -59,6 +60,7 @@ import ZeroTrustGovernancePanel from "./ZeroTrustGovernancePanel";
 import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import AiModelGovernancePanel from "./AiModelGovernancePanel";
 import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
+import IotSecurityPanel from "./IotSecurityPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -397,7 +399,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff },
           { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders },
           { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit },
-          { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary }
+          { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary },
+          { id: "iot", label: "IoMT & Medical Device Security", icon: Radio }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -843,6 +846,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 17: POST-QUANTUM CRYPTOGRAPHY & QUANTUM SECURITY ENGINE */}
       {selectedTab === "pqc" && (
         <PostQuantumCryptoPanel />
+      )}
+
+      {/* TAB 18: IOMT MEDICAL DEVICE CYBERSECURITY CONSOLE */}
+      {selectedTab === "iot" && (
+        <IotSecurityPanel />
       )}
 
       {/* 4. MODALS */}
