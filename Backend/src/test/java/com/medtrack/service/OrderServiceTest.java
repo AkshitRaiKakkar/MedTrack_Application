@@ -3,6 +3,13 @@ package com.medtrack.service;
 import com.medtrack.dto.SupplierMetricsDto;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import java.util.stream.Collectors;
+import com.medtrack.auth.model.User;
+import com.medtrack.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +23,7 @@ import com.medtrack.auth.service.EmailService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Collections;
 import java.util.Optional;
 
@@ -35,10 +43,42 @@ public class OrderServiceTest {
     @Mock
     private EmailService emailService;
 
+    // OrderService resolves the caller's organisation through UserRepository. The test never declared
+    // this mock, so @InjectMocks left the field null - one of the reasons the organisation-scoped
+    // tests could not work even once a security context was supplied.
+    @Mock
+    private UserRepository userRepository;
+
     @InjectMocks
     private OrderService orderService;
 
     private EquipmentOrder mockOrder;
+
+    @AfterEach
+    void clearSecurityContext() {
+        // The service reads SecurityContextHolder, which is thread-local and shared across tests in
+        // the same thread. Leaving an authentication behind would leak into unrelated cases.
+        SecurityContextHolder.clearContext();
+    }
+
+    /**
+     * Populates a security context for the tests that exercise organisation-scoped reads.
+     *
+     * <p>{@code OrderService.getCurrentUserOrganization()} resolves the caller from
+     * {@code SecurityContextHolder} and throws {@code RuntimeException("User not authenticated")}
+     * when there is none. Three tests were failing on exactly that: the service moved to
+     * context-based scoping and the tests never started supplying one.</p>
+     */
+    private void authenticateAs(String email, String organization, String... roles) {
+        List<SimpleGrantedAuthority> authorities = Arrays.stream(roles)
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(email, "n/a", authorities));
+
+        lenient().when(userRepository.findByEmail(email)).thenReturn(Optional.of(
+                User.builder().id(1L).email(email).organization(organization).build()));
+    }
 
     @BeforeEach
     void setUp() {
@@ -93,6 +133,11 @@ public class OrderServiceTest {
 
     @Test
     void getSupplierMetrics_CalculatesCorrectKPIs() {
+        // Authenticated as a supplier on purpose: getSupplierMetrics goes through getAllOrders,
+        // which returns findAll() for ROLE_SUPPLIER and an organisation-scoped query for everyone
+        // else. The fixture stubs findAll(), so a hospital caller would correctly see zero orders
+        // and the KPI assertions would all read 0.
+        authenticateAs("supplier@medtrack.com", "Global Suppliers Ltd", "ROLE_SUPPLIER");
         // Order 1: Delivered in 5 days (On-Time)
         EquipmentOrder order1 = EquipmentOrder.builder()
                 .id(10L)
@@ -146,6 +191,7 @@ public class OrderServiceTest {
 
      @Test
      void generateInvoicePdf_ReturnsPdfBytes() {
+        authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
          byte[] expectedPdfBytes = new byte[]{1, 2, 3};
          when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
          when(supplierInvoicePdf.generate(mockOrder)).thenReturn(expectedPdfBytes);
@@ -159,6 +205,7 @@ public class OrderServiceTest {
 
      @Test
      void emailInvoice_TriggersEmailService() {
+        authenticateAs("admin@cityhospital.com", "City Hospital", "ROLE_HOSPITAL");
          byte[] expectedPdfBytes = new byte[]{1, 2, 3};
          when(orderRepository.findById(1L)).thenReturn(Optional.of(mockOrder));
          when(supplierInvoicePdf.generate(mockOrder)).thenReturn(expectedPdfBytes);

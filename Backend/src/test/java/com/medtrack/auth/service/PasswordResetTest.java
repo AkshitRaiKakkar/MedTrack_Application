@@ -109,13 +109,21 @@ public class PasswordResetTest {
     }
 
     @Test
-    void forgotPassword_UserNotFound_ThrowsException() {
+    void forgotPassword_UserNotFound_IsIndistinguishableFromSuccess() {
         String email = "unknown@example.com";
         ForgotPasswordRequest request = new ForgotPasswordRequest(email);
 
         when(userRepository.findByEmail(email)).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> userService.forgotPassword(request));
+        // forgotPassword returns silently for an unknown address, on purpose. Throwing - which this
+        // test used to assert - makes the endpoint an account-enumeration oracle: a caller can tell
+        // a registered address from an unregistered one by whether the request errors, which is
+        // exactly what an unauthenticated password-reset endpoint must not reveal.
+        //
+        // The observable behaviour must therefore be identical to the success path from outside, and
+        // differ only in that no token is issued and no mail is sent.
+        assertDoesNotThrow(() -> userService.forgotPassword(request));
+
         verify(passwordResetTokenRepository, never()).save(any());
         verify(emailService, never()).sendOtp(any(), any());
     }

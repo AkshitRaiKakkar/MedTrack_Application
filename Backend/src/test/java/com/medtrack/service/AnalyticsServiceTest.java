@@ -2,6 +2,7 @@ package com.medtrack.service;
 
 import com.medtrack.dto.HospitalAnalyticsDto;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentCategory;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.model.EquipmentStatus;
@@ -24,10 +25,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Collections;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -151,11 +155,44 @@ public class AnalyticsServiceTest {
                 .totalCost(BigDecimal.valueOf(1_000_000.00))
                 .build();
 
-        when(equipmentRepository.findByHospitalId(hospitalId)).thenReturn(Arrays.asList(eq1, eq2));
-        when(taskRepository.findByHospitalId(hospitalId))
-                .thenReturn(Arrays.asList(task1, task2, task3, legacyCompletedTask));
-        when(orderRepository.findAll())
-                .thenReturn(Arrays.asList(order1, order2, order3, order4, otherHospitalOrder));
+        // findByHospitalId / taskRepository.findByHospitalId are no longer called: every figure now
+        // comes from a targeted query or aggregate. Leaving them stubbed trips Mockito's strict
+        // stubbing, which is what flags a test still wired to a seam the code has moved off.
+
+        // AnalyticsService was refactored to push order filtering into the database - the comment in
+        // the service reads "DB-level filtered orders". It no longer calls findAll(), so stubbing
+        // that seam left sumTotalCostByHospitalAndShippingStatus and findByHospitalAndShippingStatus
+        // unstubbed: Mockito answered null and empty, totalSpend fell back to ZERO, and the first
+        // assertion failed with `expected: <0> but was: <1>` while every assertion after it never
+        // ran. Stubbing the current seams restores coverage of the real logic - the category
+        // resolution and accumulation still run over these rows.
+        List<EquipmentOrder> deliveredForThisHospital = Arrays.asList(order1, order2, order3);
+        when(orderRepository.sumTotalCostByHospitalAndShippingStatus("City General Hospital", "Delivered"))
+                .thenReturn(BigDecimal.valueOf(180000.00));
+        when(orderRepository.findByHospitalAndShippingStatus("City General Hospital", "Delivered"))
+                .thenReturn(deliveredForThisHospital);
+
+        // SLA compliance now loads only measurable completions through a dedicated query rather than
+        // filtering findByHospitalId in Java, so the legacy completed row with no trustworthy
+        // completedAt is excluded by the query instead of by the service. task1 met its deadline,
+        // task2 missed it -> 1 of 2 compliant.
+        when(taskRepository.findCompletedTasksWithTimestamps(hospitalId, MaintenanceStatus.COMPLETED))
+                .thenReturn(Arrays.asList(task1, task2));
+
+        when(equipmentRepository.countByHospitalId(hospitalId)).thenReturn(2L);
+        when(equipmentRepository.countByHospitalIdAndStatus(hospitalId, EquipmentStatus.UNDER_MAINTENANCE))
+                .thenReturn(1L);
+        when(equipmentRepository.countByHospitalIdAndWarrantyExpiryBetween(
+                eq(hospitalId), any(), any())).thenReturn(1L);
+
+        when(taskRepository.averageHoursWorkedByHospitalIdAndStatus(hospitalId, MaintenanceStatus.COMPLETED))
+                .thenReturn(4.0);
+        when(taskRepository.countByHospitalIdAndStatusNotAndPriority(
+                hospitalId, MaintenanceStatus.COMPLETED, "CRITICAL")).thenReturn(1L);
+        when(equipmentRepository.findNameAndCategoryByHospitalId(hospitalId)).thenReturn(List.of(
+                new Object[] {"MRI Scanner", EquipmentCategory.IMAGING},
+                new Object[] {"Patient Monitor", EquipmentCategory.MONITORING},
+                new Object[] {"Ventilator", EquipmentCategory.RESPIRATORY}));
 
         HospitalAnalyticsDto dto = analyticsService.getHospitalAnalytics(hospitalId);
 
@@ -163,11 +200,13 @@ public class AnalyticsServiceTest {
         // Spend check: 150000 + 5000 + 25000 = 180000.00
         assertEquals(0, BigDecimal.valueOf(180000.00).compareTo(dto.getTotalSpend()));
 
-        // Spend category mapping check
-        assertEquals(0, BigDecimal.valueOf(150000.00).compareTo(dto.getSpendByCategory().get("Imaging")));
-        assertEquals(0, BigDecimal.valueOf(5000.00).compareTo(dto.getSpendByCategory().get("Monitoring")));
-        assertEquals(0, BigDecimal.valueOf(25000.00).compareTo(dto.getSpendByCategory().get("Respiratory")));
-        assertNull(dto.getSpendByCategory().get("Surgical")); // processing order shouldn't count
+        // Spend category mapping check. Keys are EquipmentCategory constant names: the lookup path
+        // returns category.name() and the heuristic fallback now matches it, so a caller sees one
+        // vocabulary regardless of whether the ordered item matches a registered asset.
+        assertEquals(0, BigDecimal.valueOf(150000.00).compareTo(dto.getSpendByCategory().get("IMAGING")));
+        assertEquals(0, BigDecimal.valueOf(5000.00).compareTo(dto.getSpendByCategory().get("MONITORING")));
+        assertEquals(0, BigDecimal.valueOf(25000.00).compareTo(dto.getSpendByCategory().get("RESPIRATORY")));
+        assertNull(dto.getSpendByCategory().get("SURGICAL")); // processing order shouldn't count
 
         // SLA rate check: 1 of 2 measurable completions is compliant. The legacy
         // completed row without a trustworthy timestamp is excluded.

@@ -248,7 +248,8 @@ public class EquipmentServiceTest {
         assertEquals("Siemens A2", result.getModel());
         assertEquals("SN-12345-UPD", result.getSerialNumber());
         assertEquals("Cardiology", result.getDepartment());
-        assertEquals("Maintenance", result.getStatus());
+        // status is an EquipmentStatus enum, not a String. This assertion predates that migration.
+        assertEquals(com.medtrack.model.EquipmentStatus.UNDER_MAINTENANCE, result.getStatus());
         assertEquals(LocalDate.of(2025, 2, 2), result.getPurchaseDate());
 
         verify(equipmentRepository).save(mockEquipment);
