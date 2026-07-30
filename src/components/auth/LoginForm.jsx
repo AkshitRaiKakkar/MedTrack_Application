@@ -4,7 +4,7 @@ import { loginUser } from "../../services/AuthService";
 import MedTrackLogo from "../common/MedTrackLogo";
 
 export default function LoginForm({ onNavigate }) {
-  const { login } = useAuth();
+  const { login, revokedReason } = useAuth();
 
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
@@ -73,6 +73,17 @@ export default function LoginForm({ onNavigate }) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+
+        {/* Session ended by an administrator. Shown until the next sign-in attempt, so a user whose
+            session was revoked mid-use is told why rather than being silently returned to login. */}
+        {revokedReason && !error && (
+          <div
+            className="px-4 py-3 rounded-xl text-sm"
+            style={{ background: "#fffbeb", border: "1px solid #fde68a", color: "#b45309" }}
+          >
+            {revokedReason}
+          </div>
+        )}
 
         {/* Error */}
         {error && (
