@@ -10,9 +10,9 @@
 // being imported (a runtime ReferenceError), four route keys declared twice so the second was dead,
 // and fourteen security consoles that existed as page components but were unreachable from any URL.
 //
-// One entry per page here means a new console cannot be half-registered: routeRegistry.test.js
-// fails the build if a page under src/pages/auth/ is missing from this list, if two entries claim
-// the same slug, or if any registered component is undefined.
+// One entry per page here means a new console cannot be half-registered: scripts/check-routes.js
+// runs from `prebuild` and fails the build if a page under src/pages/auth/ is missing from this
+// list, if two entries claim the same slug, or if a referenced component is never imported.
 
 import LandingPage from "../pages/LandingPage";
 import Blog from "../pages/Blog";
@@ -197,7 +197,7 @@ export const ROUTES = [
  */
 const PARAMETERISED_ROUTES = ROUTES.filter((route) => route.param);
 
-/** slug -> page key. Built once; duplicates are a build failure, see routeRegistry.test.js. */
+/** slug -> page key. Built once; duplicates are a build failure, see scripts/check-routes.js. */
 export const SLUG_TO_PAGE = ROUTES.reduce((accumulator, route) => {
   route.slugs.forEach((slug) => {
     // A parameterised route shares its prefix with its list page (`blog` and `blog/:slug`);
@@ -265,6 +265,30 @@ export function buildPath(page, data) {
     return `/${slug}/${encodeURIComponent(data)}`;
   }
   return slug ? `/${slug}` : "/";
+}
+
+/**
+ * The page that will actually be rendered for a request.
+ *
+ * AppRoutes substitutes the login screen for an unauthenticated hit on a protected route, and the
+ * 404 page for an unknown slug. Layout chrome has to be decided from that substituted page rather
+ * than the requested one: keying it off the request wrapped the full-bleed login screen in the
+ * navbar and footer whenever a signed-out visitor hit /equipment. Both the router and App.jsx call
+ * this, so the two cannot disagree about what is on screen.
+ *
+ * @param {object|null} user  the authenticated user, or null
+ * @param {string} page       requested page key
+ * @returns {string} the page key that will be rendered
+ */
+export function resolveEffectivePage(user, page) {
+  if (!getRoute(page)) {
+    return "not-found";
+  }
+  const { allowed, reason } = checkAccess(user, page);
+  if (!allowed && reason === "unauthenticated") {
+    return "login";
+  }
+  return page;
 }
 
 /**

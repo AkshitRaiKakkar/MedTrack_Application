@@ -135,20 +135,24 @@ function main() {
   }
 
   // 4. No duplicate slugs. A parameterised route legitimately shares its prefix with its list page
-  //    (`blog` and `blog/:slug`), so those are compared separately.
+  //    (`blog` and `blog/:slug` are different routes), so the two kinds get their own map: a slug
+  //    may appear once as static and once as parameterised, but not twice within either kind.
+  //    Skipping parameterised routes outright, as an earlier version of this script did, let two
+  //    dynamic routes claim the same prefix — `resolvePath` would then always pick whichever came
+  //    first in ROUTES and the other would be permanently unreachable.
   const seenSlugs = new Map();
+  const seenParameterisedSlugs = new Map();
   for (const route of routes) {
-    if (route.isParameterised) {
-      continue;
-    }
+    const seen = route.isParameterised ? seenParameterisedSlugs : seenSlugs;
+    const kind = route.isParameterised ? 'parameterised ' : '';
     for (const slug of route.slugs) {
-      if (seenSlugs.has(slug)) {
+      if (seen.has(slug)) {
         fail(
-          `slug "${slug || '(root)'}" is claimed by both "${seenSlugs.get(slug)}" and `
+          `${kind}slug "${slug || '(root)'}" is claimed by both "${seen.get(slug)}" and `
           + `"${route.page}" - one of them is unreachable`
         );
       }
-      seenSlugs.set(slug, route.page);
+      seen.set(slug, route.page);
     }
   }
 
@@ -175,6 +179,7 @@ function main() {
 
   console.log(
     `check-routes: ${routes.length} routes, ${seenSlugs.size} slugs, `
+    + `${seenParameterisedSlugs.size} parameterised, `
     + `${authPages.length} security consoles - all consistent.`
   );
 }

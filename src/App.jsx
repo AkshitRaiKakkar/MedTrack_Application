@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ReactLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
@@ -9,7 +9,7 @@ import ScrollToTopButton from "./components/common/ScrollToTopButton";
 import CustomCursor from "./components/common/CustomCursor";
 import CookieBanner from "./components/common/CookieBanner";
 import AppRoutes from "./routes/AppRoutes";
-import { resolvePath, buildPath, hasChrome } from "./routes/routeRegistry";
+import { resolvePath, buildPath, hasChrome, resolveEffectivePage } from "./routes/routeRegistry";
 import { ThemeProvider } from "./context/ThemeContext";
 
 const BASE_PATH = "/MedTrack_Application";
@@ -35,6 +35,7 @@ const currentRoutePath = () =>
 const getRouteStateFromPath = () => resolvePath(currentRoutePath());
 
 function AppContent() {
+  const { user } = useAuth();
   const initialRoute = getRouteStateFromPath();
   const [currentPage, setCurrentPage] = useState(initialRoute.page);
   const [pageData, setPageData] = useState(initialRoute.data);
@@ -61,7 +62,12 @@ function AppContent() {
 
   // Whether a page shows the navbar and footer is a property of the route, declared once in the
   // registry, rather than a hard-coded list here that had to be kept in step with it.
-  const showChrome = hasChrome(currentPage);
+  //
+  // Evaluated against the *effective* page rather than the requested one. AppRoutes substitutes the
+  // login screen for an unauthenticated hit on a protected route, so keying chrome off currentPage
+  // wrapped the full-bleed login layout in the navbar and footer for a signed-out visit to
+  // /equipment. Both sides now derive the substitution from resolveEffectivePage.
+  const showChrome = hasChrome(resolveEffectivePage(user, currentPage));
 
   return (
     <ReactLenis root>

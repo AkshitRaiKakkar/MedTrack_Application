@@ -9,7 +9,7 @@
 
 import React from "react";
 import { useAuth } from "../context/AuthContext";
-import { getRoute, checkAccess } from "./routeRegistry";
+import { getRoute, checkAccess, resolveEffectivePage } from "./routeRegistry";
 import LoginPage from "../pages/auth/LoginPage";
 import NotFoundPage from "../pages/NotFoundPage";
 
@@ -36,17 +36,21 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
 export default function AppRouter({ currentPage, onNavigate, pageData }) {
   const { user } = useAuth();
 
-  const route = getRoute(currentPage);
+  // resolveEffectivePage decides which page actually renders: the requested one, or the login
+  // screen for an unauthenticated caller, or the 404 page for an unknown slug. App.jsx calls the
+  // same function to decide layout chrome, so the two cannot disagree about what is on screen.
+  const effectivePage = resolveEffectivePage(user, currentPage);
 
-  if (!route) {
+  if (effectivePage === "not-found") {
     return <NotFoundPage onNavigate={onNavigate} />;
   }
 
-  const { allowed, reason } = checkAccess(user, currentPage);
-
-  if (!allowed && reason === "unauthenticated") {
+  if (effectivePage === "login" && currentPage !== "login") {
     return <LoginPage onNavigate={onNavigate} />;
   }
+
+  const route = getRoute(currentPage);
+  const { allowed, reason } = checkAccess(user, currentPage);
 
   if (!allowed) {
     // The denial now names the roles permitted on the route. UnauthorizedPage has always accepted
