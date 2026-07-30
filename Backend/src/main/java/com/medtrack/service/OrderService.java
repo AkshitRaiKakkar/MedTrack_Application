@@ -24,6 +24,9 @@ import java.util.List;
 import com.medtrack.util.SupplierInvoicePdf;
 import com.medtrack.auth.service.EmailService;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -77,6 +80,14 @@ public class OrderService {
         if (authentication == null) return false;
         return authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_SUPPLIER"));
+    }
+
+    private String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("User not authenticated");
+        }
+        return authentication.getName();
     }
 
     public List<EquipmentOrder> getAllOrders() {
@@ -167,6 +178,81 @@ public class OrderService {
     public void deleteOrder(Long id) {
         EquipmentOrder order = getOrderById(id);
         orderRepository.delete(order);
+    }
+
+    /**
+     * Archives (soft deletes) an order by setting deleted = true.
+     * This is used instead of hard delete for audit compliance.
+     */
+    @Transactional
+    public EquipmentOrder archiveOrder(Long id, String deletedBy) {
+        EquipmentOrder order = getOrderById(id);
+        
+        order.setDeleted(true);
+        order.setDeletedAt(LocalDateTime.now());
+        order.setDeletedBy(deletedBy);
+        
+        EquipmentOrder savedOrder = orderRepository.save(order);
+        
+        // Log the archival
+        System.out.println("Order archived | User: " + deletedBy + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
+        
+        return savedOrder;
+    }
+
+    /**
+     * Restores an archived order (admin only).
+     * Only available within 90 days of archival.
+     */
+    @Transactional
+    public EquipmentOrder restoreOrder(Long id, String username) {
+        EquipmentOrder order = orderRepository.findByIdAndDeletedTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived order not found"));
+
+        // Check if 90 days have passed since archival
+        if (order.getDeletedAt() != null && order.getDeletedAt().isBefore(LocalDateTime.now().minusDays(90))) {
+            throw new IllegalStateException("Order cannot be restored after 90 days");
+        }
+
+        order.setDeleted(false);
+        order.setDeletedAt(null);
+        order.setDeletedBy(null);
+
+        EquipmentOrder savedOrder = orderRepository.save(order);
+
+        // Log the restoration
+        System.out.println("Order restored | User: " + username + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
+
+        return savedOrder;
+    }
+
+    /**
+     * Gets paginated archived orders for the current user's hospital.
+     */
+    public Page<EquipmentOrder> getArchivedOrders(Pageable pageable) {
+        if (isSupplier()) {
+            return orderRepository.findByDeletedTrue(pageable);
+        }
+        return orderRepository.findByHospitalAndDeletedTrue(getCurrentUserOrganization(), pageable);
+    }
+
+    /**
+     * Permanently deletes an archived order (admin only).
+     * Only callable after 90 days from archival.
+     */
+    @Transactional
+    public void permanentlyDeleteOrder(Long id) {
+        EquipmentOrder order = orderRepository.findByIdAndDeletedTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived order not found"));
+
+        // Check if 90 days have passed since archival
+        if (order.getDeletedAt() != null && order.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
+            throw new IllegalStateException("Order cannot be permanently deleted until 90 days after archival");
+        }
+
+        orderRepository.delete(order);
+
+        System.out.println("Order permanently deleted | User: " + getCurrentUsername() + " | Order ID: " + id + " | Order Code: " + order.getOrderCode());
     }
 
     public SupplierMetricsDto getSupplierMetrics() {

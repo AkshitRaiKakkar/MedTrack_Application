@@ -25,6 +25,10 @@ import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+
 @RestController
 @RequestMapping("/api/equipment")
 @RequiredArgsConstructor
@@ -184,6 +188,69 @@ public class EquipmentController {
     public ResponseEntity<Void> deleteEquipment(@PathVariable Long id, Principal principal) {
         validateId(id);
         equipmentService.deleteEquipment(id, principal.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Archives (soft deletes) an equipment record.
+     * Instead of hard deleting, sets deleted = true for audit compliance.
+     *
+     * @param id the equipment identifier
+     * @param principal the authenticated user's security principal
+     * @return the archived equipment record
+     */
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Equipment> archiveEquipment(@PathVariable Long id, Principal principal) {
+        validateId(id);
+        Equipment archived = equipmentService.archiveEquipment(id, principal.getName());
+        return ResponseEntity.ok(archived);
+    }
+
+    /**
+     * Restores an archived equipment record.
+     * Only available within 90 days of archival.
+     *
+     * @param id the equipment identifier
+     * @param principal the authenticated user's security principal
+     * @return the restored equipment record
+     */
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Equipment> restoreEquipment(@PathVariable Long id, Principal principal) {
+        validateId(id);
+        Equipment restored = equipmentService.restoreEquipment(id, principal.getName());
+        return ResponseEntity.ok(restored);
+    }
+
+    /**
+     * Lists all archived (soft-deleted) equipment for the user's hospital.
+     *
+     * @param pageable pagination parameters
+     * @param principal the authenticated user's security principal
+     * @return paginated list of archived equipment
+     */
+    @GetMapping("/archived")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Page<Equipment>> getArchivedEquipment(
+            @PageableDefault(sort = "deletedAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable,
+            Principal principal) {
+        return ResponseEntity.ok(equipmentService.getArchivedEquipment(principal.getName(), pageable));
+    }
+
+    /**
+     * Permanently deletes an archived equipment record (admin only).
+     * Only callable after 90 days from archival.
+     *
+     * @param id the equipment identifier
+     * @param principal the authenticated user's security principal
+     * @return HTTP 204 No Content when successful
+     */
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Void> permanentlyDeleteEquipment(@PathVariable Long id, Principal principal) {
+        validateId(id);
+        equipmentService.permanentlyDeleteEquipment(id, principal.getName());
         return ResponseEntity.noContent().build();
     }
 
@@ -381,5 +448,56 @@ public class EquipmentController {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("Invalid resource ID.");
         }
+    }
+
+    /**
+     * Archives (soft deletes) an equipment record.
+     */
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Void> archiveEquipment(
+            @PathVariable Long id,
+            Principal principal) {
+        validateId(id);
+        equipmentService.archiveEquipment(id, principal.getName());
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Lists archived equipment for the current hospital.
+     */
+    @GetMapping("/archived")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Page<Equipment>> getArchivedEquipment(
+            @PageableDefault(size = 20, sort = "deletedAt", direction = Sort.Direction.DESC) Pageable pageable,
+            Principal principal) {
+        Page<Equipment> archived = equipmentService.getArchivedEquipment(pageable, principal.getName());
+        return ResponseEntity.ok(archived);
+    }
+
+    /**
+     * Restores an archived equipment record.
+     */
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Void> restoreEquipment(
+            @PathVariable Long id,
+            Principal principal) {
+        validateId(id);
+        equipmentService.restoreEquipment(id, principal.getName());
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Permanently deletes an archived equipment record (after 90 days).
+     */
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Void> permanentlyDeleteEquipment(
+            @PathVariable Long id,
+            Principal principal) {
+        validateId(id);
+        equipmentService.permanentlyDeleteEquipment(id, principal.getName());
+        return ResponseEntity.ok().build();
     }
 }
