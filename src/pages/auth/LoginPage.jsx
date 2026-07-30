@@ -5,11 +5,21 @@ import { loginUser } from "../../services/AuthService";
 import MedTrackLogo from "../../components/common/MedTrackLogo";
 import "./auth.css";
 
+// Pre-filled only in non-production builds, as a local-dev convenience that
+// pairs with AuthService's dev-only demo login shortcut. Dead-code eliminated
+// from production bundles by react-scripts, same as that shortcut.
+const isDevBuild = process.env.NODE_ENV !== 'production';
+const DEMO_CREDENTIALS = {
+  hospital: { email: "hospital@medtrack.com", password: "admin123" },
+  technician: { email: "tech@medtrack.com", password: "tech123" },
+  supplier: { email: "supplier@medtrack.com", password: "supplier123" },
+};
+
 export default function LoginPage({ onNavigate }) {
   const { login } = useAuth();
   const [selectedRole, setSelectedRole] = useState("hospital");
-  const [email, setEmail] = useState("hospital@medtrack.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState(isDevBuild ? DEMO_CREDENTIALS.hospital.email : "");
+  const [password, setPassword] = useState(isDevBuild ? DEMO_CREDENTIALS.hospital.password : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,15 +62,9 @@ export default function LoginPage({ onNavigate }) {
 
   const handleRoleChange = (roleKey) => {
     setSelectedRole(roleKey);
-    if (roleKey === "hospital") {
-      setEmail("hospital@medtrack.com");
-      setPassword("admin123");
-    } else if (roleKey === "technician") {
-      setEmail("tech@medtrack.com");
-      setPassword("tech123");
-    } else if (roleKey === "supplier") {
-      setEmail("supplier@medtrack.com");
-      setPassword("supplier123");
+    if (isDevBuild && DEMO_CREDENTIALS[roleKey]) {
+      setEmail(DEMO_CREDENTIALS[roleKey].email);
+      setPassword(DEMO_CREDENTIALS[roleKey].password);
     }
   };
 

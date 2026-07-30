@@ -63,7 +63,7 @@ public class AnalyticsService {
 
         // 4. Critical Pending Count — database-level aggregation
         long criticalPending = taskRepository.countByHospitalIdAndStatusNotAndPriority(
-                hospitalId, MaintenanceStatus.COMPLETED, "CRITICAL");
+                hospitalId, MaintenanceStatus.COMPLETED, "Critical");
 
         // 5. Total Spend & Category Spend — DB-level filtered orders + lightweight category mapping
         String hospitalName = hospital.getName();
@@ -109,12 +109,25 @@ public class AnalyticsService {
             if (category != null) return category;
         }
 
-        if (eqName == null) return "Other";
+        // The heuristic fallback below must speak the same vocabulary as the lookup above, which
+        // returns EquipmentCategory.name(). It previously returned Title-Case strings, so the key a
+        // caller saw depended on whether the order's equipmentName happened to match a registered
+        // asset: the same category could appear as both "IMAGING" and "Imaging" in one response, and
+        // a dashboard keying on either would silently miss half the spend.
+        if (eqName == null) return EquipmentCategory.OTHER.name();
         String lower = eqName.toLowerCase();
-        if (lower.contains("mri") || lower.contains("scan") || lower.contains("imaging")) return "Imaging";
-        if (lower.contains("pump") || lower.contains("monitor")) return "Monitoring";
-        if (lower.contains("ventilator") || lower.contains("respiratory")) return "Respiratory";
-        if (lower.contains("laser") || lower.contains("surgical")) return "Surgical";
-        return "Other";
+        if (lower.contains("mri") || lower.contains("scan") || lower.contains("imaging")) {
+            return EquipmentCategory.IMAGING.name();
+        }
+        if (lower.contains("pump") || lower.contains("monitor")) {
+            return EquipmentCategory.MONITORING.name();
+        }
+        if (lower.contains("ventilator") || lower.contains("respiratory")) {
+            return EquipmentCategory.RESPIRATORY.name();
+        }
+        if (lower.contains("laser") || lower.contains("surgical")) {
+            return EquipmentCategory.SURGICAL.name();
+        }
+        return EquipmentCategory.OTHER.name();
     }
 }

@@ -86,6 +86,17 @@ public class ScimProvisioningServiceTest {
 
     @Test
     void deprovisionScimUser_Success() {
+        // deprovisionScimUser reads policy.getDefaultDeprovisionAction() to decide between
+        // SUSPENDED and DELETED. Without this stub getOrCreatePolicy() falls through to an unstubbed
+        // save(), which Mockito answers with null, and the method NPEs before it reaches the
+        // assertions below.
+        when(policyRepository.findByPolicyName("MASTER_SCIM_POLICY"))
+                .thenReturn(Optional.of(ScimProvisioningPolicy.builder()
+                        .id(1L)
+                        .policyName("MASTER_SCIM_POLICY")
+                        .defaultDeprovisionAction("SUSPEND")
+                        .build()));
+
         ScimUserMapping mapping = ScimUserMapping.builder()
                 .id(1L)
                 .scimExternalId("okta-999")

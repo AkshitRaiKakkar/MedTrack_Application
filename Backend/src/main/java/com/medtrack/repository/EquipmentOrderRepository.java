@@ -44,4 +44,13 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
 
     @Query("SELECT o FROM EquipmentOrder o WHERE LOWER(o.hospital) = LOWER(:hospitalName) AND LOWER(o.shippingStatus) = LOWER(:shippingStatus)")
     List<EquipmentOrder> findByHospitalAndShippingStatus(@Param("hospitalName") String hospitalName, @Param("shippingStatus") String shippingStatus);
+
+    // Soft delete - archived records (deleted = true)
+    List<EquipmentOrder> findByDeletedTrue();
+
+    Page<EquipmentOrder> findByDeletedTrue(Pageable pageable);
+
+    Page<EquipmentOrder> findByHospitalAndDeletedTrue(String hospital, Pageable pageable);
+
+    Optional<EquipmentOrder> findByIdAndDeletedTrue(Long id);
 }

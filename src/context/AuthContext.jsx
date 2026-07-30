@@ -147,3 +147,6 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
+// Exported for testing — allows MockAuthProvider to wrap components with a known context value
+export { AuthContext };
