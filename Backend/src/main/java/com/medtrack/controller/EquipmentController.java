@@ -67,6 +67,18 @@ public class EquipmentController {
         );
     }
 
+    @GetMapping("/age-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<String, Long>> getEquipmentAgeSummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentAgeSummary(
+                        principal.getName()
+                )
+        );
+    }
+
     @GetMapping("/statistics")
     public ResponseEntity<EquipmentStatisticsResponse> getStatistics(
             Principal principal) {
