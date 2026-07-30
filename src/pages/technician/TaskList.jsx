@@ -1,22 +1,29 @@
 import { useState, useEffect } from "react";
 import { getAllTasks } from "../../services/MaintenanceService";
 import { useAuth } from "../../context/AuthContext";
+import Pagination from "../../components/common/Pagination";
 
 export default function TaskList({ onNavigate }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
 
   useEffect(() => {
     fetchTasks();
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllTasks();
-      setTasks(data);
+      const response = await getAllTasks({ page: pageNum, size: pageSize });
+      const items = response?.content || response?.data || [];
+      setTasks(items);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
       setError(null);
     } catch (err) {
       console.error("Error fetching tasks:", err);
@@ -24,6 +31,10 @@ export default function TaskList({ onNavigate }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchTasks(newPage);
   };
 
   if (loading) {
@@ -163,6 +174,8 @@ export default function TaskList({ onNavigate }) {
           <p className="text-secondary">You're all caught up! New assignments will appear here.</p>
         </div>
       )}
+
+      <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
     </div>
   );
 }

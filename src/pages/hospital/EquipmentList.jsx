@@ -7,6 +7,7 @@ import {
   getEquipmentQrCode,
 } from "../../services/EquipmentService";
 import { useAuth } from "../../context/AuthContext";
+import Pagination from "../../components/common/Pagination";
 
 /* ===========================
    DEFAULT PUBLIC EQUIPMENT
@@ -92,6 +93,9 @@ export default function EquipmentList({ onNavigate }) {
   const [statusFilter, setStatusFilter] = useState("All");
   const [hoveredCard, setHoveredCard] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [equipmentDetails, setEquipmentDetails] = useState(null);
@@ -200,17 +204,24 @@ export default function EquipmentList({ onNavigate }) {
     return Array.from(equipmentMap.values());
   };
 
-  const fetchEquipment = async () => {
+  const fetchEquipment = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllEquipment();
-      setEquipment(Array.isArray(data) ? mergeEquipment(data) : PUBLIC_EQUIPMENT);
+      const response = await getAllEquipment(pageNum, pageSize);
+      const items = response?.content || response?.data || [];
+      setEquipment(Array.isArray(items) ? mergeEquipment(items) : PUBLIC_EQUIPMENT);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
     } catch (error) {
       console.error("Failed to fetch equipment", error);
       setEquipment(PUBLIC_EQUIPMENT);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchEquipment(newPage);
   };
 
   const handleViewDetails = async (id) => {
@@ -379,7 +390,7 @@ export default function EquipmentList({ onNavigate }) {
       {/* Result Summary */}
       <div className="mb-6 rounded-xl border border-subtle bg-card p-4 shadow-sm">
         <p className="text-primary font-semibold">
-          Showing {filtered.length} of {equipment.length} equipment items
+          Showing {filtered.length} of {equipment.length} equipment items (Page {page + 1} of {totalPages})
         </p>
         <p className="text-secondary text-sm mt-1">
           Department: {departmentFilter === "All" ? "All Departments" : departmentFilter}
@@ -493,6 +504,10 @@ export default function EquipmentList({ onNavigate }) {
             </div>
           ))}
         </div>
+      )}
+
+      {!loading && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
       )}
 
       {/* Equipment Details Modal */}

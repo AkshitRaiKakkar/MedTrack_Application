@@ -16,6 +16,7 @@ import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -63,27 +64,13 @@ public class MaintenanceService {
             MaintenanceStatus.COMPLETED, EnumSet.noneOf(MaintenanceStatus.class)
     );
 /// updates:-
-    public List<MaintenanceTask> getAllTasks(Authentication authentication) {
-        // Scope lists from the trusted JWT identity instead of a client-supplied filter.
-        if (hasRole(authentication, "HOSPITAL")) {
-            return taskRepository.findByHospitalId(getHospitalForUser(authentication).getId());
-        }
-        if (hasRole(authentication, "TECHNICIAN")) {
-            return taskRepository.findByAssignedTechnicianId(
-                    getAuthenticatedTechnician(authentication).getId());
-        }
-        throw new AccessDeniedException("This role cannot access maintenance tasks");
-    }
-
-    public List<MaintenanceTask> getAllTasks(
+    public Page<MaintenanceTask> getAllTasks(
             Authentication authentication,
             String statusValue,
             String equipmentId,
-            Integer page,
-            Integer size) {
+            Pageable pageable) {
         MaintenanceStatus status = parseStatusFilter(statusValue);
         String normalizedEquipmentId = normalizeOptionalFilter(equipmentId);
-        Pageable pageable = resolvePageable(page, size);
 
         if (hasRole(authentication, "HOSPITAL")) {
             Long hospitalId = getHospitalForUser(authentication).getId();

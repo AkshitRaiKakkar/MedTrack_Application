@@ -3,6 +3,7 @@ package com.medtrack.repository;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -29,13 +30,17 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             + "AND task.equipmentRecord.hospital.id = :hospitalId")
     List<MaintenanceTask> findByHospitalId(@Param("hospitalId") Long hospitalId);
 
-    @Query("SELECT task FROM MaintenanceTask task "
+    @Query(value = "SELECT task FROM MaintenanceTask task "
             + "WHERE task.hospitalId = :hospitalId "
             + "AND task.equipmentRecord.hospital.id = :hospitalId "
             + "AND (:status IS NULL OR task.status = :status) "
-            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId) "
-            + "ORDER BY task.deadline ASC, task.id ASC")
-    List<MaintenanceTask> findByHospitalIdWithFilters(
+            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId)",
+            countQuery = "SELECT COUNT(task) FROM MaintenanceTask task "
+            + "WHERE task.hospitalId = :hospitalId "
+            + "AND task.equipmentRecord.hospital.id = :hospitalId "
+            + "AND (:status IS NULL OR task.status = :status) "
+            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId)")
+    Page<MaintenanceTask> findByHospitalIdWithFilters(
             @Param("hospitalId") Long hospitalId,
             @Param("status") MaintenanceStatus status,
             @Param("equipmentId") String equipmentId,
@@ -55,13 +60,17 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             @Param("id") Long id,
             @Param("technicianId") Long technicianId);
 
-    @Query("SELECT task FROM MaintenanceTask task "
+    @Query(value = "SELECT task FROM MaintenanceTask task "
             + "WHERE task.assignedTechnicianRecord.id = :technicianId "
             + "AND task.equipmentRecord.hospital.id = task.hospitalId "
             + "AND (:status IS NULL OR task.status = :status) "
-            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId) "
-            + "ORDER BY task.deadline ASC, task.id ASC")
-    List<MaintenanceTask> findByAssignedTechnicianIdWithFilters(
+            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId)",
+            countQuery = "SELECT COUNT(task) FROM MaintenanceTask task "
+            + "WHERE task.assignedTechnicianRecord.id = :technicianId "
+            + "AND task.equipmentRecord.hospital.id = task.hospitalId "
+            + "AND (:status IS NULL OR task.status = :status) "
+            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId)")
+    Page<MaintenanceTask> findByAssignedTechnicianIdWithFilters(
             @Param("technicianId") Long technicianId,
             @Param("status") MaintenanceStatus status,
             @Param("equipmentId") String equipmentId,

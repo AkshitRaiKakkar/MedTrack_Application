@@ -19,6 +19,8 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
 
     List<EquipmentOrder> findByHospital(String hospital);
 
+    Page<EquipmentOrder> findByHospital(String hospital, Pageable pageable);
+
     List<EquipmentOrder> findByStatus(String status);
 
     List<EquipmentOrder> findByEquipmentId(String equipmentId);

@@ -1,8 +1,8 @@
 import API from "./HttpService";
 
-// Fetch all orders
-export const getAllOrders = async () => {
-  const response = await API.get("/api/orders");
+// Fetch orders with pagination
+export const getAllOrders = async (page = 0, size = 20) => {
+  const response = await API.get(`/api/orders?page=${page}&size=${size}`);
   return response.data;
 };
 

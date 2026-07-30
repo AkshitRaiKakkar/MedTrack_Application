@@ -134,19 +134,10 @@ public class EquipmentService {
     }
 
     /**
-     * Fetches all equipment records from the database.
-     * Used by the "get all equipment" list view on the frontend.
+     * Fetches a paginated list of equipment records.
      */
-    public List<Equipment> getAllEquipment(String username) {
+    public Page<Equipment> getAllEquipment(String username, Pageable pageable) {
         Hospital hospital = getHospitalForUser(username);
-        return equipmentRepository.findByHospitalId(hospital.getId());
-    }
-    public Page<Equipment> getEquipmentPage(
-            String username,
-            Pageable pageable) {
-
-        Hospital hospital = getHospitalForUser(username);
-
         return equipmentRepository.findByHospitalId(hospital.getId(), pageable);
     }
 
