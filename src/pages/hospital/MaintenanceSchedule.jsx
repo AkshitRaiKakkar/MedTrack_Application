@@ -186,16 +186,10 @@ export default function MaintenanceSchedule({ onNavigate }) {
                       <div className="flex flex-col items-center">
                         <span className="text-4xl mb-2">🛠️</span>
                         <p className="font-medium">No maintenance tasks scheduled yet.</p>
-                        <button 
-                          onClick={() => onNavigate('schedule-maintenance')}
-                          className="mt-4 text-teal-600 hover:text-teal-700 dark:hover:text-teal-500 text-sm font-semibold"
-                        >
-                          Schedule your first task
-                        </button>
                         {user?.role === "hospital" && (
-                          <button 
+                          <button
                             onClick={() => onNavigate('schedule-maintenance')}
-                            className="mt-4 text-teal-600 hover:text-teal-700 text-sm font-semibold"
+                            className="mt-4 text-teal-600 hover:text-teal-700 dark:hover:text-teal-500 text-sm font-semibold"
                           >
                             Schedule your first task
                           </button>

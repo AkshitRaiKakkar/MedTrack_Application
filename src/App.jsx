@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { ReactLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
 import { AuthProvider } from "./context/AuthContext";
+import { ToastProvider, useToast } from "./context/ToastContext";
+import ToastContainer from "./components/common/ToastContainer";
+import { errorEmitter } from "./services/HttpService";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
@@ -137,6 +140,15 @@ function AppContent() {
   const initialRoute = getRouteStateFromPath();
   const [currentPage, setCurrentPage] = useState(initialRoute.page);
   const [pageData, setPageData] = useState(initialRoute.data);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    const handler = (e) => {
+      addToast(e.detail.message, e.detail.type);
+    };
+    errorEmitter.addEventListener("toast", handler);
+    return () => errorEmitter.removeEventListener("toast", handler);
+  }, [addToast]);
 
   const handleNavigate = (page, data = null) => {
     setCurrentPage(page);
@@ -189,6 +201,7 @@ function AppContent() {
       >
 
         <CustomCursor />
+        <ToastContainer />
         {!isAuthPage && (
           <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
         )}
@@ -234,7 +247,9 @@ export default function App() {
     <AuthProvider>
       <ThemeProvider>
         <ErrorBoundary>
-          <AppContent />
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
         </ErrorBoundary>
       </ThemeProvider>
     </AuthProvider>

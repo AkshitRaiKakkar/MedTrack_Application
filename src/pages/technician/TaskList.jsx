@@ -75,7 +75,7 @@ export default function TaskList({ onNavigate }) {
           <div className="bg-card px-4 py-2 rounded-xl border border-subtle shadow-sm">
             <span className="text-sm text-secondary block">Pending</span>
             <span className="text-xl font-bold text-orange-500">
-              {tasks.filter(t => t.status === 'Pending').length}
+              {tasks.filter(t => t.status === 'Scheduled').length}
             </span>
           </div>
         </div>

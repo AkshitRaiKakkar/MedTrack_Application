@@ -33,7 +33,9 @@ import java.io.InputStreamReader;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -530,6 +532,9 @@ public class EquipmentService {
         List<EquipmentImportSummary.RowFailure> failures = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
+        // Serial numbers already claimed by an earlier row in this same file, so a
+        // duplicate further down the file is caught before it ever reaches saveAll.
+        Set<String> serialNumbersInFile = new HashSet<>();
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String headerLine = reader.readLine();
@@ -647,6 +652,22 @@ public class EquipmentService {
                     parsedStatus = EquipmentStatus.UNDER_MAINTENANCE;
                 } else if ("Retired".equalsIgnoreCase(status) || "RETIRED".equalsIgnoreCase(status)) {
                     parsedStatus = EquipmentStatus.RETIRED;
+                }
+
+                if (serialNumber != null && !serialNumber.trim().isEmpty()) {
+                    String normalizedSerial = serialNumber.trim();
+                    if (!serialNumbersInFile.add(normalizedSerial)) {
+                        failures.add(new EquipmentImportSummary.RowFailure(
+                                rowNum, line, "Duplicate Serial Number within this file: " + normalizedSerial));
+                        failureCount++;
+                        continue;
+                    }
+                    if (equipmentRepository.findBySerialNumber(normalizedSerial).isPresent()) {
+                        failures.add(new EquipmentImportSummary.RowFailure(
+                                rowNum, line, "Serial Number already exists in inventory: " + normalizedSerial));
+                        failureCount++;
+                        continue;
+                    }
                 }
 
                 Equipment equipment = Equipment.builder()
