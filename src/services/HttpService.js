@@ -1,5 +1,7 @@
 import axios from "axios";
 
+const errorEmitter = new EventTarget();
+
 const API = axios.create({
   baseURL: process.env.REACT_APP_API_URL || "http://localhost:8081",
   headers: {
@@ -31,23 +33,28 @@ API.interceptors.request.use(
   }
 );
 
-// Intercept responses to handle 403 Forbidden errors globally
+// Intercept responses to handle 401/403 errors globally via toast events
+// instead of blocking alert() dialogs.
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    const status=error.response?.status;
-    if(status==401){
+    const status = error.response?.status;
+    if (status === 401) {
       sessionStorage.removeItem("medtrack_user");
-      alert("Session expired. Please login again.");
-      window.location.href="/login";
-    }
-    else if(status==403){
-      alert("Access denied: You are not authorised to perform this action.");
-    }
-    else{
+      errorEmitter.dispatchEvent(new CustomEvent("toast", {
+        detail: { message: "Session expired. Please login again.", type: "error" }
+      }));
+      setTimeout(() => { window.location.href = "/login"; }, 100);
+    } else if (status === 403) {
+      errorEmitter.dispatchEvent(new CustomEvent("toast", {
+        detail: { message: "Access denied: You are not authorised to perform this action.", type: "error" }
+      }));
+    } else {
       console.error("API request failed:", error.response?.data || error.message);
     }
     return Promise.reject(error);
   }
 );
+
+export { errorEmitter };
 export default API;
