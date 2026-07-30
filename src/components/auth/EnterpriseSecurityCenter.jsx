@@ -37,7 +37,8 @@ import {
   Network,
   Package,
   Sliders,
-  BrainCircuit
+  BrainCircuit,
+  Binary
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -57,6 +58,7 @@ import HipaaDeidentificationPanel from "./HipaaDeidentificationPanel";
 import ZeroTrustGovernancePanel from "./ZeroTrustGovernancePanel";
 import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import AiModelGovernancePanel from "./AiModelGovernancePanel";
+import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -394,7 +396,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "sbom", label: "SBOM & Supply Chain", icon: Package },
           { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff },
           { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders },
-          { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit }
+          { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit },
+          { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -835,6 +838,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 16: AI MODEL RISK & ALGORITHMIC BIAS GOVERNANCE */}
       {selectedTab === "aimodel" && (
         <AiModelGovernancePanel />
+      )}
+
+      {/* TAB 17: POST-QUANTUM CRYPTOGRAPHY & QUANTUM SECURITY ENGINE */}
+      {selectedTab === "pqc" && (
+        <PostQuantumCryptoPanel />
       )}
 
       {/* 4. MODALS */}
