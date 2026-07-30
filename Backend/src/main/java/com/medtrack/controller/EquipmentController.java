@@ -3,6 +3,7 @@ package com.medtrack.controller;
 import com.medtrack.dto.EquipmentStatisticsResponse;
 import com.medtrack.dto.LowStockSummaryResponse;
 import com.medtrack.dto.StockAdjustmentRequest;
+import com.medtrack.dto.WarrantySummaryResponse;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentCategory;
 import com.medtrack.model.EquipmentStatus;
@@ -93,7 +94,7 @@ public class EquipmentController {
 
     @GetMapping("/warranty-summary")
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Map<String, Long>> getWarrantySummary(
+    public ResponseEntity<WarrantySummaryResponse> getWarrantySummary(
             Principal principal) {
 
         return ResponseEntity.ok(

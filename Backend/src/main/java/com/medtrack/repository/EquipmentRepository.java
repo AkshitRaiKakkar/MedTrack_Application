@@ -70,4 +70,23 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     // They were also declared here as derived queries, which is a duplicate method signature
     // and is rejected by javac, so only the @Query declarations are kept.
     long countByHospitalIdAndWarrantyExpiryBefore(Long hospitalId, LocalDate date);
+
+    /**
+     * Equipment with no warranty date recorded.
+     *
+     * <p>Needed because the comparison queries above translate to SQL comparisons, and
+     * {@code NULL < today} evaluates to UNKNOWN rather than true. A null-warranty row is therefore
+     * excluded from both the expired and expiring-soon counts, and was previously absorbed into
+     * "valid" by a {@code total - expired} subtraction - reporting unknown coverage as confirmed
+     * coverage.</p>
+     */
+    long countByHospitalIdAndWarrantyExpiryIsNull(Long hospitalId);
+
+    /**
+     * Equipment whose warranty expires strictly after the given date.
+     *
+     * <p>Used with a 30-day horizon so "valid" means "not expiring soon either", making the four
+     * warranty buckets disjoint.</p>
+     */
+    long countByHospitalIdAndWarrantyExpiryAfter(Long hospitalId, LocalDate date);
 }
