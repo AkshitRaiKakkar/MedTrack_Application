@@ -105,7 +105,7 @@ public class DataInitializer implements CommandLineRunner {
                     .serialNumber("SN-9921-A")
                     .department("Radiology")
                     .status(EquipmentStatus.ACTIVE)
-                    .category("Imaging")
+                    .category(EquipmentCategory.IMAGING)
                     .purchaseDate(LocalDate.now().minusYears(2))
                     .hospital(hospital)
                     .build());
@@ -119,7 +119,7 @@ public class DataInitializer implements CommandLineRunner {
                     .serialNumber("SN-1102-B")
                     .department("ICU")
                     .status(EquipmentStatus.UNDER_MAINTENANCE)
-                    .category("Respiratory")
+                    .category(EquipmentCategory.RESPIRATORY)
                     .purchaseDate(LocalDate.now().minusMonths(6))
                     .hospital(hospital)
                     .build());
@@ -133,6 +133,8 @@ public class DataInitializer implements CommandLineRunner {
                     .orElseThrow(() -> new IllegalStateException("Seed MRI equipment was not created"));
             Equipment ventilator = equipmentRepository.findByEquipmentCode("EQ-1002")
                     .orElseThrow(() -> new IllegalStateException("Seed ventilator equipment was not created"));
+            User technician = userRepository.findByEmail("tech@medtrack.com")
+                    .orElseThrow(() -> new IllegalStateException("Seed technician user was not created"));
 
             maintenanceTaskRepository.save(MaintenanceTask.builder()
                     .taskCode("MNT-5001")
@@ -161,6 +163,7 @@ public class DataInitializer implements CommandLineRunner {
                     .priority("Critical")
                     .status(MaintenanceStatus.IN_PROGRESS)
                     .assignedTechnician("tech@medtrack.com")
+                    .assignedTechnicianRecord(technician)
                     .description("Oxygen sensor failure reported. Requires calibration.")
                     .build());
         }

@@ -38,7 +38,7 @@ export default function Dashboard({ onNavigate }) {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      if (user?.id === 'demo-user') {
+      if (user?.id?.startsWith('demo-')) {
         setEquipmentList([
           { id: 1, name: 'MRI Machine', status: 'OPERATIONAL' },
           { id: 2, name: 'X-Ray Scanner', status: 'OPERATIONAL' },
@@ -88,48 +88,48 @@ export default function Dashboard({ onNavigate }) {
 
             <nav className="space-y-1">
               {/* Main Menu */}
-              <button className="w-full flex items-center gap-4 px-4 py-3 text-sm font-bold text-gray-900 bg-white rounded-xl shadow-sm border border-gray-100 mb-1">
+              <button onClick={() => onNavigate && onNavigate("dashboard")} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-bold text-gray-900 bg-white rounded-xl shadow-sm border border-gray-100 mb-1 hover:bg-gray-50 transition-colors">
                 <LayoutGrid size={18} className="text-gray-900" /> Dashboard
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("equipment")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Box size={18} /> Equipment
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("maintenance")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <ClipboardList size={18} /> Maintenance
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Users size={18} /> Staff
+              <button onClick={() => onNavigate && onNavigate("scim-provisioning")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Users size={18} /> Staff (SCIM)
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <MessageSquare size={18} /> Messages
+              <button onClick={() => onNavigate && onNavigate("siem-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <MessageSquare size={18} /> Messages (SIEM)
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("analytics")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <LineChart size={18} /> Analytics
               </button>
 
               <div className="my-4 border-t border-gray-100"></div>
 
               {/* Secondary Menu */}
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("security-commandcenter")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Mail size={18} /> Notifications
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Workflow size={18} /> Workflows
+              <button onClick={() => onNavigate && onNavigate("soar-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Workflow size={18} /> Workflows (SOAR)
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Puzzle size={18} /> Integrations
+              <button onClick={() => onNavigate && onNavigate("sso-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Puzzle size={18} /> Integrations (SSO)
               </button>
 
               <div className="my-4 border-t border-gray-100"></div>
 
               {/* Bottom Menu */}
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("help")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <HelpCircle size={18} /> Help Center
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("help")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <MessageCircle size={18} /> Feedback
               </button>
-              <button className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => onNavigate && onNavigate("authority-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Settings size={18} /> Settings
               </button>
             </nav>

@@ -2,12 +2,11 @@ package com.medtrack.model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 
 import java.time.LocalDate;
 
@@ -51,14 +50,39 @@ public class Equipment {
     private String department;
 
     /**
-     * Status values: "Operational", "Maintenance", "Retired"
-     * Matches AddEquipmentForm.jsx options
+     * Status values: ACTIVE, UNDER_MAINTENANCE, RETIRED
      */
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private EquipmentStatus status = EquipmentStatus.ACTIVE;
 
-    private String category;
+    @Enumerated(EnumType.STRING)
+    private EquipmentCategory category;
+
+    /**
+     * Units of this asset currently held by the owning hospital.
+     *
+     * <p>Modelled as {@link Integer} rather than {@code int} deliberately. A primitive would
+     * deserialise an omitted JSON property as {@code 0}, so a {@code PUT /api/equipment/{id}} that
+     * did not mention stock would silently zero it. The service can only distinguish
+     * "not supplied" from "set to zero" if the field is nullable in transit.</p>
+     */
+    @PositiveOrZero(message = "Quantity cannot be negative")
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer quantity = 0;
+
+    /**
+     * Reorder threshold. An asset is reported by {@code GET /api/equipment/low-stock} once
+     * {@code quantity <= minimumStock}.
+     *
+     * <p>The default of 10 matches the value {@code EquipmentService.addEquipment} already applied
+     * when a caller omitted the field.</p>
+     */
+    @PositiveOrZero(message = "Minimum stock cannot be negative")
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer minimumStock = 10;
 
     private LocalDate purchaseDate;
 
@@ -68,6 +92,6 @@ public class Equipment {
      * Many Equipment items belong to one Hospital.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "hospital_id") // removed insertable=false, updatable=false
+    @JoinColumn(name = "hospital_id")
     private Hospital hospital;
 }

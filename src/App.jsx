@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { ReactLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
 import { AuthProvider } from "./context/AuthContext";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
 import ScrollToTopButton from "./components/common/ScrollToTopButton";
 import CustomCursor from "./components/common/CustomCursor";
+import CookieBanner from "./components/common/CookieBanner";
 import AppRoutes from "./routes/AppRoutes";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
@@ -85,6 +87,44 @@ const getRouteStateFromPath = () => {
     "rbac-security": "rbac-security",
     zerotrust: "zerotrust-security",
     "zerotrust-security": "zerotrust-security",
+    compliance: "compliance-security",
+    "compliance-security": "compliance-security",
+    soar: "threat-detection",
+    "soar-security": "threat-detection",
+    "threat-detection": "threat-detection",
+    keyvault: "keyvault-security",
+    "key-vault": "keyvault-security",
+    "keyvault-security": "keyvault-security",
+    certificate: "certificate",
+    dlp: "dlp-privacy",
+    "dlp-privacy": "dlp-privacy",
+    "privacy-guard": "dlp-privacy",
+    passkeys: "passkeys",
+    passwordless: "passkeys",
+    webauthn: "passkeys",
+    ztna: "ztna",
+    microsegmentation: "ztna",
+    "network-access": "ztna",
+    siem: "siem-analytics",
+    "siem-analytics": "siem-analytics",
+    "siem-security": "siem-analytics",
+    scim: "scim-provisioning",
+    "scim-provisioning": "scim-provisioning",
+    "command-center": "security-commandcenter",
+    "security-commandcenter": "security-commandcenter",
+    help: "help",
+    "help-center": "help",
+    vulnerability: "vulnerability",
+    "patch-management": "vulnerability",
+    microsegmentation: "microsegmentation",
+    sdp: "microsegmentation",
+    "perimeter-security": "microsegmentation",
+    grc: "grc-compliance",
+    "grc-compliance": "grc-compliance",
+    "audit-ledger": "grc-compliance",
+    pam: "pam",
+    "privileged-access": "pam",
+    "jit-elevation": "pam",
   };
 
   return {
@@ -147,11 +187,7 @@ function AppContent() {
         className="flex flex-col min-h-screen bg-surface text-primary transition-colors duration-200"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
-        {process.env.REACT_APP_DEMO_MODE === 'true' && (
-          <div className="bg-amber-500 text-white text-center py-2 px-4 text-xs font-bold shadow-md z-[9999] relative">
-            Demo Mode — Frontend Only, No Live Backend
-          </div>
-        )}
+
         <CustomCursor />
         {!isAuthPage && (
           <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
@@ -186,7 +222,9 @@ function AppContent() {
         </main>
 
 {!isAuthPage && <Footer onNavigate={handleNavigate} />}
-        <ScrollToTopButton />      </div>
+        <ScrollToTopButton />
+        <CookieBanner onNavigate={handleNavigate} />
+      </div>
     </ReactLenis>
   );
 }
@@ -195,7 +233,9 @@ export default function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <AppContent />
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
       </ThemeProvider>
     </AuthProvider>
   );

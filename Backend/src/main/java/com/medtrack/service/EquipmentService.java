@@ -3,17 +3,30 @@ package com.medtrack.service;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.EquipmentImportSummary;
+import com.medtrack.dto.EquipmentStatisticsResponse;
+import com.medtrack.dto.LowStockSummaryResponse;
+import com.medtrack.dto.StockAdjustmentRequest;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
+import com.medtrack.specifications.EquipmentSpecifications;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.medtrack.exception.ResourceNotFoundException;
-import java.time.temporal.ChronoUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
+import com.medtrack.model.EquipmentCategory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -35,6 +48,8 @@ public class EquipmentService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
 
+    private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
+
     private Hospital getHospitalForUser(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
@@ -49,6 +64,148 @@ public class EquipmentService {
     public List<Equipment> getAllEquipment(String username) {
         Hospital hospital = getHospitalForUser(username);
         return equipmentRepository.findByHospitalId(hospital.getId());
+    }
+    public Page<Equipment> getEquipmentPage(
+            String username,
+            Pageable pageable) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findByHospitalId(hospital.getId(), pageable);
+    }
+
+    public List<Equipment> getEquipmentByDepartment(String department, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.findByHospitalIdAndDepartmentIgnoreCase(
+                hospital.getId(),
+                department
+        );
+    }
+
+    public List<Equipment> getLowStockEquipment(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.findLowStockEquipment(hospital.getId());
+    }
+
+    /**
+     * Applies a signed stock movement to one asset owned by the caller's hospital.
+     *
+     * <p>Expressed as a delta rather than an absolute quantity so that two concurrent movements
+     * compose instead of overwriting each other. The row is re-read inside the transaction and the
+     * resulting quantity is validated before the write, so stock can never go negative.</p>
+     *
+     * @param id       equipment identifier, scoped to the caller's hospital
+     * @param request  the movement to apply
+     * @param username authenticated user's username
+     * @return the updated equipment record
+     * @throws ResourceNotFoundException if the asset does not exist or belongs to another hospital
+     * @throws IllegalArgumentException  if the delta is zero, or would drive quantity negative
+     */
+    @Transactional
+    public Equipment adjustStock(Long id, StockAdjustmentRequest request, String username) {
+        if (request == null || request.getDelta() == null) {
+            throw new IllegalArgumentException("Stock delta is required");
+        }
+        if (request.getDelta() == 0) {
+            throw new IllegalArgumentException("Stock delta must not be zero");
+        }
+        if (request.getMinimumStock() != null && request.getMinimumStock() < 0) {
+            throw new IllegalArgumentException("Minimum stock cannot be negative");
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+        Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Equipment not found or you don't have access"));
+
+        int currentQuantity = equipment.getQuantity() != null ? equipment.getQuantity() : 0;
+        long adjusted = (long) currentQuantity + request.getDelta();
+
+        if (adjusted < 0) {
+            throw new IllegalArgumentException(
+                    "Insufficient stock: cannot remove " + Math.abs(request.getDelta())
+                            + " unit(s) from a quantity of " + currentQuantity);
+        }
+        // Guard the upper bound too. A caller sending Integer.MAX_VALUE as the delta would
+        // otherwise silently overflow the column on narrowing back to int.
+        if (adjusted > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Resulting quantity exceeds the supported maximum");
+        }
+
+        equipment.setQuantity((int) adjusted);
+        if (request.getMinimumStock() != null) {
+            equipment.setMinimumStock(request.getMinimumStock());
+        }
+
+        Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment stock adjusted | User: {} | Equipment ID: {} | Delta: {} | "
+                        + "Quantity: {} -> {} | Reason: {}",
+                username,
+                savedEquipment.getId(),
+                request.getDelta(),
+                currentQuantity,
+                savedEquipment.getQuantity(),
+                request.getReason() != null ? request.getReason() : "not supplied"
+        );
+
+        return savedEquipment;
+    }
+
+    /**
+     * Counts of tracked, low and out-of-stock items for the caller's hospital.
+     *
+     * <p>Serves the dashboard tiles without transferring every low-stock row on each poll.</p>
+     *
+     * @param username authenticated user's username
+     * @return aggregate stock counters
+     */
+    public LowStockSummaryResponse getLowStockSummary(String username) {
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Equipment> inventory = equipmentRepository.findByHospitalId(hospital.getId());
+
+        long lowStock = 0;
+        long outOfStock = 0;
+        long totalUnits = 0;
+
+        for (Equipment equipment : inventory) {
+            int quantity = equipment.getQuantity() != null ? equipment.getQuantity() : 0;
+            int threshold = equipment.getMinimumStock() != null ? equipment.getMinimumStock() : 0;
+
+            totalUnits += quantity;
+            if (quantity <= threshold) {
+                lowStock++;
+            }
+            if (quantity == 0) {
+                outOfStock++;
+            }
+        }
+
+        return LowStockSummaryResponse.builder()
+                .totalTrackedItems(inventory.size())
+                .lowStockItems(lowStock)
+                .outOfStockItems(outOfStock)
+                .totalUnitsInStock(totalUnits)
+                .build();
+    }
+
+    public Map<EquipmentStatus, Long> getEquipmentStatusSummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        Map<EquipmentStatus, Long> summary = new EnumMap<>(EquipmentStatus.class);
+
+        for (EquipmentStatus status : EquipmentStatus.values()) {
+            long count = equipmentRepository.countByHospitalIdAndStatus(
+                    hospital.getId(),
+                    status
+            );
+            summary.put(status, count);
+        }
+
+        return summary;
     }
 
     /**
@@ -65,6 +222,38 @@ public class EquipmentService {
                 hospital.getId(),
                 today
         );
+    }
+
+
+    public Map<String, Long> getWarrantySummary(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.findByHospitalId(hospital.getId()).size();
+
+        long expired = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now())
+                .size();
+
+        long expiringSoon = equipmentRepository
+                .findByHospitalIdAndWarrantyExpiryBetween(
+                        hospital.getId(),
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(30))
+                .size();
+
+        long valid = total - expired;
+
+        Map<String, Long> summary = new HashMap<>();
+
+        summary.put("total", total);
+        summary.put("expired", expired);
+        summary.put("expiringSoon", expiringSoon);
+        summary.put("valid", valid);
+
+        return summary;
     }
 
     /**
@@ -97,6 +286,94 @@ public class EquipmentService {
     }
 
     /**
+     * Free-text search across the caller's inventory.
+     *
+     * <p>Matches the keyword as a case-insensitive substring of the asset name, model, serial
+     * number, equipment code or department. Results are always scoped to the authenticated user's
+     * hospital.</p>
+     *
+     * @param keyword  substring to look for; must not be blank
+     * @param username authenticated user's username
+     * @return matching equipment, ordered by name
+     * @throws IllegalArgumentException if the keyword is null or blank
+     */
+    public List<Equipment> searchEquipment(String keyword, String username) {
+        // A blank keyword degrades to "match everything", which is what GET /api/equipment already
+        // does. Rejecting it stops an accidentally-empty search box from pulling the entire
+        // inventory on every keystroke.
+        if (keyword == null || keyword.isBlank()) {
+            throw new IllegalArgumentException("Search keyword must not be blank");
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findAll(
+                EquipmentSpecifications.keywordMatches(hospital.getId(), keyword),
+                Sort.by(Sort.Direction.ASC, "name"));
+    }
+
+    /**
+     * Retrieves the caller's equipment narrowed by any combination of optional filters.
+     *
+     * <p>Every filter is optional; omitting all of them returns the hospital's full inventory. The
+     * hospital predicate is applied by the specification regardless, so no filter combination can
+     * reach another hospital's assets.</p>
+     *
+     * @param username   authenticated user's username
+     * @param department exact department name, matched case-insensitively
+     * @param category   equipment category
+     * @param status     lifecycle status
+     * @param model      case-insensitive substring of the model name
+     * @return matching equipment, ordered by name
+     */
+    public List<Equipment> filterEquipment(
+            String username,
+            String department,
+            EquipmentCategory category,
+            EquipmentStatus status,
+            String model) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        return equipmentRepository.findAll(
+                EquipmentSpecifications.filterEquipment(
+                        hospital.getId(), department, category, status, model),
+                Sort.by(Sort.Direction.ASC, "name"));
+    }
+
+    public EquipmentStatisticsResponse getEquipmentStatistics(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        long total = equipmentRepository.countByHospitalId(hospital.getId());
+
+        long active = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.ACTIVE);
+
+        long maintenance = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.UNDER_MAINTENANCE);
+
+        long retired = equipmentRepository.countByHospitalIdAndStatus(
+                hospital.getId(),
+                EquipmentStatus.RETIRED);
+
+        long expiredWarranty = equipmentRepository
+                .countByHospitalIdAndWarrantyExpiryBefore(
+                        hospital.getId(),
+                        LocalDate.now());
+
+        return new EquipmentStatisticsResponse(
+                total,
+                active,
+                maintenance,
+                retired,
+                expiredWarranty
+        );
+    }
+
+    /**
      * Adds a new equipment record.
      * If no equipmentCode is provided by the caller, auto-generates one
      * using a unique UUID.
@@ -109,7 +386,34 @@ public class EquipmentService {
         if (equipment.getEquipmentCode() == null) {
             equipment.setEquipmentCode("EQ-" + UUID.randomUUID().toString());
         }
-        return equipmentRepository.save(equipment);
+        if (equipment.getQuantity() == null) {
+            equipment.setQuantity(0);
+        }
+
+        if (equipment.getMinimumStock() == null) {
+            equipment.setMinimumStock(10);
+        }
+
+        if (equipment.getEquipmentCode() != null &&
+                equipmentRepository.findByEquipmentCode(equipment.getEquipmentCode()).isPresent()) {
+            throw new IllegalArgumentException("Equipment Code already exists.");
+        }
+
+        if (equipment.getSerialNumber() != null &&
+                equipmentRepository.findBySerialNumber(equipment.getSerialNumber()).isPresent()) {
+            throw new IllegalArgumentException("Serial Number already exists.");
+        }
+
+        Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment created | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                savedEquipment.getId(),
+                savedEquipment.getName()
+        );
+
+        return savedEquipment;
     }
 
     /**
@@ -119,6 +423,13 @@ public class EquipmentService {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+
+        logger.info(
+                "Equipment deleted | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                equipment.getId(),
+                equipment.getName()
+        );
         equipmentRepository.delete(equipment);
     }
 
@@ -130,15 +441,51 @@ public class EquipmentService {
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(id,hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
 
+        if (equipmentDetails.getEquipmentCode() != null) {
+            equipmentRepository.findByEquipmentCode(equipmentDetails.getEquipmentCode())
+                    .ifPresent(existing -> {
+                        if (!existing.getId().equals(id)) {
+                            throw new IllegalArgumentException("Equipment Code already exists.");
+                        }
+                    });
+        }
+
+        if (equipmentDetails.getSerialNumber() != null) {
+            equipmentRepository.findBySerialNumber(equipmentDetails.getSerialNumber())
+                    .ifPresent(existing -> {
+                        if (!existing.getId().equals(id)) {
+                            throw new IllegalArgumentException("Serial Number already exists.");
+                        }
+                    });
+        }
+
         equipment.setName(equipmentDetails.getName());
         equipment.setModel(equipmentDetails.getModel());
         equipment.setSerialNumber(equipmentDetails.getSerialNumber());
         equipment.setDepartment(equipmentDetails.getDepartment());
         equipment.setCategory(equipmentDetails.getCategory());
+        // Stock levels are moved through adjustStock, which applies a signed delta. A general
+        // update must therefore treat an omitted value as "leave alone" rather than as zero,
+        // otherwise any PUT that does not restate the inventory wipes it.
+        if (equipmentDetails.getQuantity() != null) {
+            equipment.setQuantity(equipmentDetails.getQuantity());
+        }
+        if (equipmentDetails.getMinimumStock() != null) {
+            equipment.setMinimumStock(equipmentDetails.getMinimumStock());
+        }
         equipment.setStatus(equipmentDetails.getStatus());
         equipment.setPurchaseDate(equipmentDetails.getPurchaseDate());
 
-        return equipmentRepository.save(equipment);
+        Equipment updatedEquipment = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment updated | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                updatedEquipment.getId(),
+                updatedEquipment.getName()
+        );
+
+        return updatedEquipment;
     }
 
     /**
@@ -239,17 +586,45 @@ public class EquipmentService {
                     continue;
                 }
 
+                // Category validation
+                EquipmentCategory equipmentCategory;
+
                 if (category == null || category.trim().isEmpty()) {
-                    category = "Imaging";
+
+                    equipmentCategory = EquipmentCategory.IMAGING;
+
                 } else {
-                    List<String> validCategories = List.of("Imaging", "Surgical", "Monitoring", "Laboratory", "Respiratory");
-                    String finalCat = category.trim();
-                    if (validCategories.stream().noneMatch(c -> c.equalsIgnoreCase(finalCat))) {
-                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Invalid category. Allowed: Imaging, Surgical, Monitoring, Laboratory, Respiratory"));
+
+                    List<EquipmentCategory> validCategories = List.of(
+                            EquipmentCategory.IMAGING,
+                            EquipmentCategory.SURGICAL,
+                            EquipmentCategory.MONITORING,
+                            EquipmentCategory.LABORATORY,
+                            EquipmentCategory.RESPIRATORY,
+                            EquipmentCategory.OTHER
+                    );
+
+                    String finalCat = category.trim().toUpperCase();
+
+                    if (validCategories.stream()
+                            .noneMatch(c -> c.name().equals(finalCat))) {
+
+                        failures.add(
+                                new EquipmentImportSummary.RowFailure(
+                                        rowNum,
+                                        line,
+                                        "Invalid category. Allowed: IMAGING, SURGICAL, MONITORING, LABORATORY, RESPIRATORY, OTHER"
+                                )
+                        );
+
                         failureCount++;
                         continue;
                     }
-                    category = validCategories.stream().filter(c -> c.equalsIgnoreCase(finalCat)).findFirst().orElse(category);
+
+                    equipmentCategory = validCategories.stream()
+                            .filter(c -> c.name().equals(finalCat))
+                            .findFirst()
+                            .orElse(EquipmentCategory.OTHER);
                 }
 
                 if (status == null || status.trim().isEmpty()) {
@@ -288,7 +663,7 @@ public class EquipmentService {
                         .model(model)
                         .serialNumber(serialNumber)
                         .department(department)
-                        .category(category)
+                        .category(equipmentCategory)
                         .status(parsedStatus)
                         .purchaseDate(purchaseDate)
                         .equipmentCode("EQ-" + UUID.randomUUID().toString())
@@ -342,5 +717,27 @@ public class EquipmentService {
             }
         }
         return null;
+    }
+
+    public byte[] exportEquipmentCsv(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        List<Equipment> equipmentList = equipmentRepository.findByHospitalId(hospital.getId());
+
+        StringBuilder csv = new StringBuilder();
+
+        csv.append("Equipment Code,Name,Department,Category,Status,Purchase Date,Warranty Expiry\n");
+
+        for (Equipment equipment : equipmentList) {
+            csv.append(equipment.getEquipmentCode()).append(",")
+                    .append(equipment.getName()).append(",")
+                    .append(equipment.getDepartment()).append(",")
+                    .append(equipment.getCategory()).append(",")
+                    .append(equipment.getStatus()).append(",")
+                    .append(equipment.getPurchaseDate()).append(",")
+                    .append(equipment.getWarrantyExpiry())
+                    .append("\n");
+        }
+
+        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 }

@@ -256,7 +256,7 @@ export default function SecurityPage() {
     
     if (score >= 9.0) {
       rating = "Critical";
-      color = "text-purple-650 dark:text-purple-400 bg-purple-500/10";
+      color = "text-purple-600 dark:text-purple-400 bg-purple-500/10";
       border = "border-purple-500/20";
     } else if (score >= 7.0) {
       rating = "High";
@@ -332,7 +332,7 @@ export default function SecurityPage() {
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="relative max-w-5xl mx-auto px-6 text-center">
-          <div className="inline-flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-indigo-650 dark:text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-full border border-indigo-500/20 mb-6 animate-pulse">
+          <div className="inline-flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-full border border-indigo-500/20 mb-6 animate-pulse">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
             Security & Trust Center
           </div>
@@ -342,7 +342,7 @@ export default function SecurityPage() {
               Clinical Trust Standards
             </span>
           </h1>
-          <p className="text-xs md:text-sm text-slate-650 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-medium">
+          <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed font-medium">
             Explore MedTrack's compliance certificates, inspect active database cryptographic protocols, review live security audit events, or submit vulnerability reports.
           </p>
 
@@ -353,7 +353,7 @@ export default function SecurityPage() {
               API Gateway: Active
             </span>
             <span className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-xl shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-green-550"></span>
+              <span className="w-2 h-2 rounded-full bg-green-500"></span>
               Database Encryption: SSL
             </span>
             <span className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-xl shadow-sm">
@@ -370,7 +370,7 @@ export default function SecurityPage() {
         <section className="mb-24">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
             <div>
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-455 bg-indigo-500/10 px-3 py-1 rounded-md">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-md">
                 Audit Registry
               </span>
               <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-3">
@@ -416,11 +416,11 @@ export default function SecurityPage() {
                     <h3 className="text-lg font-extrabold text-slate-900 dark:text-white mb-1">
                       {COMPLIANCE_CERTS[activeCert].title}
                     </h3>
-                    <p className="text-[11px] text-slate-450 font-medium">
-                      Auditor: <strong className="text-slate-700 dark:text-slate-350">{COMPLIANCE_CERTS[activeCert].auditor}</strong> • Last Audit: {COMPLIANCE_CERTS[activeCert].lastAudit}
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Auditor: <strong className="text-slate-700 dark:text-slate-300">{COMPLIANCE_CERTS[activeCert].auditor}</strong> • Last Audit: {COMPLIANCE_CERTS[activeCert].lastAudit}
                     </p>
                   </div>
-                  <span className="text-[10px] font-extrabold px-3 py-1 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 border border-green-550/20">
+                  <span className="text-[10px] font-extrabold px-3 py-1 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
                     {COMPLIANCE_CERTS[activeCert].status}
                   </span>
                 </div>
@@ -429,7 +429,7 @@ export default function SecurityPage() {
                   <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
                     Audited Scope / Clinical Systems
                   </h4>
-                  <p className="text-xs text-slate-600 dark:text-slate-450 leading-relaxed font-medium">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
                     {COMPLIANCE_CERTS[activeCert].scope}
                   </p>
                 </div>
@@ -453,16 +453,16 @@ export default function SecurityPage() {
               <div className="border-t border-slate-100 dark:border-slate-800/80 pt-6 mt-8">
                 {isVerifying ? (
                   <div className="flex items-center gap-3 py-3 text-xs font-semibold text-slate-500">
-                    <span className="w-4 h-4 border-2 border-indigo-550 border-t-transparent rounded-full animate-spin"></span>
+                    <span className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></span>
                     Querying digital signature vault...
                   </div>
                 ) : verificationResult ? (
-                  <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 p-4 rounded-2xl flex flex-col gap-2 scale-up">
+                  <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex flex-col gap-2 scale-up">
                     <div className="flex justify-between items-center text-[10px] font-mono text-green-600 dark:text-green-400">
                       <span>✓ SIGNATURE VALIDATED</span>
                       <span>{verificationResult.timestamp}</span>
                     </div>
-                    <span className="text-[9px] font-mono text-slate-450 truncate block">
+                    <span className="text-[9px] font-mono text-slate-400 truncate block">
                       SHA-256 Hash: {verificationResult.hash}
                     </span>
                     <span className="text-[9px] text-slate-500 leading-none">
@@ -487,7 +487,7 @@ export default function SecurityPage() {
         {/* 3. DYNAMIC SECURITY CONTROLS EXPLORER */}
         <section className="mb-24">
           <div className="max-w-xl mb-10">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-455 bg-indigo-500/10 px-3 py-1 rounded-md">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-md">
               Controls Directory
             </span>
             <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-3">
@@ -535,7 +535,7 @@ export default function SecurityPage() {
                   className={`w-full flex flex-col items-start p-5 rounded-2xl text-left border transition-all ${
                     expandedControlIdx === index
                       ? "bg-white dark:bg-slate-900 border-indigo-500/40 shadow-sm"
-                      : "bg-white/50 dark:bg-slate-900/30 text-secondary hover:bg-white dark:hover:bg-slate-900 border-slate-250 dark:border-slate-800"
+                      : "bg-white/50 dark:bg-slate-900/30 text-secondary hover:bg-white dark:hover:bg-slate-900 border-slate-200 dark:border-slate-800"
                   }`}
                 >
                   <span className="text-[8px] font-black uppercase tracking-wider text-indigo-500 mb-1">
@@ -553,7 +553,7 @@ export default function SecurityPage() {
               {filteredControls[expandedControlIdx] && (
                 <>
                   <div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-650 dark:text-indigo-400 bg-indigo-500/10 px-2.5 py-1.5 rounded-md">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2.5 py-1.5 rounded-md">
                       {filteredControls[expandedControlIdx].protocol}
                     </span>
                     <h3 className="text-md font-extrabold text-slate-900 dark:text-white tracking-tight mt-4">
@@ -561,7 +561,7 @@ export default function SecurityPage() {
                     </h3>
                   </div>
 
-                  <p className="text-xs text-slate-650 dark:text-slate-400 leading-relaxed font-medium">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
                     {filteredControls[expandedControlIdx].description}
                   </p>
 
@@ -569,7 +569,7 @@ export default function SecurityPage() {
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
                       Configuration / Code Blueprint
                     </h4>
-                    <pre className="bg-slate-950 text-slate-300 dark:text-slate-200 p-5 rounded-2xl text-[10px] font-mono overflow-x-auto border border-slate-850">
+                    <pre className="bg-slate-950 text-slate-300 dark:text-slate-200 p-5 rounded-2xl text-[10px] font-mono overflow-x-auto border border-slate-800">
                       <code>{filteredControls[expandedControlIdx].codeSnippet}</code>
                     </pre>
                   </div>
@@ -584,7 +584,7 @@ export default function SecurityPage() {
         <section className="mb-24">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center mb-10">
             <div className="lg:col-span-6">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-455 bg-indigo-500/10 px-3 py-1 rounded-md">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-md">
                 Telemetry Logs
               </span>
               <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-3">
@@ -618,9 +618,9 @@ export default function SecurityPage() {
           </div>
 
           {/* Terminal Console */}
-          <div className="bg-slate-950 border border-slate-850 rounded-[2rem] p-6 shadow-xl flex flex-col h-[380px] font-mono">
+          <div className="bg-slate-950 border border-slate-800 rounded-[2rem] p-6 shadow-xl flex flex-col h-[380px] font-mono">
             {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-850 mb-4 shrink-0 text-slate-400 text-[10px]">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4 shrink-0 text-slate-400 text-[10px]">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
                 <span>Console active: secure connection verified</span>
@@ -636,7 +636,7 @@ export default function SecurityPage() {
                     <span className="text-indigo-400 select-none font-semibold shrink-0">[{log.time}]</span>
                     <span className={`font-bold shrink-0 ${
                       log.level === "SECURE ALERT" ? "text-purple-400" :
-                      log.level === "WARN" ? "text-orange-400" : "text-slate-450"
+                      log.level === "WARN" ? "text-orange-400" : "text-slate-400"
                     }`}>
                       [{log.level}]
                     </span>
@@ -651,7 +651,7 @@ export default function SecurityPage() {
             </div>
 
             {/* Footer details */}
-            <div className="border-t border-slate-850 pt-3 text-[9px] text-slate-500 flex justify-between shrink-0">
+            <div className="border-t border-slate-800 pt-3 text-[9px] text-slate-500 flex justify-between shrink-0">
               <span>Streaming rate: ~1 packet/4.5s</span>
               <span>Buffer allocation: 15/15 frames</span>
             </div>
@@ -659,10 +659,10 @@ export default function SecurityPage() {
         </section>
 
         {/* 5. VULNERABILITY DISCLOSURE FORM & CVSS CALCULATOR */}
-        <section className="mb-24 bg-slate-150/50 dark:bg-slate-900/30 border border-slate-200/50 dark:border-slate-800/60 rounded-[2.5rem] p-8 md:p-12">
+        <section className="mb-24 bg-slate-100/50 dark:bg-slate-900/30 border border-slate-200/50 dark:border-slate-800/60 rounded-[2.5rem] p-8 md:p-12">
           
           <div className="max-w-xl mx-auto text-center mb-12">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-455 bg-indigo-500/10 px-3 py-1 rounded-md">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-md">
               Bug Bounty Hub
             </span>
             <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-3">
@@ -684,7 +684,7 @@ export default function SecurityPage() {
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
                 Your vulnerability ticket reference has been logged. Thank you for securing MedTrack.
               </p>
-              <div className="mt-6 text-[9px] font-mono font-bold text-slate-450 uppercase tracking-widest">
+              <div className="mt-6 text-[9px] font-mono font-bold text-slate-400 uppercase tracking-widest">
                 Ticket Reference: {ticketHash} • Validated CVSS Level: {calculatedCvss.rating} ({calculatedCvss.score})
               </div>
             </div>
@@ -800,17 +800,17 @@ export default function SecurityPage() {
 
                   <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal font-medium space-y-2 border-t border-slate-100 dark:border-slate-800/80 pt-4 mt-2">
                     <p>
-                      Exploit Factor: <span className="font-bold text-slate-700 dark:text-slate-350">{vulnerabilityForm.exploitability}</span>
+                      Exploit Factor: <span className="font-bold text-slate-700 dark:text-slate-300">{vulnerabilityForm.exploitability}</span>
                     </p>
                     <p>
-                      Impact Factor: <span className="font-bold text-slate-700 dark:text-slate-350">{vulnerabilityForm.impact}</span>
+                      Impact Factor: <span className="font-bold text-slate-700 dark:text-slate-300">{vulnerabilityForm.impact}</span>
                     </p>
                   </div>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-indigo-650 hover:bg-indigo-750 text-white font-bold text-xs rounded-xl transition-all shadow-md mt-6"
+                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-md mt-6"
                 >
                   Submit Bug Report
                 </button>
@@ -825,7 +825,7 @@ export default function SecurityPage() {
         {/* 6. SECURITY FAQS ACCORDIONS */}
         <section className="mb-12">
           <div className="text-center max-w-xl mx-auto mb-12">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-455 bg-indigo-500/10 px-3 py-1 rounded-md">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-md">
               Helpdesk FAQ
             </span>
             <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-3">
@@ -852,7 +852,7 @@ export default function SecurityPage() {
                     <span className="text-xs font-bold text-slate-900 dark:text-white pr-4">
                       {faq.q}
                     </span>
-                    <span className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-550 shrink-0 transition-transform duration-200">
+                    <span className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 shrink-0 transition-transform duration-200">
                       <svg
                         className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
                         fill="none"

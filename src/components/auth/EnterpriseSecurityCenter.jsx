@@ -41,6 +41,13 @@ import {
   bumpGlobalAuthorityVersion,
   getAuthorityAuditLogs
 } from "../../services/AuthService";
+import ThreatDetectionSoarPanel from "./ThreatDetectionSoarPanel";
+import KeyVaultSecurityPanel from "./KeyVaultSecurityPanel";
+import SiemSecurityAnalyticsPanel from "./SiemSecurityAnalyticsPanel";
+import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
+import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
+import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
+import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -367,7 +374,14 @@ export default function EnterpriseSecurityCenter() {
           { id: "mfa", label: "MFA & Passkeys", icon: KeyRound },
           { id: "jwt", label: "JWT Telemetry", icon: FileText },
           { id: "ip", label: `IP Allowlist (${trustedIps.length})`, icon: Globe },
-          { id: "audit", label: `Audit Trail (${auditLogs.length})`, icon: History }
+          { id: "audit", label: `Audit Trail (${auditLogs.length})`, icon: History },
+          { id: "threats", label: "Threat Engine & SOAR", icon: ShieldAlert },
+          { id: "keyvault", label: "Key Vault & Cryptography", icon: Lock },
+          { id: "siem", label: "SIEM & Log Analytics", icon: Activity },
+          { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
+          { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
+          { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
+          { id: "grc", label: "GRC & Audit Ledger", icon: Award }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -758,6 +772,36 @@ export default function EnterpriseSecurityCenter() {
             )}
           </div>
         </div>
+      )}
+
+      {/* TAB 7: THREAT ENGINE & SOAR */}
+      {selectedTab === "threats" && (
+        <ThreatDetectionSoarPanel />
+      )}
+
+      {/* TAB 8: SIEM & LOG ANALYTICS */}
+      {selectedTab === "siem" && (
+        <SiemSecurityAnalyticsPanel />
+      )}
+
+      {/* TAB 9: DLP & HIPAA PRIVACY GUARD */}
+      {selectedTab === "dlp" && (
+        <DlpPrivacyGuardPanel />
+      )}
+
+      {/* TAB 10: BIOMETRIC PASSKEYS & WEBAUTHN */}
+      {selectedTab === "passkeys" && (
+        <PasskeyPasswordlessPanel />
+      )}
+
+      {/* TAB 11: ZTNA & MICROSEGMENTATION */}
+      {selectedTab === "ztna" && (
+        <ZeroTrustNetworkPanel />
+      )}
+
+      {/* TAB 12: GRC & CONTINUOUS AUDIT LEDGER */}
+      {selectedTab === "grc" && (
+        <GrcAuditCompliancePanel />
       )}
 
       {/* 4. MODALS */}

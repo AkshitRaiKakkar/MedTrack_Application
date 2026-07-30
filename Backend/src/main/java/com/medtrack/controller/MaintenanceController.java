@@ -1,5 +1,6 @@
 package com.medtrack.controller;
 
+import com.medtrack.dto.MaintenanceAssignmentRequest;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.model.MaintenanceTask;
@@ -35,14 +36,20 @@ public class MaintenanceController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
-    public ResponseEntity<List<MaintenanceTask>> getAllTasks(Authentication authentication) {
+    public ResponseEntity<List<MaintenanceTask>> getAllTasks(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String equipmentId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication) {
         // Forward the trusted identity so the service can enforce record ownership.
-        return ResponseEntity.ok(maintenanceService.getAllTasks(authentication));
+        return ResponseEntity.ok(maintenanceService.getAllTasks(
+                authentication, status, equipmentId, page, size));
     }
 
     /**
      * Retrieves a maintenance task by its unique identifier.
-     *
+     *completed
      * @param id the maintenance task identifier
      * @return the requested maintenance task
      */
@@ -68,6 +75,24 @@ public class MaintenanceController {
                                                         Authentication authentication) {
         MaintenanceTask createdTask = maintenanceService.scheduleTask(request, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdTask);
+    }
+
+    /**
+     * Assigns or reassigns a technician to a scheduled maintenance task.
+     * Accessible only to the hospital that owns the task.
+     *
+     * @param id the maintenance task identifier
+     * @param request the technician assignment
+     * @return the maintenance task with its canonical technician assignment
+     */
+    @PostMapping("/{id}/assignment")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<MaintenanceTask> assignTechnician(
+            @PathVariable Long id,
+            @Valid @RequestBody MaintenanceAssignmentRequest request,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceService.assignTechnician(id, request, authentication));
     }
 
     /**

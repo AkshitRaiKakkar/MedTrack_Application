@@ -98,11 +98,24 @@ export default function CookiePage() {
   // Regulatory Mode State
   const [legalFramework, setLegalFramework] = useState("GDPR"); // GDPR or CCPA
 
+  // Helper to read initial stored consent
+  const getInitialConsentState = () => {
+    try {
+      const stored = localStorage.getItem("medtrack_cookie_consent");
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error("Error reading stored consent in CookiePage:", e);
+    }
+    return null;
+  };
+
+  const initialConsent = getInitialConsentState();
+
   // Switchboard States
   const [essentialCookies] = useState(true); // Always true
-  const [functionalCookies, setFunctionalCookies] = useState(false);
-  const [performanceCookies, setPerformanceCookies] = useState(false);
-  const [targetingCookies, setTargetingCookies] = useState(false);
+  const [functionalCookies, setFunctionalCookies] = useState(initialConsent ? Boolean(initialConsent.functional) : false);
+  const [performanceCookies, setPerformanceCookies] = useState(initialConsent ? Boolean(initialConsent.performance || initialConsent.analytics) : false);
+  const [targetingCookies, setTargetingCookies] = useState(initialConsent ? Boolean(initialConsent.targeting) : false);
 
   // Preference update simulator
   const [isSaving, setIsSaving] = useState(false);
@@ -115,21 +128,6 @@ export default function CookiePage() {
   // Consent History Log
   const [consentHistory, setConsentHistory] = useState(MOCK_CONSENT_HISTORY);
 
-  // Auto-configure switches based on Selected Legislation
-  useEffect(() => {
-    if (legalFramework === "GDPR") {
-      // GDPR requires all optional cookies to be OFF (Opt-in) by default
-      setFunctionalCookies(false);
-      setPerformanceCookies(false);
-      setTargetingCookies(false);
-    } else if (legalFramework === "CCPA") {
-      // CCPA allows optional cookies to be ON (Opt-out) by default
-      setFunctionalCookies(true);
-      setPerformanceCookies(true);
-      setTargetingCookies(true);
-    }
-  }, [legalFramework]);
-
   // Handler for Saving settings
   const handleSaveCookieSettings = () => {
     setIsSaving(true);
@@ -137,6 +135,21 @@ export default function CookiePage() {
 
     setTimeout(() => {
       setIsSaving(true);
+      const consentPayload = {
+        essential: true,
+        functional: functionalCookies,
+        performance: performanceCookies,
+        analytics: performanceCookies,
+        targeting: targetingCookies,
+        framework: legalFramework,
+        timestamp: new Date().toISOString()
+      };
+      try {
+        localStorage.setItem("medtrack_cookie_consent", JSON.stringify(consentPayload));
+      } catch (err) {
+        console.error("Error saving cookie consent:", err);
+      }
+
       const newLog = {
         id: `LOG-CON-${Math.floor(11300 + Math.random() * 8600)}`,
         date: new Date().toISOString().split('T')[0],

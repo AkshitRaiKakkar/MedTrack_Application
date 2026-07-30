@@ -1,15 +1,26 @@
 package com.medtrack.controller;
 
+import com.medtrack.dto.EquipmentStatisticsResponse;
+import com.medtrack.dto.LowStockSummaryResponse;
+import com.medtrack.dto.StockAdjustmentRequest;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentCategory;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.service.EquipmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/equipment")
@@ -30,6 +41,43 @@ public class EquipmentController {
         return ResponseEntity.ok(equipmentService.getAllEquipment(principal.getName()));
     }
 
+    @GetMapping("/page")
+    public ResponseEntity<Page<Equipment>> getEquipmentPage(
+            @PageableDefault(sort = "name") Pageable pageable,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentPage(
+                        principal.getName(),
+                        pageable
+                )
+        );
+    }
+
+    @GetMapping("/department")
+    public ResponseEntity<List<Equipment>> getEquipmentByDepartment(
+            @RequestParam String department,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentByDepartment(
+                        department,
+                        principal.getName()
+                )
+        );
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<EquipmentStatisticsResponse> getStatistics(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentStatistics(
+                        principal.getName()
+                )
+        );
+    }
+
     /**
      * Retrieves a specific equipment record by its ID.
      *
@@ -41,6 +89,18 @@ public class EquipmentController {
     public ResponseEntity<Equipment> getEquipmentById(@PathVariable Long id, Principal principal) {
         validateId(id);
         return ResponseEntity.ok(equipmentService.getEquipmentById(id, principal.getName()));
+    }
+
+    @GetMapping("/warranty-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<String, Long>> getWarrantySummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getWarrantySummary(
+                        principal.getName()
+                )
+        );
     }
 
     /**
@@ -136,6 +196,117 @@ public class EquipmentController {
     public ResponseEntity<List<Equipment>> getWarrantyExpiringSoon(Principal principal) {
         return ResponseEntity.ok(
                 equipmentService.getWarrantyExpiringSoon(principal.getName())
+        );
+    }
+    @GetMapping("/search")
+    public ResponseEntity<List<Equipment>> searchEquipment(
+            @RequestParam String keyword,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.searchEquipment(keyword, principal.getName())
+        );
+    }
+
+    /**
+     * Retrieves equipment using multiple optional filters.
+     */
+    @GetMapping("/filter")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> filterEquipment(
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) EquipmentCategory category,
+            @RequestParam(required = false) EquipmentStatus status,
+            @RequestParam(required = false) String model,
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.filterEquipment(
+                        principal.getName(),
+                        department,
+                        category,
+                        status,
+                        model
+                )
+        );
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<byte[]> exportEquipment(Principal principal) {
+
+        byte[] csv = equipmentService.exportEquipmentCsv(principal.getName());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=equipment.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
+    }
+
+    /**
+     * Retrieves all equipment that is currently below the configured stock threshold.
+     *
+     * @param principal the authenticated user's security principal
+     * @return list of low stock equipment
+     */
+    @GetMapping("/low-stock")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> getLowStockEquipment(Principal principal) {
+        return ResponseEntity.ok(
+                equipmentService.getLowStockEquipment(principal.getName())
+        );
+    }
+
+    /**
+     * Returns aggregate stock counters for the authenticated hospital.
+     *
+     * <p>Dashboard tiles need counts, not rows. Without this the client has to fetch
+     * {@code /low-stock} and measure the array on every poll.</p>
+     *
+     * @param principal the authenticated user's security principal
+     * @return tracked, low-stock, out-of-stock and total-unit counts
+     */
+    @GetMapping("/low-stock/summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<LowStockSummaryResponse> getLowStockSummary(Principal principal) {
+        return ResponseEntity.ok(
+                equipmentService.getLowStockSummary(principal.getName())
+        );
+    }
+
+    /**
+     * Applies a signed stock movement to a single asset.
+     *
+     * <p>{@code PATCH} rather than {@code PUT} because this is a partial, relative change:
+     * receiving five units is {@code {"delta": 5}}, consuming two is {@code {"delta": -2}}.
+     * Sending an absolute quantity through the full update endpoint loses concurrent movements.</p>
+     *
+     * @param id        the equipment identifier
+     * @param request   the movement to apply
+     * @param principal the authenticated user's security principal
+     * @return the updated equipment record
+     */
+    @PatchMapping("/{id}/stock")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Equipment> adjustStock(@PathVariable Long id,
+                                                 @Valid @RequestBody StockAdjustmentRequest request,
+                                                 Principal principal) {
+        validateId(id);
+        return ResponseEntity.ok(
+                equipmentService.adjustStock(id, request, principal.getName())
+        );
+    }
+
+    @GetMapping("/status-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<EquipmentStatus, Long>> getStatusSummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentStatusSummary(
+                        principal.getName()
+                )
         );
     }
 
