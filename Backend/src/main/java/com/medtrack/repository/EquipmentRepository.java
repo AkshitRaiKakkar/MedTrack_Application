@@ -70,4 +70,16 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     // They were also declared here as derived queries, which is a duplicate method signature
     // and is rejected by javac, so only the @Query declarations are kept.
     long countByHospitalIdAndWarrantyExpiryBefore(Long hospitalId, LocalDate date);
+
+    // Soft delete - archived records (deleted = true)
+    List<Equipment> findByDeletedTrue();
+
+    Page<Equipment> findByDeletedTrue(Pageable pageable);
+
+    Optional<Equipment> findByIdAndDeletedTrue(Long id);
+
+    // Archived equipment for specific hospital
+    List<Equipment> findByHospitalIdAndDeletedTrue(Long hospitalId);
+
+    Page<Equipment> findByHospitalIdAndDeletedTrue(Long hospitalId, Pageable pageable);
 }

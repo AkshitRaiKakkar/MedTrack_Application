@@ -31,6 +31,7 @@ import com.medtrack.model.EquipmentCategory;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -739,5 +740,94 @@ public class EquipmentService {
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Archives (soft deletes) an equipment record.
+     * Sets deleted = true, deletedAt, and deletedBy instead of hard deleting.
+     */
+    @Transactional
+    public Equipment archiveEquipment(Long id, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        Equipment equipment = equipmentRepository.findByIdAndHospitalId(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+
+        equipment.setDeleted(true);
+        equipment.setDeletedAt(LocalDateTime.now());
+        equipment.setDeletedBy(username);
+
+        Equipment archived = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment archived | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                archived.getId(),
+                archived.getName()
+        );
+
+        return archived;
+    }
+
+    /**
+     * Restores an archived equipment record.
+     * Sets deleted = false, clears deletedAt and deletedBy.
+     */
+    @Transactional
+    public Equipment restoreEquipment(Long id, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        Equipment equipment = equipmentRepository.findByIdAndDeletedTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived equipment not found"));
+
+        // Verify it belongs to the user's hospital
+        if (!equipment.getHospital().getId().equals(hospital.getId())) {
+            throw new ResourceNotFoundException("Archived equipment not found or you don't have access");
+        }
+
+        equipment.setDeleted(false);
+        equipment.setDeletedAt(null);
+        equipment.setDeletedBy(null);
+
+        Equipment restored = equipmentRepository.save(equipment);
+
+        logger.info(
+                "Equipment restored | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                restored.getId(),
+                restored.getName()
+        );
+
+        return restored;
+    }
+
+    /**
+     * Lists all archived (soft-deleted) equipment for the user's hospital.
+     */
+    public Page<Equipment> getArchivedEquipment(String username, Pageable pageable) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.findByDeletedTrueAndHospitalId(hospital.getId(), pageable);
+    }
+
+    /**
+     * Permanently deletes an archived equipment record (admin only).
+     * Only callable after 90 days from archival.
+     */
+    @Transactional
+    public void permanentlyDeleteEquipment(Long id, String username) {
+        Equipment equipment = equipmentRepository.findByIdAndDeletedTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Archived equipment not found"));
+
+        // Check if 90 days have passed since archival
+        if (equipment.getDeletedAt() != null && equipment.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
+            throw new IllegalStateException("Equipment cannot be permanently deleted until 90 days after archival");
+        }
+
+        equipmentRepository.delete(equipment);
+
+        logger.info(
+                "Equipment permanently deleted | User: {} | Equipment ID: {} | Name: {}",
+                username,
+                id,
+                equipment.getName()
+        );
     }
 }

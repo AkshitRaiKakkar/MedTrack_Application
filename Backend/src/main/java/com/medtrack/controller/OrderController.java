@@ -4,6 +4,9 @@ import com.medtrack.model.EquipmentOrder;
 import com.medtrack.dto.SupplierMetricsDto;
 import com.medtrack.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -12,6 +15,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+
+import org.springframework.data.domain.Sort;
 
 /**
  * REST controller for managing equipment orders.
@@ -173,6 +178,64 @@ public class OrderController {
     }
 
     /**
+     * Archives (soft deletes) an equipment order.
+     * Instead of hard deleting, sets deleted = true for audit compliance.
+     *
+     * @param id the order identifier
+     * @return the archived order
+     */
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<EquipmentOrder> archiveOrder(@PathVariable Long id) {
+        validateId(id);
+        EquipmentOrder archived = orderService.archiveOrder(id, getCurrentUsername());
+        return ResponseEntity.ok(archived);
+    }
+
+    /**
+     * Lists all archived (soft-deleted) orders.
+     *
+     * @param pageable pagination parameters
+     * @return paginated list of archived orders
+     */
+    @GetMapping("/archived")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Page<EquipmentOrder>> getArchivedOrders(
+            @PageableDefault(sort = "deletedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(orderService.getArchivedOrders(pageable));
+    }
+
+    /**
+     * Restores an archived order.
+     * Only available within 90 days of archival.
+     *
+     * @param id the order identifier
+     * @return the restored order
+     */
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<EquipmentOrder> restoreOrder(@PathVariable Long id) {
+        validateId(id);
+        EquipmentOrder restored = orderService.restoreOrder(id, getCurrentUsername());
+        return ResponseEntity.ok(restored);
+    }
+
+    /**
+     * Permanently deletes an archived order (admin only).
+     * Only callable after 90 days from archival.
+     *
+     * @param id the order identifier
+     * @return HTTP 204 No Content when successful
+     */
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Void> permanentlyDeleteOrder(@PathVariable Long id) {
+        validateId(id);
+        orderService.permanentlyDeleteOrder(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Validates that a resource ID is a positive number.
      *
      * @param id the resource identifier
@@ -182,5 +245,10 @@ public class OrderController {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("Invalid resource ID.");
         }
+    }
+
+    private String getCurrentUsername() {
+        return org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getName();
     }
 }
