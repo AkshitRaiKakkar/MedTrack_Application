@@ -31,25 +31,20 @@ public class EquipmentController {
     private final EquipmentService equipmentService;
 
     /**
-     * Retrieves all equipment records associated with the authenticated hospital.
+     * Retrieves a paginated list of equipment records associated with the authenticated hospital.
      *
+     * @param pageable  pagination information (page, size, sort)
      * @param principal the authenticated user's security principal
-     * @return a list of equipment records
+     * @return a paginated response of equipment records
      */
     @GetMapping
-    public ResponseEntity<List<Equipment>> getAllEquipment(Principal principal) {
-        return ResponseEntity.ok(equipmentService.getAllEquipment(principal.getName()));
-    }
-
-    @GetMapping("/page")
-    public ResponseEntity<Page<Equipment>> getEquipmentPage(
+    public ResponseEntity<com.medtrack.dto.PagedResponse<Equipment>> getAllEquipment(
             @PageableDefault(sort = "name") Pageable pageable,
             Principal principal) {
 
         return ResponseEntity.ok(
-                equipmentService.getEquipmentPage(
-                        principal.getName(),
-                        pageable
+                com.medtrack.dto.PagedResponse.of(
+                        equipmentService.getEquipmentPage(principal.getName(), pageable)
                 )
         );
     }

@@ -2,6 +2,8 @@ package com.medtrack.supplier.repository;
 
 import com.medtrack.supplier.model.ShipmentStatus;
 import com.medtrack.supplier.model.ShipmentTracking;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -18,6 +20,8 @@ public interface ShipmentTrackingRepository extends JpaRepository<ShipmentTracki
     Optional<ShipmentTracking> findByOrderId(Long orderId);
 
     List<ShipmentTracking> findBySupplierId(Long supplierId);
+
+    Page<ShipmentTracking> findBySupplierId(Long supplierId, Pageable pageable);
 
     List<ShipmentTracking> findByEstimatedDeliveryDateBefore(LocalDateTime dateTime);
 

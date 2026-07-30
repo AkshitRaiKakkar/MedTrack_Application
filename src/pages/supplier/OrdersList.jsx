@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getAllOrders, updateOrderStatus, getSupplierMetrics } from "../../services/OrderService";
 import { useAuth } from "../../context/AuthContext";
 import InvoiceModal from "./InvoiceModal";
+import Pagination from "../../components/common/Pagination";
 
 const STATUS_OPTIONS = ["Processing", "Shipped", "Delivered", "Cancelled"];
 
@@ -12,6 +13,9 @@ export default function OrdersList({ onNavigate }) {
   const [error, setError] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
   
   const [metrics, setMetrics] = useState({
     totalOrders: 0,
@@ -26,11 +30,14 @@ export default function OrdersList({ onNavigate }) {
     fetchOrders();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllOrders();
-      setOrders(data);
+      const response = await getAllOrders(pageNum, pageSize);
+      const items = response?.content || response?.data || [];
+      setOrders(items);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
       await fetchMetrics();
     } catch (err) {
       console.error("Error fetching orders:", err);
@@ -38,6 +45,10 @@ export default function OrdersList({ onNavigate }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchOrders(newPage);
   };
 
   const fetchMetrics = async () => {
@@ -247,6 +258,10 @@ export default function OrdersList({ onNavigate }) {
           <h2 className="text-2xl font-bold text-slate-900 mb-2">No active orders</h2>
           <p className="text-slate-500">When hospitals place equipment orders, they'll appear here for fulfillment.</p>
         </div>
+      )}
+
+      {!loading && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
       )}
 
       {selectedInvoiceOrder && (

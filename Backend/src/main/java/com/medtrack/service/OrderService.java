@@ -12,6 +12,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import com.medtrack.exception.ResourceNotFoundException;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -64,11 +66,11 @@ public class OrderService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_SUPPLIER"));
     }
 
-    public List<EquipmentOrder> getAllOrders() {
+    public Page<EquipmentOrder> getAllOrders(Pageable pageable) {
         if (isSupplier()) {
-            return orderRepository.findAll();
+            return orderRepository.findAll(pageable);
         }
-        return orderRepository.findByHospital(getCurrentUserOrganization());
+        return orderRepository.findByHospital(getCurrentUserOrganization(), pageable);
     }
 
     public EquipmentOrder getOrderById(Long id) {

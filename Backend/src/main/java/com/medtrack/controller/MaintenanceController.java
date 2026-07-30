@@ -3,17 +3,19 @@ package com.medtrack.controller;
 import com.medtrack.dto.MaintenanceAssignmentRequest;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
+import com.medtrack.dto.PagedResponse;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.service.MaintenanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST controller for managing equipment maintenance tasks.
@@ -29,22 +31,20 @@ public class MaintenanceController {
     private final MaintenanceService maintenanceService;
 
     /**
-     * Retrieves all maintenance tasks.
+     * Retrieves a paginated list of maintenance tasks.
      *
-     * @return a list of maintenance tasks. An empty result is returned as HTTP 200
-     *         with an empty JSON array so API clients have one stable response shape.
+     * @return a paginated response of maintenance tasks
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
-    public ResponseEntity<List<MaintenanceTask>> getAllTasks(
+    public ResponseEntity<PagedResponse<MaintenanceTask>> getAllTasks(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String equipmentId,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size,
+            @PageableDefault(size = 20, sort = "deadline") Pageable pageable,
             Authentication authentication) {
-        // Forward the trusted identity so the service can enforce record ownership.
-        return ResponseEntity.ok(maintenanceService.getAllTasks(
-                authentication, status, equipmentId, page, size));
+        Page<MaintenanceTask> page = maintenanceService.getAllTasks(
+                authentication, status, equipmentId, pageable);
+        return ResponseEntity.ok(PagedResponse.of(page));
     }
 
     /**

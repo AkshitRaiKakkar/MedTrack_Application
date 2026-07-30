@@ -1,9 +1,12 @@
 package com.medtrack.controller;
 
+import com.medtrack.dto.PagedResponse;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.dto.SupplierMetricsDto;
 import com.medtrack.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -27,20 +30,15 @@ public class OrderController {
     private final OrderService orderService;
 
     /**
-     * Retrieves all equipment orders.
+     * Retrieves a paginated list of equipment orders.
      *
-     * @return a list of equipment orders if available,
-     *         or HTTP 204 No Content when no orders exist
+     * @param pageable pagination information (page, size, sort)
+     * @return a paginated response of equipment orders
      */
     @GetMapping
-    public ResponseEntity<List<EquipmentOrder>> getAllOrders() {
-        List<EquipmentOrder> orders = orderService.getAllOrders();
-
-        if (orders.isEmpty()) {
-            return ResponseEntity.noContent().build();
-        }
-
-        return ResponseEntity.ok(orders);
+    public ResponseEntity<PagedResponse<EquipmentOrder>> getAllOrders(
+            @PageableDefault(sort = "orderDate") Pageable pageable) {
+        return ResponseEntity.ok(PagedResponse.of(orderService.getAllOrders(pageable)));
     }
 
     /**
