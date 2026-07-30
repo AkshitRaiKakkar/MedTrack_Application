@@ -1,8 +1,10 @@
 package com.medtrack.controller;
 
 import com.medtrack.model.EquipmentOrder;
+import com.medtrack.dto.PlaceOrderRequest;
 import com.medtrack.dto.SupplierMetricsDto;
 import com.medtrack.service.OrderService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -69,14 +71,18 @@ public class OrderController {
     /**
      * Creates a new equipment order.
      * Accessible only to users with the HOSPITAL role.
+     * The requesting hospital's identity, order code, and workflow status are
+     * derived server-side from the authenticated user, never from the request body.
      *
-     * @param order the equipment order to create
+     * @param request the client-supplied order details
+     * @param authentication the authenticated hospital user placing the order
      * @return the newly created equipment order with HTTP 201 Created
      */
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<EquipmentOrder> placeOrder(@RequestBody EquipmentOrder order) {
-        EquipmentOrder createdOrder = orderService.placeOrder(order);
+    public ResponseEntity<EquipmentOrder> placeOrder(@Valid @RequestBody PlaceOrderRequest request,
+                                                       Authentication authentication) {
+        EquipmentOrder createdOrder = orderService.placeOrder(request, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdOrder);
     }
 
