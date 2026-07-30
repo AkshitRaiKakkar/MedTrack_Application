@@ -32,7 +32,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import com.medtrack.model.EquipmentCategory;
-
+import com.medtrack.dto.EquipmentUtilizationResponse;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.LocalDate;
@@ -212,6 +212,41 @@ public class EquipmentService {
         );
 
         return savedEquipment;
+    }
+
+
+    public EquipmentUtilizationResponse getEquipmentUtilization(String username) {
+
+        Hospital hospital = getHospitalForUser(username);
+
+        List<Equipment> equipmentList =
+                equipmentRepository.findByHospitalId(hospital.getId());
+
+        long total = equipmentList.size();
+
+        long active = equipmentList.stream()
+                .filter(e -> e.getStatus() == EquipmentStatus.ACTIVE)
+                .count();
+
+        long underMaintenance = equipmentList.stream()
+                .filter(e -> e.getStatus() == EquipmentStatus.UNDER_MAINTENANCE)
+                .count();
+
+        long retired = equipmentList.stream()
+                .filter(e -> e.getStatus() == EquipmentStatus.RETIRED)
+                .count();
+
+        double utilization = total == 0
+                ? 0.0
+                : Math.round((active * 100.0 / total) * 100.0) / 100.0;
+
+        return new EquipmentUtilizationResponse(
+                total,
+                active,
+                underMaintenance,
+                retired,
+                utilization
+        );
     }
 
     /**
