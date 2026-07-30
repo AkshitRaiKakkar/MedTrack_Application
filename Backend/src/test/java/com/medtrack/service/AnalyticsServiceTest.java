@@ -100,7 +100,7 @@ public class AnalyticsServiceTest {
                 .id(30L)
                 .hospitalId(hospitalId)
                 .status(MaintenanceStatus.SCHEDULED)
-                .priority("CRITICAL") // critical pending
+                .priority("Critical") // critical pending
                 .build();
 
         MaintenanceTask legacyCompletedTask = MaintenanceTask.builder()
@@ -155,44 +155,23 @@ public class AnalyticsServiceTest {
                 .totalCost(BigDecimal.valueOf(1_000_000.00))
                 .build();
 
-        // findByHospitalId / taskRepository.findByHospitalId are no longer called: every figure now
-        // comes from a targeted query or aggregate. Leaving them stubbed trips Mockito's strict
-        // stubbing, which is what flags a test still wired to a seam the code has moved off.
-
-        // AnalyticsService was refactored to push order filtering into the database - the comment in
-        // the service reads "DB-level filtered orders". It no longer calls findAll(), so stubbing
-        // that seam left sumTotalCostByHospitalAndShippingStatus and findByHospitalAndShippingStatus
-        // unstubbed: Mockito answered null and empty, totalSpend fell back to ZERO, and the first
-        // assertion failed with `expected: <0> but was: <1>` while every assertion after it never
-        // ran. Stubbing the current seams restores coverage of the real logic - the category
-        // resolution and accumulation still run over these rows.
-        List<EquipmentOrder> deliveredForThisHospital = Arrays.asList(order1, order2, order3);
-        when(orderRepository.sumTotalCostByHospitalAndShippingStatus("City General Hospital", "Delivered"))
-                .thenReturn(BigDecimal.valueOf(180000.00));
-        when(orderRepository.findByHospitalAndShippingStatus("City General Hospital", "Delivered"))
-                .thenReturn(deliveredForThisHospital);
-
-        // SLA compliance now loads only measurable completions through a dedicated query rather than
-        // filtering findByHospitalId in Java, so the legacy completed row with no trustworthy
-        // completedAt is excluded by the query instead of by the service. task1 met its deadline,
-        // task2 missed it -> 1 of 2 compliant.
-        when(taskRepository.findCompletedTasksWithTimestamps(hospitalId, MaintenanceStatus.COMPLETED))
-                .thenReturn(Arrays.asList(task1, task2));
-
         when(equipmentRepository.countByHospitalId(hospitalId)).thenReturn(2L);
-        when(equipmentRepository.countByHospitalIdAndStatus(hospitalId, EquipmentStatus.UNDER_MAINTENANCE))
-                .thenReturn(1L);
+        when(equipmentRepository.countByHospitalIdAndStatus(
+                hospitalId, EquipmentStatus.UNDER_MAINTENANCE)).thenReturn(1L);
         when(equipmentRepository.countByHospitalIdAndWarrantyExpiryBetween(
-                eq(hospitalId), any(), any())).thenReturn(1L);
-
-        when(taskRepository.averageHoursWorkedByHospitalIdAndStatus(hospitalId, MaintenanceStatus.COMPLETED))
-                .thenReturn(4.0);
+                eq(hospitalId), any(LocalDate.class), any(LocalDate.class))).thenReturn(1L);
+        when(equipmentRepository.findNameAndCategoryByHospitalId(hospitalId))
+                .thenReturn(Collections.emptyList());
+        when(taskRepository.findCompletedTasksWithTimestamps(
+                hospitalId, MaintenanceStatus.COMPLETED)).thenReturn(Arrays.asList(task1, task2));
+        when(taskRepository.averageHoursWorkedByHospitalIdAndStatus(
+                hospitalId, MaintenanceStatus.COMPLETED)).thenReturn(4.0);
         when(taskRepository.countByHospitalIdAndStatusNotAndPriority(
-                hospitalId, MaintenanceStatus.COMPLETED, "CRITICAL")).thenReturn(1L);
-        when(equipmentRepository.findNameAndCategoryByHospitalId(hospitalId)).thenReturn(List.of(
-                new Object[] {"MRI Scanner", EquipmentCategory.IMAGING},
-                new Object[] {"Patient Monitor", EquipmentCategory.MONITORING},
-                new Object[] {"Ventilator", EquipmentCategory.RESPIRATORY}));
+                hospitalId, MaintenanceStatus.COMPLETED, "Critical")).thenReturn(1L);
+        when(orderRepository.sumTotalCostByHospitalAndShippingStatus(
+                "City General Hospital", "Delivered")).thenReturn(BigDecimal.valueOf(180000.00));
+        when(orderRepository.findByHospitalAndShippingStatus(
+                "City General Hospital", "Delivered")).thenReturn(Arrays.asList(order1, order2, order3));
 
         HospitalAnalyticsDto dto = analyticsService.getHospitalAnalytics(hospitalId);
 
@@ -223,6 +202,9 @@ public class AnalyticsServiceTest {
 
         // Warranty: eq1 expires in 15 days, eq2 in 100 days -> 1 upcoming
         assertEquals(1, dto.getUpcomingWarrantyExpirationsCount());
+
+        verify(taskRepository).countByHospitalIdAndStatusNotAndPriority(
+                hospitalId, MaintenanceStatus.COMPLETED, "Critical");
     }
 
     @Test

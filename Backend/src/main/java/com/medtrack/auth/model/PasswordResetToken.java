@@ -44,4 +44,13 @@ public class PasswordResetToken {
     @Builder.Default
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /**
+     * Number of incorrect OTP guesses made against this token. Once this reaches the
+     * configured maximum, the token is invalidated and a fresh {@code forgotPassword}
+     * request is required.
+     */
+    @Builder.Default
+    @Column(nullable = false)
+    private int attemptCount = 0;
 }
