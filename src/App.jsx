@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { ReactLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
 import { AuthProvider } from "./context/AuthContext";
@@ -12,16 +12,18 @@ import ScrollToTopButton from "./components/common/ScrollToTopButton";
 import CustomCursor from "./components/common/CustomCursor";
 import CookieBanner from "./components/common/CookieBanner";
 import AppRoutes from "./routes/AppRoutes";
-import AboutPage from "./pages/AboutPage";
-import ContactPage from "./pages/ContactPage";
-import GuidelinesPage from "./pages/GuidelinesPage";
-import HelpCenterPage from "./pages/HelpCenterPage";
-import AwardsPage from "./pages/AwardsPage";
-import TermsPage from "./pages/TermsPage";
-import GuidesPage from "./pages/GuidesPage";
-import SecurityPage from "./pages/SecurityPage";
-import SystemStatusPage from "./pages/SystemStatusPage";
+import PageLoader from "./components/common/PageLoader";
 import { ThemeProvider } from "./context/ThemeContext";
+
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const GuidelinesPage = lazy(() => import("./pages/GuidelinesPage"));
+const HelpCenterPage = lazy(() => import("./pages/HelpCenterPage"));
+const AwardsPage = lazy(() => import("./pages/AwardsPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const GuidesPage = lazy(() => import("./pages/GuidesPage"));
+const SecurityPage = lazy(() => import("./pages/SecurityPage"));
+const SystemStatusPage = lazy(() => import("./pages/SystemStatusPage"));
 
 const getRouteStateFromPath = () => {
   const pathname = window.location.pathname;
@@ -207,31 +209,33 @@ function AppContent() {
         )}
 
         <main className="flex-1">
-          {currentPage === "about" ? (
-            <AboutPage />
-          ) : currentPage === "contact" ? (
-            <ContactPage />
-          ) : currentPage === "guidelines" ? (
-            <GuidelinesPage />
-          ) : currentPage === "help" ? (
-            <HelpCenterPage />
-          ) : currentPage === "awards" ? (
-            <AwardsPage />
-          ) : currentPage === "terms" ? (
-            <TermsPage />
-          ) : currentPage === "guides" ? (
-            <GuidesPage />
-          ) : currentPage === "security" ? (
-            <SecurityPage />
-          ) : currentPage === "status" ? (
-            <SystemStatusPage />
-          ) : (
-            <AppRoutes
-              currentPage={currentPage}
-              onNavigate={handleNavigate}
-              pageData={pageData}
-            />
-          )}
+          <Suspense fallback={<PageLoader />}>
+            {currentPage === "about" ? (
+              <AboutPage />
+            ) : currentPage === "contact" ? (
+              <ContactPage />
+            ) : currentPage === "guidelines" ? (
+              <GuidelinesPage />
+            ) : currentPage === "help" ? (
+              <HelpCenterPage />
+            ) : currentPage === "awards" ? (
+              <AwardsPage />
+            ) : currentPage === "terms" ? (
+              <TermsPage />
+            ) : currentPage === "guides" ? (
+              <GuidesPage />
+            ) : currentPage === "security" ? (
+              <SecurityPage />
+            ) : currentPage === "status" ? (
+              <SystemStatusPage />
+            ) : (
+              <AppRoutes
+                currentPage={currentPage}
+                onNavigate={handleNavigate}
+                pageData={pageData}
+              />
+            )}
+          </Suspense>
         </main>
 
 {!isAuthPage && <Footer onNavigate={handleNavigate} />}
