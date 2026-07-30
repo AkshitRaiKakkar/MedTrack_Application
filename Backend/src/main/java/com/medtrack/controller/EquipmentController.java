@@ -1,20 +1,26 @@
 package com.medtrack.controller;
 
+import com.medtrack.dto.EquipmentStatisticsResponse;
+import com.medtrack.dto.LowStockSummaryResponse;
+import com.medtrack.dto.StockAdjustmentRequest;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentCategory;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.service.EquipmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import java.util.Map;
-import com.medtrack.model.EquipmentStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/equipment")
@@ -249,6 +255,46 @@ public class EquipmentController {
     public ResponseEntity<List<Equipment>> getLowStockEquipment(Principal principal) {
         return ResponseEntity.ok(
                 equipmentService.getLowStockEquipment(principal.getName())
+        );
+    }
+
+    /**
+     * Returns aggregate stock counters for the authenticated hospital.
+     *
+     * <p>Dashboard tiles need counts, not rows. Without this the client has to fetch
+     * {@code /low-stock} and measure the array on every poll.</p>
+     *
+     * @param principal the authenticated user's security principal
+     * @return tracked, low-stock, out-of-stock and total-unit counts
+     */
+    @GetMapping("/low-stock/summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<LowStockSummaryResponse> getLowStockSummary(Principal principal) {
+        return ResponseEntity.ok(
+                equipmentService.getLowStockSummary(principal.getName())
+        );
+    }
+
+    /**
+     * Applies a signed stock movement to a single asset.
+     *
+     * <p>{@code PATCH} rather than {@code PUT} because this is a partial, relative change:
+     * receiving five units is {@code {"delta": 5}}, consuming two is {@code {"delta": -2}}.
+     * Sending an absolute quantity through the full update endpoint loses concurrent movements.</p>
+     *
+     * @param id        the equipment identifier
+     * @param request   the movement to apply
+     * @param principal the authenticated user's security principal
+     * @return the updated equipment record
+     */
+    @PatchMapping("/{id}/stock")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Equipment> adjustStock(@PathVariable Long id,
+                                                 @Valid @RequestBody StockAdjustmentRequest request,
+                                                 Principal principal) {
+        validateId(id);
+        return ResponseEntity.ok(
+                equipmentService.adjustStock(id, request, principal.getName())
         );
     }
 

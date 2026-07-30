@@ -1,5 +1,3 @@
-package com.medtrack.auth.evidence.commandcenter.model;
-
 package com.medtrack.auth.commandcenter.model;
 
 import jakarta.persistence.*;

@@ -32,7 +32,10 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
-  AlertCircle
+  AlertCircle,
+  Award,
+  Network,
+  Package
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -49,6 +52,7 @@ import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
 import SbomPanel from "./SbomPanel";
 import HipaaDeidentificationPanel from "./HipaaDeidentificationPanel";
+import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -382,6 +386,7 @@ export default function EnterpriseSecurityCenter() {
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
           { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
+          { id: "grc", label: "GRC & Audit Ledger", icon: Award },
           { id: "sbom", label: "SBOM & Supply Chain", icon: Package },
           { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff }
         ].map((tab) => {
@@ -772,6 +777,10 @@ export default function EnterpriseSecurityCenter() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
       {/* TAB 7: THREAT ENGINE & SOAR */}
       {selectedTab === "threats" && (
         <ThreatDetectionSoarPanel />
@@ -797,12 +806,17 @@ export default function EnterpriseSecurityCenter() {
         <ZeroTrustNetworkPanel />
       )}
 
-      {/* TAB 12: SBOM & SUPPLY CHAIN SECURITY */}
+      {/* TAB 12: GRC & CONTINUOUS AUDIT LEDGER */}
+      {selectedTab === "grc" && (
+        <GrcAuditCompliancePanel />
+      )}
+
+      {/* TAB 13: SBOM & SUPPLY CHAIN SECURITY */}
       {selectedTab === "sbom" && (
         <SbomPanel />
       )}
 
-      {/* TAB 13: HIPAA ANONYMIZATION & PHI DE-IDENTIFICATION */}
+      {/* TAB 14: HIPAA ANONYMIZATION & PHI DE-IDENTIFICATION */}
       {selectedTab === "deidentification" && (
         <HipaaDeidentificationPanel />
       )}

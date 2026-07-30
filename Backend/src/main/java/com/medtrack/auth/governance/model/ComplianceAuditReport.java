@@ -6,10 +6,29 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 /**
- * Entity logging historical security compliance audit scans and health scores.
+ * Historical security compliance audit scans and health scores produced by the GRC governance
+ * subsystem.
+ *
+ * <p>The explicit entity and table names are required, not cosmetic.
+ * {@code com.medtrack.auth.compliance.model} declares a different entity with the same simple name,
+ * and Hibernate derives an entity name from the simple name alone:</p>
+ *
+ * <pre>
+ * DuplicateMappingException: Entity classes [com.medtrack.auth.compliance.model.ComplianceAuditReport]
+ * and [com.medtrack.auth.governance.model.ComplianceAuditReport] share the entity name
+ * 'ComplianceAuditReport' (entity names must be distinct)
+ * </pre>
+ *
+ * <p>Both also declared {@code @Table(name = "compliance_audit_reports")} while carrying completely
+ * different columns - this one records {@code scanTitle}/{@code complianceScore}/
+ * {@code overallStatus}/{@code scannedAt}, the other records {@code reportId}/
+ * {@code frameworkStandard}/{@code status}/{@code auditDate}. Under
+ * {@code hbm2ddl.auto=update} that produces one table holding the union of two unrelated schemas,
+ * with every column of the absent entity left null on each write. They are separate concepts and
+ * now use separate tables.</p>
  */
-@Entity
-@Table(name = "compliance_audit_reports")
+@Entity(name = "GovernanceComplianceAuditReport")
+@Table(name = "governance_compliance_audit_reports")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
