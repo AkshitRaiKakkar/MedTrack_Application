@@ -318,6 +318,120 @@ class EquipmentCsvServiceTest {
     }
 
     @Test
+    @DisplayName("re-importing an export updates the existing asset instead of duplicating it")
+    void reimportUpdatesRatherThanDuplicates() {
+        Equipment stored = Equipment.builder()
+                .id(500L)
+                .equipmentCode("EQ-1001")
+                .name("MRI Scanner")
+                .department("Radiology")
+                .category(EquipmentCategory.IMAGING)
+                .status(EquipmentStatus.ACTIVE)
+                .hospital(hospital)
+                .build();
+
+        // equipmentCode carries a unique constraint, so building a fresh entity for a code that
+        // already exists would violate it and fail the whole batch. The mocked repository in the
+        // other round-trip test cannot enforce that, which is exactly why this case is asserted on
+        // the resolved entity instead.
+        when(equipmentRepository.findByEquipmentCode("EQ-1001")).thenReturn(Optional.of(stored));
+
+        String csv = "Equipment Code,Name,Department,Category,Status\r\n"
+                + "EQ-1001,MRI Scanner Mk2,Imaging Suite,IMAGING,Maintenance\r\n";
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "in.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)),
+                USERNAME);
+
+        assertEquals(1, summary.getSuccessCount(), () -> String.valueOf(summary.getFailures()));
+
+        ArgumentCaptor<List<Equipment>> saved = ArgumentCaptor.forClass(List.class);
+        verify(equipmentRepository).saveAll(saved.capture());
+
+        Equipment result = saved.getValue().get(0);
+        assertEquals(500L, result.getId(), "the existing row must be updated, not a new one inserted");
+        assertEquals("MRI Scanner Mk2", result.getName());
+        assertEquals("Imaging Suite", result.getDepartment());
+        assertEquals(EquipmentStatus.UNDER_MAINTENANCE, result.getStatus());
+    }
+
+    @Test
+    @DisplayName("a code owned by another hospital is refused, not adopted")
+    void refusesAnotherHospitalsCode() {
+        Hospital other = Hospital.builder().id(99L).name("Rival Trust").build();
+        Equipment theirs = Equipment.builder()
+                .id(900L)
+                .equipmentCode("EQ-9999")
+                .name("Their Scanner")
+                .hospital(other)
+                .build();
+
+        when(equipmentRepository.findByEquipmentCode("EQ-9999")).thenReturn(Optional.of(theirs));
+
+        String csv = "Equipment Code,Name,Department,Category,Status\r\n"
+                + "EQ-9999,Hijacked,Radiology,IMAGING,Operational\r\n";
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "in.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)),
+                USERNAME);
+
+        // Adopting the row would let one tenant overwrite another's asset just by naming its code
+        // in an uploaded file.
+        assertEquals(0, summary.getSuccessCount());
+        assertEquals(1, summary.getFailureCount());
+        assertTrue(summary.getFailures().get(0).getReason().contains("another hospital"),
+                summary.getFailures().get(0).getReason());
+        verify(equipmentRepository, org.mockito.Mockito.never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("a stray quote is rejected with a reason rather than silently corrected")
+    void strayQuoteRejectsTheDocument() {
+        // `Oper"ational` previously parsed as `Operational` and then passed status validation, so
+        // malformed input was quietly turned into valid-looking data.
+        //
+        // It is rejected at document level, not per row, and that is the correct scope: an unbalanced
+        // quote makes record boundaries ambiguous, because the only quote-consistent reading is that
+        // everything after it is one field. Importing the rows before it and mis-assigning the rest
+        // would be worse than refusing the file.
+        String csv = "Name,Department,Category,Status\r\n"
+                + "Good,Lab,LABORATORY,Operational\r\n"
+                + "Bad,Lab,LABORATORY,Oper\"ational\r\n";
+
+        CsvSupport.MalformedCsvException error = assertThrows(
+                CsvSupport.MalformedCsvException.class,
+                () -> equipmentService.importEquipmentFromCsv(
+                        new MockMultipartFile("file", "in.csv", "text/csv",
+                                csv.getBytes(StandardCharsets.UTF_8)),
+                        USERNAME));
+
+        // MalformedCsvException extends IllegalArgumentException, so the existing advice mapping
+        // renders it as a 400 with the reason intact rather than a 500.
+        assertTrue(error instanceof IllegalArgumentException);
+        assertTrue(error.getMessage().contains("Unterminated quoted field"), error.getMessage());
+        verify(equipmentRepository, org.mockito.Mockito.never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("a row malformed without unbalancing quotes fails alone, and the rest still imports")
+    void balancedButMalformedRowFailsAlone() {
+        // Quotes are balanced here, so record boundaries are unambiguous and the damage can be
+        // contained to the offending row: text after a closing quote is malformed, but only this row.
+        String csv = "Name,Department,Category,Status\r\n"
+                + "Good,Lab,LABORATORY,Operational\r\n"
+                + "\"Bad\"extra,Lab,LABORATORY,Operational\r\n";
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "in.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)),
+                USERNAME);
+
+        assertEquals(1, summary.getSuccessCount(), "the well-formed row must still import");
+        assertEquals(1, summary.getFailureCount());
+        assertTrue(summary.getFailures().get(0).getReason().contains("after a closing quote"),
+                summary.getFailures().get(0).getReason());
+    }
+
+    @Test
     @DisplayName("the invalid-status message lists every accepted value")
     void invalidStatusMessageIsCurrent() {
         String csv = "Name,Department,Category,Status\r\nA,Lab,LABORATORY,Exploded\r\n";

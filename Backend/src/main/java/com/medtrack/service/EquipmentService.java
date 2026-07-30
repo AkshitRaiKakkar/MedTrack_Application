@@ -35,6 +35,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -579,7 +580,17 @@ public class EquipmentService {
                 String line = records.get(recordIndex);
                 rowNum++;
 
-                List<String> fields = parseCsvLine(line);
+                List<String> fields;
+                try {
+                    fields = parseCsvLine(line);
+                } catch (CsvSupport.MalformedCsvException e) {
+                    // A malformed row is the caller's data problem, not a server fault. Recorded as
+                    // a row failure with the reason so the rest of the file still imports; the
+                    // parser used to silently repair such rows into valid-looking values instead.
+                    failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, e.getMessage()));
+                    failureCount++;
+                    continue;
+                }
                 if (fields.size() < headers.size()) {
                     failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Row has fewer columns than headers"));
                     failureCount++;
@@ -702,22 +713,58 @@ public class EquipmentService {
                     parsedStatus = EquipmentStatus.RETIRED;
                 }
 
-                Equipment equipment = Equipment.builder()
-                        .name(name)
-                        .model(model)
-                        .serialNumber(serialNumber)
-                        .department(department)
-                        .category(equipmentCategory)
-                        .status(parsedStatus)
-                        .purchaseDate(purchaseDate)
-                        .warrantyExpiry(warrantyExpiry)
-                        // Preserve the code when the file carries one, so re-importing an export
-                        // updates the same assets rather than duplicating them under new codes.
-                        .equipmentCode(equipmentCode != null && !equipmentCode.trim().isEmpty()
-                                ? equipmentCode.trim()
-                                : "EQ-" + UUID.randomUUID())
-                        .hospital(hospital)
-                        .build();
+                // Upsert by equipment code. Preserving the code alone was not enough: equipmentCode
+                // carries a unique constraint, so building a fresh entity for a code that already
+                // exists either violates that constraint and fails the whole batch, or - before the
+                // code was preserved at all - inserted a duplicate asset under a new UUID. Neither
+                // is what re-importing an export should do.
+                String trimmedCode = equipmentCode != null && !equipmentCode.trim().isEmpty()
+                        ? equipmentCode.trim()
+                        : null;
+
+                Equipment existing = null;
+                if (trimmedCode != null) {
+                    Optional<Equipment> byCode = equipmentRepository.findByEquipmentCode(trimmedCode);
+                    if (byCode.isPresent()) {
+                        existing = byCode.get();
+                        // A code owned by another hospital must never be adopted: that would let one
+                        // tenant overwrite another's asset by uploading a file naming its code.
+                        if (existing.getHospital() == null
+                                || !hospital.getId().equals(existing.getHospital().getId())) {
+                            failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                    "Equipment Code " + trimmedCode
+                                            + " belongs to another hospital"));
+                            failureCount++;
+                            continue;
+                        }
+                    }
+                }
+
+                Equipment equipment;
+                if (existing != null) {
+                    equipment = existing;
+                    equipment.setName(name);
+                    equipment.setModel(model);
+                    equipment.setSerialNumber(serialNumber);
+                    equipment.setDepartment(department);
+                    equipment.setCategory(equipmentCategory);
+                    equipment.setStatus(parsedStatus);
+                    equipment.setPurchaseDate(purchaseDate);
+                    equipment.setWarrantyExpiry(warrantyExpiry);
+                } else {
+                    equipment = Equipment.builder()
+                            .name(name)
+                            .model(model)
+                            .serialNumber(serialNumber)
+                            .department(department)
+                            .category(equipmentCategory)
+                            .status(parsedStatus)
+                            .purchaseDate(purchaseDate)
+                            .warrantyExpiry(warrantyExpiry)
+                            .equipmentCode(trimmedCode != null ? trimmedCode : "EQ-" + UUID.randomUUID())
+                            .hospital(hospital)
+                            .build();
+                }
 
                 equipmentToSave.add(equipment);
                 successCount++;

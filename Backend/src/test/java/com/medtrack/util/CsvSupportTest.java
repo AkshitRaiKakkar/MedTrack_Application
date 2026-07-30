@@ -9,6 +9,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -176,6 +177,53 @@ class CsvSupportTest {
         @DisplayName("returns no fields for null")
         void handlesNull() {
             assertTrue(CsvSupport.parseLine(null).isEmpty());
+        }
+
+        @Test
+        @DisplayName("a quote in the middle of an unquoted field is rejected, not silently dropped")
+        void rejectsMidFieldQuote() {
+            // `Oper"ational` used to parse as `Operational`, which then passed status validation:
+            // malformed input was quietly corrected into valid-looking data.
+            CsvSupport.MalformedCsvException error = assertThrows(
+                    CsvSupport.MalformedCsvException.class,
+                    () -> CsvSupport.parseLine("A,Lab,LABORATORY,Oper\"ational"));
+
+            assertTrue(error.getMessage().contains("Unexpected quote"), error.getMessage());
+        }
+
+        @Test
+        @DisplayName("an unterminated quoted field is rejected")
+        void rejectsUnterminatedQuote() {
+            // A stray opening quote used to swallow the rest of the record, silently merging several
+            // columns into one field.
+            CsvSupport.MalformedCsvException error = assertThrows(
+                    CsvSupport.MalformedCsvException.class,
+                    () -> CsvSupport.parseLine("\"Ventilator,ICU,RESPIRATORY,Operational"));
+
+            assertTrue(error.getMessage().contains("Unterminated"), error.getMessage());
+        }
+
+        @Test
+        @DisplayName("text after a closing quote is rejected")
+        void rejectsTextAfterClosingQuote() {
+            assertThrows(CsvSupport.MalformedCsvException.class,
+                    () -> CsvSupport.parseLine("\"Ventilator\"extra,ICU"));
+        }
+
+        @Test
+        @DisplayName("a document ending inside a quoted value is rejected")
+        void rejectsUnterminatedDocument() {
+            assertThrows(CsvSupport.MalformedCsvException.class,
+                    () -> CsvSupport.splitRecords("a,b\r\n\"unclosed,value\r\n"));
+        }
+
+        @Test
+        @DisplayName("legitimately quoted and doubled quotes still parse")
+        void wellFormedQuotingStillWorks() {
+            assertEquals(List.of("Monitor 15\" Display", "Ward"),
+                    CsvSupport.parseLine("\"Monitor 15\"\" Display\",Ward"));
+            assertEquals(List.of("Ventilator, Portable", "ICU"),
+                    CsvSupport.parseLine("\"Ventilator, Portable\",ICU"));
         }
 
         @Test

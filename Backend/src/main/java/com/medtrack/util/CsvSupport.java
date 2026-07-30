@@ -195,6 +195,18 @@ public final class CsvSupport {
             current.append(character);
         }
 
+        if (inQuotes) {
+            // Once quotes are unbalanced, record boundaries are genuinely ambiguous: the only
+            // quote-consistent reading is that everything after the stray quote is one field, so
+            // continuing would silently mis-assign every remaining line. Rejecting the document is
+            // the honest outcome. The usual cause is a lone quote in a value rather than a truncated
+            // file, so the message says so.
+            throw new MalformedCsvException(
+                    "Unterminated quoted field: the document ends inside a quoted value. "
+                            + "A lone double quote in a value will do this - quote the whole field "
+                            + "and double the quote (\"\") to include a literal one.");
+        }
+
         addIfNotBlank(records, current);
         return records;
     }
@@ -226,19 +238,20 @@ public final class CsvSupport {
         StringBuilder current = new StringBuilder();
         boolean inQuotes = false;
         boolean fieldWasQuoted = false;
+        boolean quotedFieldClosed = false;
 
         for (int index = 0; index < line.length(); index++) {
             char character = line.charAt(index);
 
             if (inQuotes) {
                 if (character == '"') {
-                    // A doubled quote inside a quoted field is a literal quote. The previous
-                    // implementation toggled twice and emitted nothing, deleting the character.
+                    // A doubled quote inside a quoted field is a literal quote.
                     if (index + 1 < line.length() && line.charAt(index + 1) == '"') {
                         current.append('"');
                         index++;
                     } else {
                         inQuotes = false;
+                        quotedFieldClosed = true;
                     }
                 } else {
                     current.append(character);
@@ -247,19 +260,56 @@ public final class CsvSupport {
             }
 
             if (character == '"') {
+                // A quote may only open a field, at its very start. Accepting one mid-field silently
+                // deleted it: `Oper"ational` parsed as `Operational` and then passed status
+                // validation, so malformed input was corrected into valid-looking data instead of
+                // being rejected.
+                if (quotedFieldClosed || current.length() > 0) {
+                    throw new MalformedCsvException(
+                            "Unexpected quote at position " + index + " in record: " + line
+                                    + ". A quote may only appear at the start of a field, or doubled "
+                                    + "(\"\") inside a quoted field.");
+                }
                 inQuotes = true;
                 fieldWasQuoted = true;
             } else if (character == ',') {
                 fields.add(finishField(current, fieldWasQuoted));
                 current.setLength(0);
                 fieldWasQuoted = false;
+                quotedFieldClosed = false;
             } else {
+                // Nothing but a delimiter may follow a closing quote.
+                if (quotedFieldClosed) {
+                    throw new MalformedCsvException(
+                            "Unexpected text after a closing quote at position " + index
+                                    + " in record: " + line);
+                }
                 current.append(character);
             }
         }
 
+        if (inQuotes) {
+            // Previously an unterminated quoted field was silently accepted, so a stray quote
+            // swallowed the rest of the record and merged several columns into one.
+            throw new MalformedCsvException("Unterminated quoted field in record: " + line);
+        }
+
         fields.add(finishField(current, fieldWasQuoted));
         return fields;
+    }
+
+    /**
+     * Raised when input is not valid CSV.
+     *
+     * <p>A distinct type so callers can classify it: the import turns it into a per-row failure with
+     * the reason attached, rather than either a 500 or - worse - a silently corrected value.</p>
+     */
+    public static class MalformedCsvException extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+
+        public MalformedCsvException(String message) {
+            super(message);
+        }
     }
 
     private static String finishField(StringBuilder buffer, boolean wasQuoted) {
