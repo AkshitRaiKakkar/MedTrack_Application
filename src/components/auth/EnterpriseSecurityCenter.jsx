@@ -48,6 +48,7 @@ import DlpPrivacyGuardPanel from "./DlpPrivacyGuardPanel";
 import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
 import SbomPanel from "./SbomPanel";
+import HipaaDeidentificationPanel from "./HipaaDeidentificationPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -381,7 +382,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "dlp", label: "DLP & HIPAA Privacy", icon: ShieldCheck },
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
           { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
-          { id: "sbom", label: "SBOM & Supply Chain", icon: Package }
+          { id: "sbom", label: "SBOM & Supply Chain", icon: Package },
+          { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -798,6 +800,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 12: SBOM & SUPPLY CHAIN SECURITY */}
       {selectedTab === "sbom" && (
         <SbomPanel />
+      )}
+
+      {/* TAB 13: HIPAA ANONYMIZATION & PHI DE-IDENTIFICATION */}
+      {selectedTab === "deidentification" && (
+        <HipaaDeidentificationPanel />
       )}
 
       {/* 4. MODALS */}
