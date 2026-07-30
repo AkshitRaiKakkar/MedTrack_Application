@@ -105,3 +105,35 @@ adding accessors by hand. Look for the first structural error in the log instead
 ```
 
 Fix those, then recompile. The `cannot find symbol` wave will disappear on its own.
+
+## Database migrations
+
+`spring.flyway.locations=classpath:db/migration/{vendor}`, with `h2` and `mysql` variants that must
+stay in step.
+
+**Flyway manages exactly two tables: `maintenance_tasks` and `equipment`.** Everything else in the
+schema — including all ~30 security-subsystem tables — is created by `hibernate.ddl-auto=update`.
+
+That split is load-bearing, and getting it wrong is not obvious from the file you are editing.
+Flyway runs *before* Hibernate, so a migration that does
+
+```sql
+ALTER TABLE vulnerability_policies ADD COLUMN critical_patch_sla_days INT NULL;
+```
+
+fails with `Table "VULNERABILITY_POLICIES" not found` at **every** version number — there is no
+ordering that makes it work, because no migration ever creates that table. This actually shipped
+(`V7`, in #581) and broke four tests in `MaintenanceMigrationIntegrationTest`. The two halves of that
+change looked symmetrical: `equipment` is referenced by V1 and V3, `vulnerability_policies` by
+nothing, and that difference is invisible from inside the new file.
+
+`FlywayMigrationConsistencyTest` now enforces three things:
+
+1. no migration references a table outside `FLYWAY_MANAGED_TABLES`,
+2. the `h2` and `mysql` directories carry the same version numbers,
+3. versions run `V1..Vn` with no gaps, since Flyway rejects out-of-order versions unless
+   `spring.flyway.out-of-order` is enabled.
+
+To bring a table under Flyway control, write its `CREATE TABLE` migration first, then add it to the
+allowlist in that test. Adding a table to the allowlist without the `CREATE TABLE` reproduces the
+original bug.

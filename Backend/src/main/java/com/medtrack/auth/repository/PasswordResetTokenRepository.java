@@ -13,15 +13,6 @@ import java.util.Optional;
 public interface PasswordResetTokenRepository extends JpaRepository<PasswordResetToken, Long> {
 
     /**
-     * Finds a password reset token by email and OTP code.
-     *
-     * @param email the email address
-     * @param otp the OTP code
-     * @return an {@link Optional} containing the matched {@link PasswordResetToken} if found
-     */
-    Optional<PasswordResetToken> findByEmailAndOtp(String email, String otp);
-
-    /**
      * Finds password reset tokens by email and used status.
      *
      * @param email the email address
@@ -37,4 +28,13 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
      * @return an {@link Optional} containing the latest {@link PasswordResetToken} if found
      */
     Optional<PasswordResetToken> findFirstByEmailOrderByCreatedAtDesc(String email);
+
+    /**
+     * Finds the latest not-yet-used password reset token for a given email address,
+     * i.e. the token an OTP/reset attempt should currently be evaluated against.
+     *
+     * @param email the email address
+     * @return an {@link Optional} containing the latest unused {@link PasswordResetToken} if found
+     */
+    Optional<PasswordResetToken> findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(String email);
 }
