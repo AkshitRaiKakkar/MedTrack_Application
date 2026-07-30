@@ -1,14 +1,22 @@
 package com.medtrack.service;
 
+import com.medtrack.auth.model.User;
+import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.dto.PlaceOrderRequest;
 import com.medtrack.dto.SupplierMetricsDto;
+import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
+import com.medtrack.repository.EquipmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 
 import com.medtrack.util.SupplierInvoicePdf;
 import com.medtrack.auth.service.EmailService;
@@ -30,10 +38,16 @@ public class OrderServiceTest {
     private EquipmentOrderRepository orderRepository;
 
     @Mock
+    private EquipmentRepository equipmentRepository;
+
+    @Mock
     private SupplierInvoicePdf supplierInvoicePdf;
 
     @Mock
     private EmailService emailService;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private OrderService orderService;
@@ -167,4 +181,80 @@ public class OrderServiceTest {
 
          verify(emailService).sendInvoiceEmail(eq("admin@cityhospital.com"), eq("ORD-1111"), eq(expectedPdfBytes));
      }
+
+    @Test
+    void placeOrder_DerivesHospitalAndCreatedByFromAuthenticatedUser_ServerSide() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setName("City Hospital Admin");
+        hospitalUser.setOrganization("City Hospital");
+
+        Equipment equipment = new Equipment();
+        equipment.setEquipmentCode("EQ-100");
+        equipment.setName("Ventilator Alpha");
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(3)
+                .notes("Urgent")
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-100")).thenReturn(Optional.of(equipment));
+        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        EquipmentOrder created = orderService.placeOrder(request, authentication);
+
+        assertEquals("City Hospital", created.getHospital());
+        assertEquals("City Hospital Admin", created.getCreatedBy());
+        assertEquals("Ventilator Alpha", created.getEquipmentName());
+        assertEquals("PENDING", created.getStatus());
+        assertEquals("Processing", created.getShippingStatus());
+        assertEquals(EquipmentOrder.APPROVAL_PENDING, created.getApprovalStatus());
+        assertNotNull(created.getOrderCode());
+    }
+
+    @Test
+    void placeOrder_UnknownEquipmentCode_ThrowsResourceNotFoundException() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "admin@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("admin@cityhospital.com");
+        hospitalUser.setOrganization("City Hospital");
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-DOES-NOT-EXIST")
+                .quantity(1)
+                .build();
+
+        when(userRepository.findByEmail("admin@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+        when(equipmentRepository.findByEquipmentCode("EQ-DOES-NOT-EXIST")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> orderService.placeOrder(request, authentication));
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void placeOrder_UserWithNoOrganization_ThrowsIllegalArgumentException() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "noorg@cityhospital.com", null, Collections.emptyList());
+
+        User hospitalUser = new User();
+        hospitalUser.setEmail("noorg@cityhospital.com");
+        hospitalUser.setOrganization(null);
+
+        PlaceOrderRequest request = PlaceOrderRequest.builder()
+                .equipmentId("EQ-100")
+                .quantity(1)
+                .build();
+
+        when(userRepository.findByEmail("noorg@cityhospital.com")).thenReturn(Optional.of(hospitalUser));
+
+        assertThrows(IllegalArgumentException.class, () -> orderService.placeOrder(request, authentication));
+        verify(orderRepository, never()).save(any());
+    }
 }
