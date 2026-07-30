@@ -49,6 +49,7 @@ import PasskeyPasswordlessPanel from "./PasskeyPasswordlessPanel";
 import ZeroTrustNetworkPanel from "./ZeroTrustNetworkPanel";
 import SbomPanel from "./SbomPanel";
 import HipaaDeidentificationPanel from "./HipaaDeidentificationPanel";
+import ZeroTrustGovernancePanel from "./ZeroTrustGovernancePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -383,7 +384,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "passkeys", label: "Passkeys & WebAuthn", icon: Fingerprint },
           { id: "ztna", label: "ZTNA & Microsegmentation", icon: Network },
           { id: "sbom", label: "SBOM & Supply Chain", icon: Package },
-          { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff }
+          { id: "deidentification", label: "HIPAA Anonymization & PHI", icon: EyeOff },
+          { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -805,6 +807,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 13: HIPAA ANONYMIZATION & PHI DE-IDENTIFICATION */}
       {selectedTab === "deidentification" && (
         <HipaaDeidentificationPanel />
+      )}
+
+      {/* TAB 14: ZERO TRUST IDENTITY GOVERNANCE */}
+      {selectedTab === "ztgovernance" && (
+        <ZeroTrustGovernancePanel />
       )}
 
       {/* 4. MODALS */}
