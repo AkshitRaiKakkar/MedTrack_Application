@@ -531,7 +531,10 @@ public class MaintenanceServiceTest {
         assertTrue(icalResult.contains("BEGIN:VEVENT"));
         assertTrue(icalResult.contains("UID:MNT-1111@medtrack.com"));
         assertTrue(icalResult.contains("SUMMARY:MRI Scanner -"));
-        assertTrue(icalResult.contains("STATUS:NEEDS-ACTION")); // since status is IN_PROGRESS
+        assertTrue(icalResult.contains("STATUS:CONFIRMED"));
+        assertTrue(icalResult.contains("X-MEDTRACK-STATUS:IN_PROGRESS"));
+        assertFalse(icalResult.contains("\r\nSTATUS:NEEDS-ACTION\r\n"));
+        assertFalse(icalResult.contains("\r\nSTATUS:COMPLETED\r\n"));
         assertTrue(icalResult.contains("END:VEVENT"));
         assertTrue(icalResult.contains("END:VCALENDAR"));
     }

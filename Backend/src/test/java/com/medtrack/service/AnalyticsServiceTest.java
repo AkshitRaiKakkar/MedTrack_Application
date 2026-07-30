@@ -96,7 +96,7 @@ public class AnalyticsServiceTest {
                 .id(30L)
                 .hospitalId(hospitalId)
                 .status(MaintenanceStatus.SCHEDULED)
-                .priority("CRITICAL") // critical pending
+                .priority("Critical") // critical pending
                 .build();
 
         MaintenanceTask legacyCompletedTask = MaintenanceTask.builder()
@@ -151,11 +151,23 @@ public class AnalyticsServiceTest {
                 .totalCost(BigDecimal.valueOf(1_000_000.00))
                 .build();
 
-        when(equipmentRepository.findByHospitalId(hospitalId)).thenReturn(Arrays.asList(eq1, eq2));
-        when(taskRepository.findByHospitalId(hospitalId))
-                .thenReturn(Arrays.asList(task1, task2, task3, legacyCompletedTask));
-        when(orderRepository.findAll())
-                .thenReturn(Arrays.asList(order1, order2, order3, order4, otherHospitalOrder));
+        when(equipmentRepository.countByHospitalId(hospitalId)).thenReturn(2L);
+        when(equipmentRepository.countByHospitalIdAndStatus(
+                hospitalId, EquipmentStatus.UNDER_MAINTENANCE)).thenReturn(1L);
+        when(equipmentRepository.countByHospitalIdAndWarrantyExpiryBetween(
+                eq(hospitalId), any(LocalDate.class), any(LocalDate.class))).thenReturn(1L);
+        when(equipmentRepository.findNameAndCategoryByHospitalId(hospitalId))
+                .thenReturn(Collections.emptyList());
+        when(taskRepository.findCompletedTasksWithTimestamps(
+                hospitalId, MaintenanceStatus.COMPLETED)).thenReturn(Arrays.asList(task1, task2));
+        when(taskRepository.averageHoursWorkedByHospitalIdAndStatus(
+                hospitalId, MaintenanceStatus.COMPLETED)).thenReturn(4.0);
+        when(taskRepository.countByHospitalIdAndStatusNotAndPriority(
+                hospitalId, MaintenanceStatus.COMPLETED, "Critical")).thenReturn(1L);
+        when(orderRepository.sumTotalCostByHospitalAndShippingStatus(
+                "City General Hospital", "Delivered")).thenReturn(BigDecimal.valueOf(180000.00));
+        when(orderRepository.findByHospitalAndShippingStatus(
+                "City General Hospital", "Delivered")).thenReturn(Arrays.asList(order1, order2, order3));
 
         HospitalAnalyticsDto dto = analyticsService.getHospitalAnalytics(hospitalId);
 
@@ -184,6 +196,9 @@ public class AnalyticsServiceTest {
 
         // Warranty: eq1 expires in 15 days, eq2 in 100 days -> 1 upcoming
         assertEquals(1, dto.getUpcomingWarrantyExpirationsCount());
+
+        verify(taskRepository).countByHospitalIdAndStatusNotAndPriority(
+                hospitalId, MaintenanceStatus.COMPLETED, "Critical");
     }
 
     @Test

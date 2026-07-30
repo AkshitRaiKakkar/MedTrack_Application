@@ -150,6 +150,15 @@ Technicians may update report fields without changing a non-completed status, bu
 
 The ownership rule also applies to Maintenance analytics. Status counts, completed-task SLA
 inputs, average work hours, and critical-pending counts exclude rows whose scalar hospital owner
-does not match the hospital that owns the linked equipment.
+does not match the hospital that owns the linked equipment. Critical-pending analytics use the
+documented canonical priority value `Critical`, matching request validation and persistence.
 
 Legacy completed rows may have a null completion timestamp. They remain readable, but maintenance SLA reporting excludes them rather than estimating when the work finished.
+
+## Calendar Export
+
+The hospital calendar export represents deadlines as `VEVENT` components. RFC 5545 permits
+`TENTATIVE`, `CONFIRMED`, or `CANCELLED` as a `VEVENT` `STATUS`, so every exported Maintenance
+event uses `STATUS:CONFIRMED`. The exact Maintenance enum name, such as `IN_PROGRESS` or
+`COMPLETED`, is preserved separately in `X-MEDTRACK-STATUS` and remains present as a
+human-readable value in the event description.
