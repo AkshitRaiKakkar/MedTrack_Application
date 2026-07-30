@@ -38,18 +38,16 @@ API.interceptors.request.use(
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    const status = error.response?.status;
-    if (status === 401) {
+    const status=error.response?.status;
+    if(status===401){
       sessionStorage.removeItem("medtrack_user");
-      errorEmitter.dispatchEvent(new CustomEvent("toast", {
-        detail: { message: "Session expired. Please login again.", type: "error" }
-      }));
-      setTimeout(() => { window.location.href = "/login"; }, 100);
-    } else if (status === 403) {
-      errorEmitter.dispatchEvent(new CustomEvent("toast", {
-        detail: { message: "Access denied: You are not authorised to perform this action.", type: "error" }
-      }));
-    } else {
+      alert("Session expired. Please login again.");
+      window.location.href="/login";
+    }
+    else if(status===403){
+      alert("Access denied: You are not authorised to perform this action.");
+    }
+    else{
       console.error("API request failed:", error.response?.data || error.message);
     }
     return Promise.reject(error);

@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import { getAllEquipment } from '../../services/EquipmentService';
 import { placeOrder } from '../../services/OrderService';
 
 const RequestEquipmentPage = ({ onNavigate }) => {
-  const { user } = useAuth();
   const [equipmentList, setEquipmentList] = useState([]);
   const [formData, setFormData] = useState({
     equipmentId: '',
@@ -46,11 +44,7 @@ const RequestEquipmentPage = ({ onNavigate }) => {
     e.preventDefault();
 
     try {
-      await placeOrder({
-        ...formData,
-        hospital: user?.organization,
-        createdBy: user?.name
-      });
+      await placeOrder(formData);
       alert('Order placed successfully!');
       onNavigate('dashboard');
     } catch (err) {
