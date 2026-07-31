@@ -132,10 +132,21 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             + "AND t.priority = :priority")
     long countByHospitalIdAndStatusNotAndPriority(@Param("hospitalId") Long hospitalId, @Param("status") MaintenanceStatus status, @Param("priority") String priority);
 
-    // Soft delete - archived records (deleted = true)
+    // Soft delete - archived records (deleted = true).
+    //
+    // Native for the same reason as the equipment archive queries: MaintenanceTask carries a
+    // class-level @SQLRestriction("deleted = false"), which Hibernate appends to every HQL and
+    // criteria query for the entity. As derived queries these asked for `deleted = true AND
+    // deleted = false` and could never return a row.
+
+    @Query(value = "SELECT * FROM maintenance_tasks WHERE deleted = TRUE", nativeQuery = true)
     List<MaintenanceTask> findByDeletedTrue();
 
+    @Query(value = "SELECT * FROM maintenance_tasks WHERE deleted = TRUE",
+            countQuery = "SELECT COUNT(*) FROM maintenance_tasks WHERE deleted = TRUE",
+            nativeQuery = true)
     Page<MaintenanceTask> findByDeletedTrue(Pageable pageable);
 
-    Optional<MaintenanceTask> findByIdAndDeletedTrue(Long id);
+    @Query(value = "SELECT * FROM maintenance_tasks WHERE id = :id AND deleted = TRUE", nativeQuery = true)
+    Optional<MaintenanceTask> findByIdAndDeletedTrue(@Param("id") Long id);
 }

@@ -103,10 +103,20 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     // Soft delete - archived records (deleted = true).
     //
-    // Both of these deliberately carry a `deleted = true` predicate, which the entity's
-    // class-level @SQLRestriction("deleted = false") contradicts. Restoring the build does not
-    // resolve that contradiction; it is tracked separately so the fix arrives with its own tests.
-    Page<Equipment> findByDeletedTrueAndHospitalId(Long hospitalId, Pageable pageable);
+    // Native on purpose. Equipment carries a class-level @SQLRestriction("deleted = false") and
+    // Hibernate appends that predicate to every HQL and criteria query for the entity, including
+    // derived queries. `deleted = true AND deleted = false` is unsatisfiable, so as derived queries
+    // these could never return a row: archiving an asset removed it permanently, with no way to
+    // list it or restore it. A native query is passed through as written, so the restriction does
+    // not apply and the archive view works while the default view still hides archived rows.
 
-    Optional<Equipment> findByIdAndDeletedTrue(Long id);
+    @Query(value = "SELECT * FROM equipment WHERE deleted = TRUE AND hospital_id = :hospitalId",
+            countQuery = "SELECT COUNT(*) FROM equipment WHERE deleted = TRUE AND hospital_id = :hospitalId",
+            nativeQuery = true)
+    Page<Equipment> findByDeletedTrueAndHospitalId(
+            @Param("hospitalId") Long hospitalId,
+            Pageable pageable);
+
+    @Query(value = "SELECT * FROM equipment WHERE id = :id AND deleted = TRUE", nativeQuery = true)
+    Optional<Equipment> findByIdAndDeletedTrue(@Param("id") Long id);
 }
