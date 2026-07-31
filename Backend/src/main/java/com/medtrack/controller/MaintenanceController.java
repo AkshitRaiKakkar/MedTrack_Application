@@ -3,19 +3,17 @@ package com.medtrack.controller;
 import com.medtrack.dto.MaintenanceAssignmentRequest;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
-import com.medtrack.dto.PagedResponse;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.service.MaintenanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.web.PageableDefault;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * REST controller for managing equipment maintenance tasks.
@@ -31,20 +29,20 @@ public class MaintenanceController {
     private final MaintenanceService maintenanceService;
 
     /**
-     * Retrieves a paginated list of maintenance tasks.
+     * Retrieves an ownership-scoped list of maintenance tasks, with optional pagination.
      *
-     * @return a paginated response of maintenance tasks
+     * @return the matching maintenance tasks as the established JSON-array response
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
-    public ResponseEntity<PagedResponse<MaintenanceTask>> getAllTasks(
+    public ResponseEntity<List<MaintenanceTask>> getAllTasks(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String equipmentId,
-            @PageableDefault(size = 20, sort = "deadline") Pageable pageable,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             Authentication authentication) {
-        Page<MaintenanceTask> page = maintenanceService.getAllTasks(
-                authentication, status, equipmentId, pageable);
-        return ResponseEntity.ok(PagedResponse.of(page));
+        return ResponseEntity.ok(maintenanceService.getAllTasks(
+                authentication, status, equipmentId, page, size));
     }
 
     /**
@@ -113,12 +111,12 @@ public class MaintenanceController {
     }
 
     /**
-     * Deletes a non-completed maintenance task by its identifier.
+     * Soft-deletes a non-completed maintenance task by its identifier.
      * Accessible only to users with the HOSPITAL role.
      * Completed records are retained as immutable maintenance evidence.
      *
      * @param id the maintenance task identifier
-     * @return HTTP 204 No Content when the task is successfully deleted
+     * @return HTTP 204 No Content when the task is successfully archived
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")

@@ -14,6 +14,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,7 +25,7 @@ import static com.medtrack.validation.MaintenanceValidationLimits.SIGNATURE_MAX_
 
 @Entity
 @Table(name = "maintenance_tasks")
-@Where(clause = "deleted = false")
+@SQLRestriction("deleted = false")
 @Data
 @Builder
 @NoArgsConstructor

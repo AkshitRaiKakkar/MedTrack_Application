@@ -48,6 +48,24 @@ class MaintenanceTaskRepositoryTest {
     private MaintenanceTaskRepository taskRepository;
 
     @Test
+    void softDeletedTasksAreExcludedFromNormalRepositoryAccess() {
+        Hospital hospital = persistHospital("Archive Hospital");
+        Equipment equipment = persistEquipment(hospital);
+        User technician = persistTechnician("archive-tech");
+        MaintenanceTask task = persistTask("MNT-ARCHIVED", equipment, hospital, technician);
+        task.setDeleted(true);
+        task.setDeletedAt(LocalDateTime.now());
+        task.setDeletedBy("hospital@medtrack.com");
+        Long taskId = task.getId();
+        entityManager.flush();
+        entityManager.clear();
+
+        assertTrue(taskRepository.findById(taskId).isEmpty());
+        assertTrue(taskRepository.findByHospitalId(hospital.getId()).isEmpty());
+        assertTrue(taskRepository.findByAssignedTechnicianId(technician.getId()).isEmpty());
+    }
+
+    @Test
     void ownershipScopedQueriesRequireTaskAndEquipmentHospitalToAgree() {
         Hospital equipmentHospital = persistHospital("Equipment Hospital");
         Hospital taskHospital = persistHospital("Task Hospital");

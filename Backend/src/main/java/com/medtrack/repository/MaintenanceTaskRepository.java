@@ -132,10 +132,4 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             + "AND t.priority = :priority")
     long countByHospitalIdAndStatusNotAndPriority(@Param("hospitalId") Long hospitalId, @Param("status") MaintenanceStatus status, @Param("priority") String priority);
 
-    // Soft delete - archived records (deleted = true)
-    List<MaintenanceTask> findByDeletedTrue();
-
-    Page<MaintenanceTask> findByDeletedTrue(Pageable pageable);
-
-    Optional<MaintenanceTask> findByIdAndDeletedTrue(Long id);
 }
