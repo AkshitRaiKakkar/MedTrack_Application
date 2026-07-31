@@ -1,7 +1,7 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ReactLenis } from "lenis/react";
 import "lenis/dist/lenis.css";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ToastProvider, useToast } from "./context/ToastContext";
 import ToastContainer from "./components/common/ToastContainer";
 import { errorEmitter } from "./services/HttpService";
@@ -12,47 +12,14 @@ import ScrollToTopButton from "./components/common/ScrollToTopButton";
 import CustomCursor from "./components/common/CustomCursor";
 import CookieBanner from "./components/common/CookieBanner";
 import AppRoutes from "./routes/AppRoutes";
-import PageLoader from "./components/common/PageLoader";
 import { ThemeProvider } from "./context/ThemeContext";
-
-const AboutPage = lazy(() => import("./pages/AboutPage"));
-const ContactPage = lazy(() => import("./pages/ContactPage"));
-const GuidelinesPage = lazy(() => import("./pages/GuidelinesPage"));
-const HelpCenterPage = lazy(() => import("./pages/HelpCenterPage"));
-const AwardsPage = lazy(() => import("./pages/AwardsPage"));
-const TermsPage = lazy(() => import("./pages/TermsPage"));
-const GuidesPage = lazy(() => import("./pages/GuidesPage"));
-const SecurityPage = lazy(() => import("./pages/SecurityPage"));
-const SystemStatusPage = lazy(() => import("./pages/SystemStatusPage"));
-
-const getRouteStateFromPath = () => {
-  const pathname = window.location.pathname;
-  const path = pathname
-    .replace(/^\/MedTrack_Application/i, "")
-    .replace(/^\/+|\/+$/g, "");
-
-  if (!path) return { page: "landing", data: null };
-
-  if (path.startsWith("blog/")) {
-    return {
-      page: "blog-post",
-      data: decodeURIComponent(path.slice("blog/".length)),
-    };
-  }
-
-  if (path.startsWith("edit-equipment/")) {
-    return {
-      page: "edit-equipment",
-      data: decodeURIComponent(path.slice("edit-equipment/".length)),
-    };
-  }
-
-  if (path.startsWith("apply/")) {
-    return {
-      page: "apply",
-      data: decodeURIComponent(path.slice("apply/".length)),
-    };
-  }
+import {
+  BASE_PATH,
+  buildPath,
+  hasChrome,
+  resolveEffectivePage,
+  resolvePath,
+} from "./routes/routeRegistry";
 
 /**
  * Strips the GitHub Pages base path and surrounding slashes from the current location, leaving the
@@ -71,6 +38,11 @@ const currentRoutePath = () =>
  * appeared twice, and `microsegmentation` appeared twice with *different* targets ("ztna" and
  * "microsegmentation"). In an object literal the last wins silently, so `/microsegmentation`
  * resolved to a page whose switch case was itself unreachable.
+ *
+ * This file also used to carry its own `lazy()` ladder rendering AboutPage, ContactPage and seven
+ * others *before* delegating to AppRoutes. Those nine pages are all in the registry, so the ladder
+ * both duplicated their chunks and made App.jsx a second place a route could be declared. Every
+ * page now renders through AppRoutes; there is one list.
  */
 const getRouteStateFromPath = () => resolvePath(currentRoutePath());
 
@@ -82,8 +54,8 @@ function AppContent() {
   const { addToast } = useToast();
 
   useEffect(() => {
-    const handler = (e) => {
-      addToast(e.detail.message, e.detail.type);
+    const handler = (event) => {
+      addToast(event.detail.message, event.detail.type);
     };
     errorEmitter.addEventListener("toast", handler);
     return () => errorEmitter.removeEventListener("toast", handler);
@@ -126,38 +98,16 @@ function AppContent() {
       >
         <CustomCursor />
         <ToastContainer />
-        {!isAuthPage && (
+        {showChrome && (
           <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
         )}
 
         <main className="flex-1">
-          <Suspense fallback={<PageLoader />}>
-            {currentPage === "about" ? (
-              <AboutPage />
-            ) : currentPage === "contact" ? (
-              <ContactPage />
-            ) : currentPage === "guidelines" ? (
-              <GuidelinesPage />
-            ) : currentPage === "help" ? (
-              <HelpCenterPage />
-            ) : currentPage === "awards" ? (
-              <AwardsPage />
-            ) : currentPage === "terms" ? (
-              <TermsPage />
-            ) : currentPage === "guides" ? (
-              <GuidesPage />
-            ) : currentPage === "security" ? (
-              <SecurityPage />
-            ) : currentPage === "status" ? (
-              <SystemStatusPage />
-            ) : (
-              <AppRoutes
-                currentPage={currentPage}
-                onNavigate={handleNavigate}
-                pageData={pageData}
-              />
-            )}
-          </Suspense>
+          <AppRoutes
+            currentPage={currentPage}
+            onNavigate={handleNavigate}
+            pageData={pageData}
+          />
         </main>
 
         {showChrome && <Footer onNavigate={handleNavigate} />}

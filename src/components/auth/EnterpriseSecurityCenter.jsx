@@ -36,7 +36,6 @@ import {
   Award,
   Network,
   Package,
-  Sliders,
   BrainCircuit,
   Binary,
   Radio

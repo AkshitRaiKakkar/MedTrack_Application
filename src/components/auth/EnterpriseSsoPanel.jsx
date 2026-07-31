@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  Info,
   Activity,
   Layers,
   Lock,
