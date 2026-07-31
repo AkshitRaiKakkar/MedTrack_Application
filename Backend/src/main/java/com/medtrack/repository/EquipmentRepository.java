@@ -84,4 +84,29 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
             LocalDate startDate,
             LocalDate endDate
     );
+
+    /**
+     * Assets whose warranty runs past {@code horizon} - the "comfortably valid" bucket.
+     *
+     * <p>Rows with no warranty date are excluded on purpose; they are counted separately by
+     * {@link #countByHospitalIdAndWarrantyExpiryIsNull(Long)} so that "unknown" is never
+     * silently reported as "valid".</p>
+     */
+    @Query("SELECT COUNT(e) FROM Equipment e WHERE e.hospital.id = :hospitalId AND e.warrantyExpiry > :horizon")
+    long countByHospitalIdAndWarrantyExpiryAfter(
+            @Param("hospitalId") Long hospitalId,
+            @Param("horizon") LocalDate horizon);
+
+    /** Assets with no warranty expiry recorded at all. */
+    @Query("SELECT COUNT(e) FROM Equipment e WHERE e.hospital.id = :hospitalId AND e.warrantyExpiry IS NULL")
+    long countByHospitalIdAndWarrantyExpiryIsNull(@Param("hospitalId") Long hospitalId);
+
+    // Soft delete - archived records (deleted = true).
+    //
+    // Both of these deliberately carry a `deleted = true` predicate, which the entity's
+    // class-level @SQLRestriction("deleted = false") contradicts. Restoring the build does not
+    // resolve that contradiction; it is tracked separately so the fix arrives with its own tests.
+    Page<Equipment> findByDeletedTrueAndHospitalId(Long hospitalId, Pageable pageable);
+
+    Optional<Equipment> findByIdAndDeletedTrue(Long id);
 }

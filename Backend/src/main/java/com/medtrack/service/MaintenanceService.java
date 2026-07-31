@@ -63,7 +63,76 @@ public class MaintenanceService {
             MaintenanceStatus.ON_HOLD, EnumSet.of(MaintenanceStatus.IN_PROGRESS),
             MaintenanceStatus.COMPLETED, EnumSet.noneOf(MaintenanceStatus.class)
     );
-/// updates:-
+    /**
+     * Every task the caller may see, unfiltered and unpaged.
+     *
+     * <p>Scope comes from the trusted JWT identity, never from a client-supplied filter: a hospital
+     * user sees their hospital's tasks, a technician sees the tasks assigned to their own user ID.
+     * </p>
+     *
+     * <p>Kept alongside the paged overload because two callers genuinely need the whole set rather
+     * than a window of it - the iCal feed, which a calendar client subscribes to and expects to be
+     * complete, and internal aggregation. Returning a page to those callers silently truncates the
+     * answer to the first 20 rows.</p>
+     *
+     * @param authentication the authenticated caller
+     * @return every task visible to the caller
+     * @throws AccessDeniedException if the caller holds neither the HOSPITAL nor TECHNICIAN role
+     */
+    public List<MaintenanceTask> getAllTasks(Authentication authentication) {
+        if (hasRole(authentication, "HOSPITAL")) {
+            return taskRepository.findByHospitalId(getHospitalForUser(authentication).getId());
+        }
+        if (hasRole(authentication, "TECHNICIAN")) {
+            return taskRepository.findByAssignedTechnicianId(
+                    getAuthenticatedTechnician(authentication).getId());
+        }
+        throw new AccessDeniedException("This role cannot access maintenance tasks");
+    }
+
+    /**
+     * Filtered tasks addressed by a plain {@code page}/{@code size} pair.
+     *
+     * <p>This is the shape the HTTP API has always exposed, and the shape the existing callers and
+     * tests use. It validates the two numbers before touching the repository - a negative page or a
+     * size above {@value #MAX_PAGE_SIZE} is rejected as a bad request rather than turned into an
+     * unbounded scan - and then delegates to {@link #getAllTasks(Authentication, String, String,
+     * Pageable)}.</p>
+     *
+     * <p>Passing {@code null} for both numbers means "no paging", which is how an unfiltered list
+     * request with no query parameters behaves.</p>
+     *
+     * @param authentication the authenticated caller
+     * @param statusValue    optional status filter, accepted as either display name or enum constant
+     * @param equipmentId    optional equipment code filter
+     * @param page           zero-based page index, or {@code null} for unpaged
+     * @param size           page size, or {@code null} to fall back to {@value #DEFAULT_PAGE_SIZE}
+     * @return the matching tasks
+     * @throws IllegalArgumentException if the page index is negative or the size is out of range
+     */
+    public List<MaintenanceTask> getAllTasks(
+            Authentication authentication,
+            String statusValue,
+            String equipmentId,
+            Integer page,
+            Integer size) {
+        return getAllTasks(authentication, statusValue, equipmentId, resolvePageable(page, size))
+                .getContent();
+    }
+
+    /**
+     * Filtered, paged tasks.
+     *
+     * <p>The ownership predicate lives in the repository query, so no filter combination can reach
+     * another hospital's or another technician's records.</p>
+     *
+     * @param authentication the authenticated caller
+     * @param statusValue    optional status filter
+     * @param equipmentId    optional equipment code filter
+     * @param pageable       the page to fetch
+     * @return the requested page of tasks
+     * @throws AccessDeniedException if the caller holds neither the HOSPITAL nor TECHNICIAN role
+     */
     public Page<MaintenanceTask> getAllTasks(
             Authentication authentication,
             String statusValue,
@@ -400,6 +469,9 @@ public class MaintenanceService {
     }
 
     public String exportTasksToICal(Authentication authentication) {
+        // The calendar feed is a subscription, not a page: a client fetches this URL and expects
+        // every scheduled task back. Deliberately the unpaged overload, so the feed can never be
+        // silently truncated to whatever the default page size happens to be.
         List<MaintenanceTask> tasks = getAllTasks(authentication);
         StringBuilder ical = new StringBuilder();
         ical.append("BEGIN:VCALENDAR\r\n")

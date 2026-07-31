@@ -13,6 +13,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLRestriction;
 import lombok.ToString;
 
 import java.time.LocalDate;
@@ -24,7 +25,8 @@ import static com.medtrack.validation.MaintenanceValidationLimits.SIGNATURE_MAX_
 
 @Entity
 @Table(name = "maintenance_tasks")
-@Where(clause = "deleted = false")
+// Hibernate 7 removed @Where; @SQLRestriction is its replacement and carries the same semantics.
+@SQLRestriction("deleted = false")
 @Data
 @Builder
 @NoArgsConstructor

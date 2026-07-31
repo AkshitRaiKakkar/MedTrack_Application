@@ -2,6 +2,7 @@ package com.medtrack.service;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.dto.EquipmentDashboardResponse;
 import com.medtrack.dto.EquipmentImportSummary;
 import com.medtrack.dto.EquipmentStatisticsResponse;
 import com.medtrack.dto.LowStockSummaryResponse;
@@ -134,7 +135,26 @@ public class EquipmentService {
     }
 
     /**
-     * Fetches a paginated list of equipment records.
+     * Every equipment record belonging to the caller's hospital, unpaged.
+     *
+     * <p>Retained next to the paged overload for the callers that genuinely need the whole
+     * inventory in one pass - the CSV export and the aggregate reports - where handing back a
+     * single page would silently produce a partial answer rather than a smaller one.</p>
+     *
+     * @param username authenticated user's username
+     * @return the hospital's full inventory
+     */
+    public List<Equipment> getAllEquipment(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentRepository.findByHospitalId(hospital.getId());
+    }
+
+    /**
+     * Fetches one page of the caller's equipment records.
+     *
+     * @param username authenticated user's username
+     * @param pageable the page to fetch
+     * @return the requested page of equipment
      */
     public Page<Equipment> getAllEquipment(String username, Pageable pageable) {
         Hospital hospital = getHospitalForUser(username);

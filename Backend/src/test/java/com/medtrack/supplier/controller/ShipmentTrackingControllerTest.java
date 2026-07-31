@@ -14,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -44,7 +46,11 @@ public class ShipmentTrackingControllerTest {
 
     @BeforeEach
     void setUp() {
+        // standaloneSetup wires none of Spring Data Web's argument resolvers, so without this the
+        // controller's `Pageable` parameter resolves to null and every paged endpoint 500s inside
+        // MockMvc rather than under a real dispatcher.
         mockMvc = MockMvcBuilders.standaloneSetup(shipmentTrackingController)
+                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -154,11 +160,14 @@ public class ShipmentTrackingControllerTest {
                 .supplierId(10L)
                 .build();
 
-        when(shipmentTrackingService.getShipmentsBySupplier(eq(10L), any())).thenReturn(Collections.singletonList(item));
+        // The endpoint returns a PagedResponse envelope, so the rows live under `content`.
+        when(shipmentTrackingService.getShipmentsBySupplier(eq(10L), any(), any()))
+                .thenReturn(new PageImpl<>(Collections.singletonList(item)));
 
         mockMvc.perform(get("/api/shipments/supplier/10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(100))
-                .andExpect(jsonPath("$[0].supplierId").value(10));
+                .andExpect(jsonPath("$.content[0].id").value(100))
+                .andExpect(jsonPath("$.content[0].supplierId").value(10))
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 }

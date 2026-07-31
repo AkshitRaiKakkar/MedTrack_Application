@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.security.access.AccessDeniedException;
@@ -668,12 +669,13 @@ public class MaintenanceServiceTest {
                 .when(authentication).getAuthorities();
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
         when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        // findByHospitalIdWithFilters is a paged query, so the stub has to hand back a Page.
         when(taskRepository.findByHospitalIdWithFilters(
                 eq(mockHospital.getId()),
                 eq(MaintenanceStatus.IN_PROGRESS),
                 eq("EQ-100"),
                 any(Pageable.class)))
-                .thenReturn(Collections.singletonList(mockTask));
+                .thenReturn(new PageImpl<>(Collections.singletonList(mockTask)));
 
         List<MaintenanceTask> result = maintenanceService.getAllTasks(
                 authentication, "In Progress", "  EQ-100  ", 1, 25);
