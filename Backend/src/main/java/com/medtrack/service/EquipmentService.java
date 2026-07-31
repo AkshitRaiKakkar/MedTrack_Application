@@ -44,6 +44,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -778,6 +779,10 @@ public class EquipmentService {
         // Serial numbers already claimed by an earlier row in this same file, so a
         // duplicate further down the file is caught before it ever reaches saveAll.
         Set<String> serialNumbersInFile = new HashSet<>();
+        // Equipment codes already claimed by an earlier row in this same file. equipmentCode is a
+        // unique column, so two rows naming the same code must be caught here rather than by a
+        // constraint violation that takes the whole batch down.
+        Set<String> equipmentCodesInFile = new HashSet<>();
 
         // UTF-8 explicitly. InputStreamReader with no charset uses the platform default, so on a
         // JVM defaulting to Windows-1252 the exported BOM decodes to "\u00ef\u00bb\u00bf" rather
@@ -946,7 +951,13 @@ public class EquipmentService {
                         failureCount++;
                         continue;
                     }
-                    if (equipmentRepository.findBySerialNumber(normalizedSerial).isPresent()) {
+                    // Scoped to *other* records. During an upsert the row's own stored asset
+                    // already holds this serial number, so an unqualified "already exists" check
+                    // would reject every re-import of an unchanged export.
+                    String rowCode = equipmentCode != null ? equipmentCode.trim() : null;
+                    Optional<Equipment> serialOwner = equipmentRepository.findBySerialNumber(normalizedSerial);
+                    if (serialOwner.isPresent()
+                            && !(rowCode != null && rowCode.equals(serialOwner.get().getEquipmentCode()))) {
                         failures.add(new EquipmentImportSummary.RowFailure(
                                 rowNum, line, "Serial Number already exists in inventory: " + normalizedSerial));
                         failureCount++;
@@ -954,17 +965,73 @@ public class EquipmentService {
                     }
                 }
 
-                Equipment equipment = Equipment.builder()
-                        .name(name)
-                        .model(model)
-                        .serialNumber(serialNumber)
-                        .department(department)
-                        .category(equipmentCategory)
-                        .status(parsedStatus)
-                        .purchaseDate(purchaseDate)
-                        .equipmentCode("EQ-" + UUID.randomUUID().toString())
-                        .hospital(hospital)
-                        .build();
+                // Upsert by equipment code.
+                //
+                // Minting a fresh UUID for every row makes re-importing an export duplicate the
+                // whole inventory: the code column is the only stable identity a CSV carries, and
+                // discarding it means the second import cannot tell "this asset again" from "a new
+                // asset". It is also a unique column, so a row naming an existing code either
+                // violates that constraint and fails the entire batch, or - with a new UUID -
+                // silently inserts a second copy of the same physical asset.
+                String trimmedCode = equipmentCode != null && !equipmentCode.trim().isEmpty()
+                        ? equipmentCode.trim()
+                        : null;
+
+                if (trimmedCode != null && !equipmentCodesInFile.add(trimmedCode)) {
+                    // Two rows of one file claiming the same code would build two entities for a
+                    // unique column. saveAll would then fail the whole batch on a constraint
+                    // violation, reporting a 500 for what is a fixable problem in the caller's file.
+                    failures.add(new EquipmentImportSummary.RowFailure(
+                            rowNum, line, "Duplicate Equipment Code within this file: " + trimmedCode));
+                    failureCount++;
+                    continue;
+                }
+
+                Equipment existing = null;
+                if (trimmedCode != null) {
+                    Optional<Equipment> byCode = equipmentRepository.findByEquipmentCode(trimmedCode);
+                    if (byCode.isPresent()) {
+                        existing = byCode.get();
+                        // A code owned by another hospital must never be adopted: findByEquipmentCode
+                        // is global, so without this check one tenant could overwrite another's
+                        // asset simply by naming its code in an uploaded file.
+                        if (existing.getHospital() == null
+                                || !hospital.getId().equals(existing.getHospital().getId())) {
+                            failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                    "Equipment Code " + trimmedCode + " belongs to another hospital"));
+                            failureCount++;
+                            continue;
+                        }
+                    }
+                }
+
+                Equipment equipment;
+                if (existing != null) {
+                    equipment = existing;
+                    equipment.setName(name);
+                    equipment.setModel(model);
+                    equipment.setSerialNumber(serialNumber);
+                    equipment.setDepartment(department);
+                    equipment.setCategory(equipmentCategory);
+                    equipment.setStatus(parsedStatus);
+                    equipment.setPurchaseDate(purchaseDate);
+                    equipment.setWarrantyExpiry(warrantyExpiry);
+                } else {
+                    equipment = Equipment.builder()
+                            .name(name)
+                            .model(model)
+                            .serialNumber(serialNumber)
+                            .department(department)
+                            .category(equipmentCategory)
+                            .status(parsedStatus)
+                            .purchaseDate(purchaseDate)
+                            // Written by the export and previously never read back, so a round trip
+                            // silently dropped the warranty date.
+                            .warrantyExpiry(warrantyExpiry)
+                            .equipmentCode(trimmedCode != null ? trimmedCode : "EQ-" + UUID.randomUUID())
+                            .hospital(hospital)
+                            .build();
+                }
 
                 equipmentToSave.add(equipment);
                 successCount++;
