@@ -14,8 +14,6 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -68,17 +66,14 @@ class MaintenanceControllerIntegrationTest {
     @Test
     @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
     void listTasks_ReturnsEmptyJsonArrayWith200() throws Exception {
-        // GET /api/maintenance returns a PagedResponse envelope and the controller resolves a
-        // Pageable, so this stubs the Pageable-taking overload. Stubbing the page/size one left the
-        // real call unstubbed, Mockito returned null, and PagedResponse.of(null) surfaced as a 400.
-        when(maintenanceService.getAllTasks(any(), eq(null), eq(null), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(maintenanceService.getAllTasks(
+                any(), eq(null), eq(null), eq(null), eq(null)))
+                .thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/maintenance"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isArray())
-                .andExpect(jsonPath("$.content").isEmpty())
-                .andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
@@ -419,22 +414,22 @@ class MaintenanceControllerIntegrationTest {
                 .priority("Normal")
                 .status(MaintenanceStatus.SCHEDULED)
                 .build();
-        when(maintenanceService.getAllTasks(any(), eq(null), eq(null), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(task)));
+        when(maintenanceService.getAllTasks(
+                any(), eq(null), eq(null), eq(null), eq(null)))
+                .thenReturn(List.of(task));
 
         mockMvc.perform(get("/api/maintenance"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].taskCode").value("MNT-42"))
-                .andExpect(jsonPath("$.content[0].status").value("Scheduled"))
-                .andExpect(jsonPath("$.totalElements").value(1));
+                .andExpect(jsonPath("$[0].taskCode").value("MNT-42"))
+                .andExpect(jsonPath("$[0].status").value("Scheduled"));
     }
 
     @Test
     @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
     void hospitalListForwardsOptionalFiltersAndPagination() throws Exception {
         when(maintenanceService.getAllTasks(
-                any(), eq("In Progress"), eq("EQ-1001"), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(Collections.emptyList()));
+                any(), eq("In Progress"), eq("EQ-1001"), eq(2), eq(25)))
+                .thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/maintenance")
                         .param("status", "In Progress")
@@ -442,15 +437,13 @@ class MaintenanceControllerIntegrationTest {
                         .param("page", "2")
                         .param("size", "25"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isEmpty());
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
 
-        // The page and size query parameters must reach the service as a resolved Pageable, not be
-        // silently dropped: a listing that ignores them returns page 0 whatever the client asked for.
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        // The raw page and size query parameters must reach the service unchanged. The service
+        // owns defaulting, validation, deterministic sorting, and repository Pageable creation.
         verify(maintenanceService).getAllTasks(
-                any(), eq("In Progress"), eq("EQ-1001"), pageableCaptor.capture());
-        assertEquals(2, pageableCaptor.getValue().getPageNumber());
-        assertEquals(25, pageableCaptor.getValue().getPageSize());
+                any(), eq("In Progress"), eq("EQ-1001"), eq(2), eq(25));
     }
 
     private MaintenanceCreateRequest validSchedulingRequest() {
