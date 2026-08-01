@@ -93,6 +93,22 @@ public class Equipment {
 
     private LocalDate warrantyExpiry;
 
+    @Column(name = "room_location", length = 100)
+    private String roomLocation;
+
+    @Column(name = "ward_location", length = 100)
+    private String wardLocation;
+
+    @Column(name = "custodian", length = 255)
+    private String custodian;
+
+    @Column(name = "location_effective_date")
+    private LocalDate locationEffectiveDate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "replacement_equipment_id")
+    private Equipment replacementEquipment;
+
     /**
      * Many Equipment items belong to one Hospital.
      */

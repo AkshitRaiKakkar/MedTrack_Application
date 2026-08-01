@@ -47,3 +47,28 @@ export const updateEquipment = async (id, data) => {
   const response = await API.put(`/api/equipment/${id}`, data);
   return response.data;
 };
+
+export const getEquipmentLifecycle = async (id) => {
+  const response = await API.get(`/api/equipment/${id}/lifecycle`);
+  return response.data;
+};
+
+export const createEquipmentLifecycleAction = async (id, data) => {
+  const response = await API.post(`/api/equipment/${id}/lifecycle`, data);
+  return response.data;
+};
+
+export const approveEquipmentLifecycleAction = async (actionId) => {
+  const response = await API.post(`/api/equipment/lifecycle/${actionId}/approve`);
+  return response.data;
+};
+
+export const rejectEquipmentLifecycleAction = async (actionId, reason = "") => {
+  const response = await API.post(`/api/equipment/lifecycle/${actionId}/reject`, { reason });
+  return response.data;
+};
+
+export const completeEquipmentLifecycleAction = async (actionId) => {
+  const response = await API.post(`/api/equipment/lifecycle/${actionId}/complete`);
+  return response.data;
+};
