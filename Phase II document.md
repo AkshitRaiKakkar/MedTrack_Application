@@ -190,7 +190,7 @@ technician-owned progress updates, completion evidence, and completion-driven re
 
 **Implemented Deliverables**
 - model/MaintenanceTask.java — equipment relationship, deadline, priority, typed status, technician report, completion timestamp, and recurrence period
-- service/MaintenanceService.java — hospital-scoped scheduling/reads/deletion, technician-scoped updates, recurrence, and iCalendar export
+- service/MaintenanceService.java — hospital-scoped scheduling/reads/auditable soft deletion, technician-scoped updates, recurrence, and iCalendar export
 - Completion-driven recurrence using the hospital-configured interval; concurrent completion is serialized with a database write lock
 - Priority values: Normal / High / Critical
 - Status lifecycle: SCHEDULED → IN_PROGRESS → COMPLETED, with NEEDS_PART and ON_HOLD returning to IN_PROGRESS
@@ -204,6 +204,10 @@ technician-owned progress updates, completion evidence, and completion-driven re
 - Every Maintenance operation revalidates the caller's current database role and requires an
   active account, so stale JWTs cannot preserve Maintenance access after lockout or disablement
 - `GET /api/maintenance/export/calendar.ics` for hospital calendar export
+- Calendar events use RFC 5545-valid `VEVENT` status values and expose the exact workflow state
+  through `X-MEDTRACK-STATUS`
+- Critical-pending Maintenance analytics use the documented canonical `Critical` value consistently
+  across persistence and repository aggregation
 - Focused unit/repository/migration tests for ownership, validation, lifecycle, recurrence, locking, and calendar generation
 
 Quartz-based overdue detection, Kafka maintenance events, automatic SLA escalation, and a separate
@@ -228,6 +232,8 @@ progress/report fields, and closing work orders with a digital sign-off.*
 - Technician list, read, and update operations also require the current technician account to
   remain active and retain its technician role
 - Completed task evidence is immutable and records a server-controlled completion timestamp
+- Hospital deletion retains eligible non-completed tasks with a deletion timestamp and actor while
+  excluding them from normal Maintenance reads
 
 Automatic inventory deduction, multipart evidence upload/object storage, Kafka assignment
 consumption, and a separate Technician controller/service remain roadmap items and are not present

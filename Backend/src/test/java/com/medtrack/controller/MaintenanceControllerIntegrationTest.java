@@ -66,12 +66,14 @@ class MaintenanceControllerIntegrationTest {
     @Test
     @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
     void listTasks_ReturnsEmptyJsonArrayWith200() throws Exception {
-        when(maintenanceService.getAllTasks(any(), eq(null), eq(null), eq(null), eq(null)))
+        when(maintenanceService.getAllTasks(
+                any(), eq(null), eq(null), eq(null), eq(null)))
                 .thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/maintenance"))
                 .andExpect(status().isOk())
-                .andExpect(content().json("[]"));
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
@@ -412,7 +414,8 @@ class MaintenanceControllerIntegrationTest {
                 .priority("Normal")
                 .status(MaintenanceStatus.SCHEDULED)
                 .build();
-        when(maintenanceService.getAllTasks(any(), eq(null), eq(null), eq(null), eq(null)))
+        when(maintenanceService.getAllTasks(
+                any(), eq(null), eq(null), eq(null), eq(null)))
                 .thenReturn(List.of(task));
 
         mockMvc.perform(get("/api/maintenance"))
@@ -434,8 +437,11 @@ class MaintenanceControllerIntegrationTest {
                         .param("page", "2")
                         .param("size", "25"))
                 .andExpect(status().isOk())
-                .andExpect(content().json("[]"));
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
 
+        // The raw page and size query parameters must reach the service unchanged. The service
+        // owns defaulting, validation, deterministic sorting, and repository Pageable creation.
         verify(maintenanceService).getAllTasks(
                 any(), eq("In Progress"), eq("EQ-1001"), eq(2), eq(25));
     }

@@ -19,6 +19,8 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
 
     List<EquipmentOrder> findByHospital(String hospital);
 
+    Page<EquipmentOrder> findByHospital(String hospital, Pageable pageable);
+
     List<EquipmentOrder> findByStatus(String status);
 
     List<EquipmentOrder> findByEquipmentId(String equipmentId);
@@ -44,4 +46,30 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
 
     @Query("SELECT o FROM EquipmentOrder o WHERE LOWER(o.hospital) = LOWER(:hospitalName) AND LOWER(o.shippingStatus) = LOWER(:shippingStatus)")
     List<EquipmentOrder> findByHospitalAndShippingStatus(@Param("hospitalName") String hospitalName, @Param("shippingStatus") String shippingStatus);
+
+    // Soft delete - archived records (deleted = true).
+    //
+    // Native for the same reason as the equipment archive queries: EquipmentOrder carries a
+    // class-level @SQLRestriction("deleted = false"), which Hibernate appends to every HQL and
+    // criteria query for the entity. As derived queries these asked for `deleted = true AND
+    // deleted = false` and could never return a row, so an archived order could not be listed,
+    // restored or purged.
+
+    @Query(value = "SELECT * FROM equipment_orders WHERE deleted = TRUE", nativeQuery = true)
+    List<EquipmentOrder> findByDeletedTrue();
+
+    @Query(value = "SELECT * FROM equipment_orders WHERE deleted = TRUE",
+            countQuery = "SELECT COUNT(*) FROM equipment_orders WHERE deleted = TRUE",
+            nativeQuery = true)
+    Page<EquipmentOrder> findByDeletedTrue(Pageable pageable);
+
+    @Query(value = "SELECT * FROM equipment_orders WHERE deleted = TRUE AND hospital = :hospital",
+            countQuery = "SELECT COUNT(*) FROM equipment_orders WHERE deleted = TRUE AND hospital = :hospital",
+            nativeQuery = true)
+    Page<EquipmentOrder> findByHospitalAndDeletedTrue(
+            @Param("hospital") String hospital,
+            Pageable pageable);
+
+    @Query(value = "SELECT * FROM equipment_orders WHERE id = :id AND deleted = TRUE", nativeQuery = true)
+    Optional<EquipmentOrder> findByIdAndDeletedTrue(@Param("id") Long id);
 }

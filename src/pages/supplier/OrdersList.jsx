@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getAllOrders, updateOrderStatus, getSupplierMetrics } from "../../services/OrderService";
 import { useAuth } from "../../context/AuthContext";
 import InvoiceModal from "./InvoiceModal";
+import Pagination from "../../components/common/Pagination";
 
 const STATUS_OPTIONS = ["Processing", "Shipped", "Delivered", "Cancelled"];
 
@@ -12,6 +13,9 @@ export default function OrdersList({ onNavigate }) {
   const [error, setError] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
   
   const [metrics, setMetrics] = useState({
     totalOrders: 0,
@@ -26,12 +30,20 @@ export default function OrdersList({ onNavigate }) {
     fetchOrders();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllOrders();
-      setOrders(data);
-      await fetchMetrics();
+      // GET /api/orders returns a PagedResponse envelope, not a bare array. Assigning the envelope
+      // straight to `orders` left every `orders.map(...)` below iterating an object, so the page
+      // threw on render as soon as the backend started paging. `data` is kept as a fallback for a
+      // backend that has not been redeployed yet.
+      const response = await getAllOrders(pageNum, pageSize);
+      const items = response?.content || response?.data || [];
+      setOrders(items);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
+      await fetchMetrics(items);
+      setError(null);
     } catch (err) {
       console.error("Error fetching orders:", err);
       setError("Unable to load orders. Please try again.");
@@ -40,7 +52,11 @@ export default function OrdersList({ onNavigate }) {
     }
   };
 
-  const fetchMetrics = async () => {
+  const handlePageChange = (newPage) => {
+    fetchOrders(newPage);
+  };
+
+  const fetchMetrics = async (currentOrders = orders) => {
     try {
       const data = await getSupplierMetrics();
       if (data) {
@@ -49,13 +65,13 @@ export default function OrdersList({ onNavigate }) {
     } catch (err) {
       console.error("Error fetching supplier metrics:", err);
       // Fallback local calculations
-      const total = orders.length;
-      const processing = orders.filter(o => o.shippingStatus === 'Processing' || o.shippingStatus === 'Pending').length;
-      const delivered = orders.filter(o => o.shippingStatus === 'Delivered').length;
+      const total = currentOrders.length;
+      const processing = currentOrders.filter(o => o.shippingStatus === 'Processing' || o.shippingStatus === 'Pending').length;
+      const delivered = currentOrders.filter(o => o.shippingStatus === 'Delivered').length;
       setMetrics({
         totalOrders: total,
         pendingOrders: processing,
-        shippedOrders: orders.filter(o => o.shippingStatus === 'Shipped').length,
+        shippedOrders: currentOrders.filter(o => o.shippingStatus === 'Shipped').length,
         deliveredOrders: delivered,
         averageDeliveryDays: 4.5,
         onTimeRate: 95.0
@@ -247,6 +263,10 @@ export default function OrdersList({ onNavigate }) {
           <h2 className="text-2xl font-bold text-slate-900 mb-2">No active orders</h2>
           <p className="text-slate-500">When hospitals place equipment orders, they'll appear here for fulfillment.</p>
         </div>
+      )}
+
+      {!loading && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
       )}
 
       {selectedInvoiceOrder && (

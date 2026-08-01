@@ -1,54 +1,16 @@
 // src/routes/AppRoutes.jsx
-import React from "react";
+import React, { Suspense } from "react";
 import { useAuth } from "../context/AuthContext";
+import PageLoader from "../components/common/PageLoader";
+import { checkAccess, getRoute, resolveEffectivePage } from "./routeRegistry";
 
-// Page Imports
-import LandingPage from "../pages/LandingPage";
-import NotFoundPage from "../pages/NotFoundPage";
-import Blog from "../pages/Blog";
-import BlogPost from "../pages/BlogPost";
-import CareersPage from "../pages/CareersPage";
-import JobApplicationPage from "../pages/JobApplicationPage";
-import HelpPage from "../pages/HelpPage";
-import CertificateGeneratorPage from "../pages/CertificateGeneratorPage";
-import LoginPage from "../pages/auth/LoginPage";
-import RegisterPage from "../pages/auth/RegisterPage";
-import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
-import VerifyOtpPage from "../pages/auth/VerifyOtpPage";
-import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
-import Dashboard from "../pages/hospital/Dashboard";
-import AnalyticsDashboard from "../pages/hospital/AnalyticsDashboard";
-import EquipmentList from "../pages/hospital/EquipmentList";
-import MaintenanceSchedule from "../pages/hospital/MaintenanceSchedule";
-import TaskList from "../pages/technician/TaskList";
-import UpdateTask from "../pages/technician/UpdateTask";
-import OrdersList from "../pages/supplier/OrdersList";
-import OrderStatus from "../pages/supplier/OrderStatus";
-import AuthoritySecurityPage from "../pages/auth/AuthoritySecurityPage";
-import MfaSecurityPage from "../pages/auth/MfaSecurityPage";
-import EnterpriseSsoPage from "../pages/auth/EnterpriseSsoPage";
-import RbacSecurityPage from "../pages/auth/RbacSecurityPage";
-import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
-import ComplianceSecurityPage from "../pages/auth/ComplianceSecurityPage";
-import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
-import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
-import DlpPrivacyGuardPage from "../pages/auth/DlpPrivacyGuardPage";
-import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
-import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
-import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
-import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
-import GrcAuditCompliancePage from "../pages/auth/GrcAuditCompliancePage";
-import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
-import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
-import VulnerabilityManagementPage from "../pages/auth/VulnerabilityManagementPage";
-import PamPage from "../pages/auth/PamPage";
-
-// --- Connected Imports ---
-import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
-import EditEquipmentForm from "../pages/hospital/EditEquipmentForm";
-import ScheduleMaintenancePage from "../pages/hospital/ScheduleMaintenancePage";
-import RequestEquipmentPage from "../pages/hospital/RequestEquipmentPage";
-
+/**
+ * Shown when a signed-in user reaches a console their role is not permitted to open.
+ *
+ * Distinct from the login substitution on purpose: an unauthenticated visitor is sent to the login
+ * screen because signing in would fix it, whereas a technician opening an admin console has a
+ * problem that signing in again will not solve.
+ */
 const UnauthorizedPage = ({ onNavigate, message }) => (
   <div className="min-h-screen bg-slate-900 flex items-center justify-center font-sans text-white p-6">
     <div className="bg-slate-800 rounded-[2rem] p-16 text-center border border-red-500/20 max-w-md shadow-2xl">
@@ -57,8 +19,7 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
       </div>
       <h2 className="text-2xl font-black mb-2">Access Denied</h2>
       <p className="text-red-400 font-bold mb-6">
-        {message ||
-          "Your account role is not authorized to access this resource."}
+        {message || "Your account role is not authorized to access this resource."}
       </p>
       <button
         onClick={() => onNavigate("dashboard")}
@@ -70,152 +31,62 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
   </div>
 );
 
-export default function AppRouter({ currentPage, onNavigate, pageData }) {
+/**
+ * Renders whichever page the registry resolves for `currentPage`.
+ *
+ * This file used to carry a 130-line `switch` listing every route by hand, in parallel with a
+ * `routeMap` object in App.jsx and an import list at the top of this file. Nothing kept the three
+ * consistent and they had drifted badly: `keyvault-security` appeared as a `case` label twice in
+ * the same switch, `microsegmentation` appeared in two separate case groups so the second was
+ * unreachable, and the `ProtectedRoute` helper the switch called was deleted by a merge while every
+ * one of its ~30 call sites stayed - leaving a bare `return` statement floating between the
+ * component's body and the switch, which is what stopped the whole bundle from parsing.
+ *
+ * Route information now lives in exactly one place - routeRegistry.js - and this component is the
+ * generic renderer for it, so a new console cannot be half-registered.
+ *
+ * Access control is applied here, once, rather than per route:
+ *
+ *   - an unknown slug resolves to the 404 page;
+ *   - an unauthenticated visitor to a protected route gets the login screen (App.jsx derives layout
+ *     chrome from the same `resolveEffectivePage` call, so the two cannot disagree);
+ *   - a signed-in user whose role is not on the route's allow-list gets the Access Denied page.
+ */
+export default function AppRoutes({ currentPage, onNavigate, pageData }) {
   const { user } = useAuth();
 
-  const ProtectedRoute = (Component, props = {}, allowedRoles = []) => {
-    if (!user) return <LoginPage onNavigate={onNavigate} />;
+  // resolveEffectivePage decides which page actually renders: the requested one, or the login
+  // screen for an unauthenticated caller, or the 404 page for an unknown slug. App.jsx calls the
+  // same function to decide layout chrome, so the two cannot disagree about what is on screen.
+  const effectivePage = resolveEffectivePage(user, currentPage);
+  const route = getRoute(effectivePage);
 
-    if (
-      allowedRoles.length > 0 &&
-      !allowedRoles.includes(user.role?.toLowerCase())
-    ) {
-      return <UnauthorizedPage onNavigate={onNavigate} />;
+  const renderContent = () => {
+    // resolveEffectivePage only ever returns a page key the registry knows, so a missing route here
+    // means the registry itself has lost its 404 entry. Fail visibly rather than render nothing.
+    if (!route) {
+      return (
+        <UnauthorizedPage
+          onNavigate={onNavigate}
+          message="This page is not registered in the route registry."
+        />
+      );
     }
 
-    return <Component onNavigate={onNavigate} {...props} />;
+    const { allowed, reason } = checkAccess(user, effectivePage);
+    if (!allowed) {
+      return <UnauthorizedPage onNavigate={onNavigate} message={reason} />;
+    }
+
+    const Component = route.component;
+
+    // A parameterised route names the prop its component expects for the dynamic segment, so
+    // `/edit-equipment/EQ-1001` arrives as `equipmentId` and `/blog/my-post` as `slug` without this
+    // file needing to know either name.
+    const params = route.param ? { [route.param]: pageData } : {};
+
+    return <Component onNavigate={onNavigate} {...params} />;
   };
 
-  switch (currentPage) {
-    // --- Public Routes ---
-    case "landing":
-      return <LandingPage onNavigate={onNavigate} />;
-    case "blog":
-      return <Blog onNavigate={onNavigate} />;
-    case "blog-post":
-      return <BlogPost onNavigate={onNavigate} slug={pageData} />;
-    case "careers":
-      return <CareersPage onNavigate={onNavigate} />;
-    case "apply":
-      return <JobApplicationPage onNavigate={onNavigate} jobId={pageData} />;
-    case "certificate":
-      return <CertificateGeneratorPage />;
-    case "login":
-      return <LoginPage onNavigate={onNavigate} />;
-    case "register":
-      return <RegisterPage onNavigate={onNavigate} defaultRole={pageData} />;
-    case "forgot-password":
-      return <ForgotPasswordPage onNavigate={onNavigate} />;
-    case "verify-otp":
-      return <VerifyOtpPage onNavigate={onNavigate} />;
-    case "reset-password":
-      return <ResetPasswordPage onNavigate={onNavigate} />;
-
-    // --- Protected Routes: Hospital Admin ---
-    case "dashboard":
-      return ProtectedRoute(Dashboard);
-    case "equipment":
-      return ProtectedRoute(EquipmentList);
-    case "add-equipment":
-      return ProtectedRoute(AddEquipmentForm, {}, ["hospital"]);
-    case "edit-equipment":
-      return ProtectedRoute(EditEquipmentForm, { equipmentId: pageData }, ["hospital"]);
-    case "schedule-maintenance":
-      return ProtectedRoute(ScheduleMaintenancePage, {}, ["hospital"]);
-    case "request-equipment":
-      return ProtectedRoute(RequestEquipmentPage, {}, ["hospital"]);
-    case "maintenance":
-      return ProtectedRoute(MaintenanceSchedule);
-    case "analytics":
-      return ProtectedRoute(AnalyticsDashboard, {}, ["hospital"]);
-
-    // --- Protected Routes: Technician ---
-    case "tasks":
-      return ProtectedRoute(TaskList);
-    case "update-task":
-      return ProtectedRoute(UpdateTask, { task: pageData });
-    case "updatetask":
-      return ProtectedRoute(UpdateTask, { task: pageData });
-
-    // --- Protected Routes: Supplier ---
-    case "orders":
-      return ProtectedRoute(OrdersList);
-    case "orderstatus":
-      return ProtectedRoute(OrderStatus, { order: pageData });
-
-    // --- Protected Routes: Security & Authority ---
-    // Authority version management, RBAC role/permission matrix, and SSO provider
-    // configuration are Hospital admin-only consoles. 2FA/device management is
-    // self-service and stays open to any authenticated role.
-    case "authority-security":
-    case "authority":
-      return ProtectedRoute(AuthoritySecurityPage, {}, ["hospital"]);
-    case "mfa-security":
-    case "mfa":
-      return ProtectedRoute(MfaSecurityPage);
-    case "sso-security":
-    case "sso":
-      return ProtectedRoute(EnterpriseSsoPage, {}, ["hospital"]);
-    case "rbac-security":
-    case "rbac":
-      return ProtectedRoute(RbacSecurityPage, {}, ["hospital"]);
-    case "zerotrust-security":
-    case "zerotrust":
-      return ProtectedRoute(ZeroTrustSecurityPage, {}, ["hospital"]);
-    case "compliance-security":
-    case "compliance":
-      return ProtectedRoute(ComplianceSecurityPage);
-    case "threat-detection":
-    case "soar-security":
-    case "soar":
-      return ProtectedRoute(ThreatDetectionSoarPage);
-    case "keyvault-security":
-    case "keyvault":
-    case "keyvault-security":
-      return ProtectedRoute(KeyVaultSecurityPage);
-    case "dlp":
-    case "dlp-privacy":
-    case "privacy-guard":
-      return ProtectedRoute(DlpPrivacyGuardPage);
-    case "passkeys":
-    case "passwordless":
-    case "webauthn":
-      return ProtectedRoute(PasskeyPasswordlessPage);
-    case "ztna":
-    case "microsegmentation":
-    case "network-access":
-      return ProtectedRoute(ZeroTrustNetworkPage);
-    case "siem":
-    case "siem-analytics":
-    case "siem-security":
-      return ProtectedRoute(SiemSecurityAnalyticsPage);
-    case "scim-provisioning":
-    case "scim":
-      return ProtectedRoute(ScimProvisioningPage);
-    case "security-commandcenter":
-    case "command-center":
-      return ProtectedRoute(SecurityCommandCenterPage);
-    case "vulnerability":
-    case "patch-management":
-      return ProtectedRoute(VulnerabilityManagementPage);
-    case "microsegmentation":
-    case "sdp":
-    case "perimeter-security":
-      return ProtectedRoute(MicrosegmentationPage);
-    case "grc":
-    case "grc-compliance":
-    case "audit-ledger":
-      return ProtectedRoute(GrcAuditCompliancePage);
-    case "pam":
-    case "privileged-access":
-    case "jit-elevation":
-      return ProtectedRoute(PamPage);
-    case "help":
-    case "help-center":
-      return <HelpPage onNavigate={onNavigate} />;
-
-    // --- Fallback: 404 ---
-    default:
-      return <NotFoundPage onNavigate={onNavigate} />;
-  }
+  return <Suspense fallback={<PageLoader />}>{renderContent()}</Suspense>;
 }

@@ -29,10 +29,9 @@ public class MaintenanceController {
     private final MaintenanceService maintenanceService;
 
     /**
-     * Retrieves all maintenance tasks.
+     * Retrieves an ownership-scoped list of maintenance tasks, with optional pagination.
      *
-     * @return a list of maintenance tasks. An empty result is returned as HTTP 200
-     *         with an empty JSON array so API clients have one stable response shape.
+     * @return the matching maintenance tasks as the established JSON-array response
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
@@ -42,7 +41,6 @@ public class MaintenanceController {
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             Authentication authentication) {
-        // Forward the trusted identity so the service can enforce record ownership.
         return ResponseEntity.ok(maintenanceService.getAllTasks(
                 authentication, status, equipmentId, page, size));
     }
@@ -113,12 +111,12 @@ public class MaintenanceController {
     }
 
     /**
-     * Deletes a non-completed maintenance task by its identifier.
+     * Soft-deletes a non-completed maintenance task by its identifier.
      * Accessible only to users with the HOSPITAL role.
      * Completed records are retained as immutable maintenance evidence.
      *
      * @param id the maintenance task identifier
-     * @return HTTP 204 No Content when the task is successfully deleted
+     * @return HTTP 204 No Content when the task is successfully archived
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")

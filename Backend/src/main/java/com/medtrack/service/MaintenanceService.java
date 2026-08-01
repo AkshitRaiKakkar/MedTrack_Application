@@ -18,6 +18,7 @@ import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -62,11 +63,10 @@ public class MaintenanceService {
             MaintenanceStatus.ON_HOLD, EnumSet.of(MaintenanceStatus.IN_PROGRESS),
             MaintenanceStatus.COMPLETED, EnumSet.noneOf(MaintenanceStatus.class)
     );
-/// updates:-
     public List<MaintenanceTask> getAllTasks(Authentication authentication) {
-        // Scope lists from the trusted JWT identity instead of a client-supplied filter.
         if (hasRole(authentication, "HOSPITAL")) {
-            return taskRepository.findByHospitalId(getHospitalForUser(authentication).getId());
+            Long hospitalId = getHospitalForUser(authentication).getId();
+            return taskRepository.findByHospitalId(hospitalId);
         }
         if (hasRole(authentication, "TECHNICIAN")) {
             return taskRepository.findByAssignedTechnicianId(
@@ -88,14 +88,14 @@ public class MaintenanceService {
         if (hasRole(authentication, "HOSPITAL")) {
             Long hospitalId = getHospitalForUser(authentication).getId();
             return taskRepository.findByHospitalIdWithFilters(
-                    hospitalId, status, normalizedEquipmentId, pageable);
+                    hospitalId, status, normalizedEquipmentId, pageable).getContent();
         }
         if (hasRole(authentication, "TECHNICIAN")) {
             return taskRepository.findByAssignedTechnicianIdWithFilters(
                     getAuthenticatedTechnician(authentication).getId(),
                     status,
                     normalizedEquipmentId,
-                    pageable);
+                    pageable).getContent();
         }
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
@@ -263,8 +263,11 @@ public class MaintenanceService {
     }
 
     private Pageable resolvePageable(Integer page, Integer size) {
+        Sort sort = Sort.by(
+                Sort.Order.asc("deadline"),
+                Sort.Order.asc("id"));
         if (page == null && size == null) {
-            return Pageable.unpaged();
+            return Pageable.unpaged(sort);
         }
 
         int resolvedPage = page != null ? page : 0;
@@ -276,7 +279,7 @@ public class MaintenanceService {
             throw new IllegalArgumentException(
                     "Page size must be between 1 and " + MAX_PAGE_SIZE);
         }
-        return PageRequest.of(resolvedPage, resolvedSize);
+        return PageRequest.of(resolvedPage, resolvedSize, sort);
     }
 
     private Equipment resolveOwnedEquipment(String equipmentReference, Long hospitalId) {
@@ -413,6 +416,9 @@ public class MaintenanceService {
     }
 
     public String exportTasksToICal(Authentication authentication) {
+        // The calendar feed is a subscription, not a page: a client fetches this URL and expects
+        // every scheduled task back. Deliberately the unpaged overload, so the feed can never be
+        // silently truncated to whatever the default page size happens to be.
         List<MaintenanceTask> tasks = getAllTasks(authentication);
         StringBuilder ical = new StringBuilder();
         ical.append("BEGIN:VCALENDAR\r\n")
@@ -431,7 +437,7 @@ public class MaintenanceService {
             String dtStart = task.getDeadline().format(basicDate);
             String dtEnd = task.getDeadline().plusDays(1).format(basicDate);
             String summary = (task.getEquipment() != null ? task.getEquipment() : "Equipment") + " - " + (task.getMaintenanceType() != null ? task.getMaintenanceType() : "Maintenance");
-            String status = task.getStatus() == com.medtrack.model.MaintenanceStatus.COMPLETED ? "COMPLETED" : "NEEDS-ACTION";
+            String maintenanceStatus = task.getStatus().name();
 
             String description = String.format("Task Code: %s\nStatus: %s\nTechnician: %s\nPriority: %s\nDescription: %s",
                     task.getTaskCode(),
@@ -449,7 +455,10 @@ public class MaintenanceService {
             appendICalLine(ical, "DTEND;VALUE=DATE:" + dtEnd);
             appendICalLine(ical, "SUMMARY:" + escapeICalText(summary));
             appendICalLine(ical, "DESCRIPTION:" + escapeICalText(description));
-            appendICalLine(ical, "STATUS:" + status);
+            // RFC 5545 allows TENTATIVE, CONFIRMED, or CANCELLED for VEVENT.
+            // Preserve the Maintenance lifecycle value in a standards-compliant extension.
+            appendICalLine(ical, "STATUS:CONFIRMED");
+            appendICalLine(ical, "X-MEDTRACK-STATUS:" + maintenanceStatus);
             appendICalLine(ical, "END:VEVENT");
         }
 
@@ -495,13 +504,17 @@ public class MaintenanceService {
     @Transactional
     public void deleteTask(Long id, Authentication authentication) {
         // Lock the owned row so deletion cannot race with technician completion.
+        Hospital hospital = getHospitalForUser(authentication);
         MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(
-                        id, getHospitalForUser(authentication).getId())
+                        id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or access denied"));
         if (task.getStatus() == MaintenanceStatus.COMPLETED) {
             throw new InvalidStatusTransitionException("Completed maintenance tasks cannot be deleted");
         }
-        taskRepository.delete(task);
+        task.setDeleted(true);
+        task.setDeletedAt(LocalDateTime.now());
+        task.setDeletedBy(authentication.getName().trim().toLowerCase(Locale.ROOT));
+        taskRepository.save(task);
     }
 
     private MaintenanceTask findOwnedTask(Long id, Authentication authentication) {

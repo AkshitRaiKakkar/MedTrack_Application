@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getAllTasks, exportTasksToICal } from '../../services/MaintenanceService';
+import Pagination from "../../components/common/Pagination";
 
 /* ===========================
    BIG TEMPORARY DEMO DATA
@@ -50,17 +51,20 @@ export default function MaintenanceSchedule({ onNavigate }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [exporting, setExporting] = useState(false);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
 
   useEffect(() => {
     fetchTasks();
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (pageNum = 0) => {
     try {
-      const data = await getAllTasks();
-      if (Array.isArray(data) && data.length > 0) {
-        // Map backend task structure to match the component keys (equipmentName, scheduledDate)
-        const mapped = data.map(t => ({
+      const response = await getAllTasks({ page: pageNum, size: pageSize });
+      const items = response?.content || response?.data || [];
+      if (Array.isArray(items) && items.length > 0) {
+        const mapped = items.map(t => ({
           id: t.taskCode || `MNT-${t.id}`,
           equipmentName: t.equipment || "N/A",
           maintenanceType: t.maintenanceType || "N/A",
@@ -69,6 +73,8 @@ export default function MaintenanceSchedule({ onNavigate }) {
           status: t.status ? t.status.getDisplayName ? t.status.getDisplayName() : t.status : "Scheduled"
         }));
         setTasks(mapped);
+        if (response?.totalPages) setTotalPages(response.totalPages);
+        if (response?.page !== undefined) setPage(response.page);
       } else {
         loadLocalTasks();
       }
@@ -76,6 +82,10 @@ export default function MaintenanceSchedule({ onNavigate }) {
       console.error("Failed to load tasks from backend, using local/demo:", err);
       loadLocalTasks();
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchTasks(newPage);
   };
 
   const loadLocalTasks = () => {
@@ -176,16 +186,10 @@ export default function MaintenanceSchedule({ onNavigate }) {
                       <div className="flex flex-col items-center">
                         <span className="text-4xl mb-2">🛠️</span>
                         <p className="font-medium">No maintenance tasks scheduled yet.</p>
-                        <button 
-                          onClick={() => onNavigate('schedule-maintenance')}
-                          className="mt-4 text-teal-600 hover:text-teal-700 dark:hover:text-teal-500 text-sm font-semibold"
-                        >
-                          Schedule your first task
-                        </button>
                         {user?.role === "hospital" && (
-                          <button 
+                          <button
                             onClick={() => onNavigate('schedule-maintenance')}
-                            className="mt-4 text-teal-600 hover:text-teal-700 text-sm font-semibold"
+                            className="mt-4 text-teal-600 hover:text-teal-700 dark:hover:text-teal-500 text-sm font-semibold"
                           >
                             Schedule your first task
                           </button>
@@ -240,6 +244,8 @@ export default function MaintenanceSchedule({ onNavigate }) {
             </table>
           </div>
         </div>
+
+        <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
       </main>
     </div>
   );

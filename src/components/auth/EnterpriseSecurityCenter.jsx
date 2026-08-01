@@ -36,11 +36,13 @@ import {
   Award,
   Network,
   Package,
-  Sliders,
   BrainCircuit,
   Binary,
   Radio,
-  FileCheck
+  FileHeart,
+  Skull,
+  Cloud,
+  Usb
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -62,7 +64,10 @@ import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import AiModelGovernancePanel from "./AiModelGovernancePanel";
 import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
 import IotSecurityPanel from "./IotSecurityPanel";
-import ClinicalTrialLedgerPanel from "./ClinicalTrialLedgerPanel";
+import FhirEhrSecurityPanel from "./FhirEhrSecurityPanel";
+import ThreatIntelPanel from "./ThreatIntelPanel";
+import HealthcareCspmPanel from "./HealthcareCspmPanel";
+import Fido2WebAuthnPanel from "./Fido2WebAuthnPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -403,7 +408,10 @@ export default function EnterpriseSecurityCenter() {
           { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit },
           { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary },
           { id: "iot", label: "IoMT & Medical Device Security", icon: Radio },
-          { id: "trial", label: "Clinical Trial Ledger & 21 CFR Part 11", icon: FileCheck }
+          { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart },
+          { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull },
+          { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud },
+          { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -856,9 +864,24 @@ export default function EnterpriseSecurityCenter() {
         <IotSecurityPanel />
       )}
 
-      {/* TAB 19: CLINICAL TRIAL DATA INTEGRITY & 21 CFR PART 11 AUDIT */}
-      {selectedTab === "trial" && (
-        <ClinicalTrialLedgerPanel />
+      {/* TAB 19: FHIR R4 INTEROPERABILITY & EHR SECURITY CONSOLE */}
+      {selectedTab === "fhir" && (
+        <FhirEhrSecurityPanel />
+      )}
+
+      {/* TAB 20: STIX 2.1 / TAXII 2.1 BIOMEDICAL THREAT INTELLIGENCE CONSOLE */}
+      {selectedTab === "threatintel" && (
+        <ThreatIntelPanel />
+      )}
+
+      {/* TAB 21: HEALTHCARE CLOUD SECURITY POSTURE MANAGEMENT (CSPM) */}
+      {selectedTab === "cspm" && (
+        <HealthcareCspmPanel />
+      )}
+
+      {/* TAB 22: FIDO2 WEBAUTHN HARDWARE SECURITY KEYS & BIOMETRIC PASSKEYS */}
+      {selectedTab === "fido2" && (
+        <Fido2WebAuthnPanel />
       )}
 
       {/* 4. MODALS */}

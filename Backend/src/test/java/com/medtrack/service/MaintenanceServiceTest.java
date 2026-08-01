@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.security.access.AccessDeniedException;
@@ -531,7 +532,10 @@ public class MaintenanceServiceTest {
         assertTrue(icalResult.contains("BEGIN:VEVENT"));
         assertTrue(icalResult.contains("UID:MNT-1111@medtrack.com"));
         assertTrue(icalResult.contains("SUMMARY:MRI Scanner -"));
-        assertTrue(icalResult.contains("STATUS:NEEDS-ACTION")); // since status is IN_PROGRESS
+        assertTrue(icalResult.contains("STATUS:CONFIRMED"));
+        assertTrue(icalResult.contains("X-MEDTRACK-STATUS:IN_PROGRESS"));
+        assertFalse(icalResult.contains("\r\nSTATUS:NEEDS-ACTION\r\n"));
+        assertFalse(icalResult.contains("\r\nSTATUS:COMPLETED\r\n"));
         assertTrue(icalResult.contains("END:VEVENT"));
         assertTrue(icalResult.contains("END:VCALENDAR"));
     }
@@ -665,12 +669,13 @@ public class MaintenanceServiceTest {
                 .when(authentication).getAuthorities();
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
         when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        // findByHospitalIdWithFilters is a paged query, so the stub has to hand back a Page.
         when(taskRepository.findByHospitalIdWithFilters(
                 eq(mockHospital.getId()),
                 eq(MaintenanceStatus.IN_PROGRESS),
                 eq("EQ-100"),
                 any(Pageable.class)))
-                .thenReturn(Collections.singletonList(mockTask));
+                .thenReturn(new PageImpl<>(Collections.singletonList(mockTask)));
 
         List<MaintenanceTask> result = maintenanceService.getAllTasks(
                 authentication, "In Progress", "  EQ-100  ", 1, 25);
@@ -684,6 +689,7 @@ public class MaintenanceServiceTest {
                 pageableCaptor.capture());
         assertEquals(1, pageableCaptor.getValue().getPageNumber());
         assertEquals(25, pageableCaptor.getValue().getPageSize());
+        assertEquals("deadline: ASC,id: ASC", pageableCaptor.getValue().getSort().toString());
     }
 
     @Test
@@ -706,7 +712,11 @@ public class MaintenanceServiceTest {
 
         maintenanceService.deleteTask(50L, authentication);
 
-        verify(taskRepository).delete(mockTask);
+        assertTrue(mockTask.getDeleted());
+        assertNotNull(mockTask.getDeletedAt());
+        assertEquals(email, mockTask.getDeletedBy());
+        verify(taskRepository).save(mockTask);
+        verify(taskRepository, never()).delete(any());
     }
 
     @Test
@@ -721,6 +731,7 @@ public class MaintenanceServiceTest {
                 maintenanceService.deleteTask(999L, authentication)
         );
 
+        verify(taskRepository, never()).save(any());
         verify(taskRepository, never()).delete(any());
     }
 
@@ -736,6 +747,7 @@ public class MaintenanceServiceTest {
         assertThrows(com.medtrack.exception.InvalidStatusTransitionException.class,
                 () -> maintenanceService.deleteTask(50L, authentication));
 
+        verify(taskRepository, never()).save(any());
         verify(taskRepository, never()).delete(any());
     }
 }

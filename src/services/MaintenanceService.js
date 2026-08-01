@@ -1,9 +1,16 @@
 import API from "./HttpService";
 
-export const getAllTasks = async (technicianId) => {
-  const url = technicianId
-    ? `/api/maintenance?technicianId=${technicianId}`
-    : "/api/maintenance";
+export const getAllTasks = async (params = {}) => {
+  const { technicianId, page = 0, size = 20, status, equipmentId } = params;
+  const query = new URLSearchParams();
+  if (technicianId) query.set("technicianId", technicianId);
+  if (page !== undefined) query.set("page", page);
+  if (size !== undefined) query.set("size", size);
+  if (status) query.set("status", status);
+  if (equipmentId) query.set("equipmentId", equipmentId);
+
+  const qs = query.toString();
+  const url = qs ? `/api/maintenance?${qs}` : "/api/maintenance";
 
   try {
     const response = await API.get(url);

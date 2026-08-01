@@ -13,6 +13,7 @@ import com.medtrack.repository.HospitalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -212,6 +213,72 @@ public class EquipmentServiceTest {
     }
 
     @Test
+    void importEquipmentFromCsv_DuplicateSerialWithinFile_RejectsSecondRowOnly() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        when(equipmentRepository.findBySerialNumber(any())).thenReturn(Optional.empty());
+
+        String csvContent = "Name,Model,Serial Number,Department,Category,Status,Purchase Date\n" +
+                "Ventilator,V-200,SN-DUP,ICU,Respiratory,Operational,2026-01-01\n" +
+                "Ultrasound,U-500,SN-DUP,Cardiology,Imaging,Operational,2026-01-01\n";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "equipment.csv", "text/csv", csvContent.getBytes());
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(file, username);
+
+        assertEquals(1, summary.getSuccessCount());
+        assertEquals(1, summary.getFailureCount());
+        assertEquals(3, summary.getFailures().get(0).getRowNumber());
+        assertTrue(summary.getFailures().get(0).getReason().contains("Duplicate Serial Number within this file"));
+
+        // The valid first row must still be imported, not the whole batch dropped.
+        ArgumentCaptor<List<Equipment>> savedCaptor = ArgumentCaptor.forClass(List.class);
+        verify(equipmentRepository).saveAll(savedCaptor.capture());
+        assertEquals(1, savedCaptor.getValue().size());
+        assertEquals("SN-DUP", savedCaptor.getValue().get(0).getSerialNumber());
+    }
+
+    @Test
+    void importEquipmentFromCsv_SerialAlreadyInDatabase_RejectsRow() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        when(equipmentRepository.findBySerialNumber("SN-12345")).thenReturn(Optional.of(mockEquipment));
+
+        String csvContent = "Name,Model,Serial Number,Department,Category,Status,Purchase Date\n" +
+                "Ventilator,V-200,SN-12345,ICU,Respiratory,Operational,2026-01-01\n";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "equipment.csv", "text/csv", csvContent.getBytes());
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(file, username);
+
+        assertEquals(0, summary.getSuccessCount());
+        assertEquals(1, summary.getFailureCount());
+        assertTrue(summary.getFailures().get(0).getReason().contains("Serial Number already exists in inventory"));
+        verify(equipmentRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void importEquipmentFromCsv_BlankSerialNumbers_AreNotTreatedAsDuplicatesOfEachOther() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+
+        String csvContent = "Name,Model,Serial Number,Department,Category,Status,Purchase Date\n" +
+                "Ventilator,V-200,,ICU,Respiratory,Operational,2026-01-01\n" +
+                "Ultrasound,U-500,,Cardiology,Imaging,Operational,2026-01-01\n";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "equipment.csv", "text/csv", csvContent.getBytes());
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(file, username);
+
+        assertEquals(2, summary.getSuccessCount());
+        assertEquals(0, summary.getFailureCount());
+        verify(equipmentRepository, never()).findBySerialNumber(any());
+    }
+
+    @Test
     void importEquipmentFromCsv_EmptyFile_ThrowsException() {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -248,7 +315,8 @@ public class EquipmentServiceTest {
         assertEquals("Siemens A2", result.getModel());
         assertEquals("SN-12345-UPD", result.getSerialNumber());
         assertEquals("Cardiology", result.getDepartment());
-        assertEquals("Maintenance", result.getStatus());
+        // status is an EquipmentStatus enum, not a String. This assertion predates that migration.
+        assertEquals(com.medtrack.model.EquipmentStatus.UNDER_MAINTENANCE, result.getStatus());
         assertEquals(LocalDate.of(2025, 2, 2), result.getPurchaseDate());
 
         verify(equipmentRepository).save(mockEquipment);

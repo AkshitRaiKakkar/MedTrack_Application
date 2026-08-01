@@ -17,9 +17,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
@@ -51,7 +54,39 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     @Value("${security.rate-limit.write.refill-duration:1m}")
     private String writeRefillDurationStr;
 
-    private final ConcurrentHashMap<String, Bucket> cache = new ConcurrentHashMap<>();
+    /**
+     * Peer addresses whose {@code X-Forwarded-For} header is trusted.
+     *
+     * <p>Empty by default, which means the header is ignored entirely and every request is keyed on
+     * {@code getRemoteAddr()}. Defaulting to "trust nothing" is the safe direction: a deployment
+     * behind a proxy that has not configured this rate-limits per-proxy, which is over-restrictive
+     * and visible, whereas the previous behaviour was silently no rate limiting at all.</p>
+     *
+     * <p>Set to the proxy addresses, e.g.
+     * {@code security.rate-limit.trusted-proxies=127.0.0.1,10.0.0.5}.</p>
+     */
+    @Value("${security.rate-limit.trusted-proxies:}")
+    private String trustedProxiesRaw;
+
+    /**
+     * Maximum number of buckets held at once.
+     *
+     * <p>The cache was previously unbounded, so every distinct key created a permanent entry. With
+     * the key derived from a client-supplied header, a single loop varying
+     * {@code X-Forwarded-For} grew it without limit until the heap was exhausted - the same request
+     * pattern that bypassed the limiter also took the process down.</p>
+     */
+    @Value("${security.rate-limit.max-tracked-clients:10000}")
+    private int maxTrackedClients;
+
+    /** Idle period after which a bucket is discarded. */
+    @Value("${security.rate-limit.client-ttl:10m}")
+    private String clientTtlStr;
+
+    private Set<String> trustedProxies = Set.of();
+    private Duration clientTtl = Duration.ofMinutes(10);
+
+    private final ConcurrentHashMap<String, TrackedBucket> cache = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private Bandwidth authBandwidth;
@@ -63,6 +98,18 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         this.authBandwidth = Bandwidth.classic(authCapacity, Refill.intervally(authRefillTokens, parseDuration(authRefillDurationStr)));
         this.getBandwidth = Bandwidth.classic(getCapacity, Refill.intervally(getRefillTokens, parseDuration(getRefillDurationStr)));
         this.writeBandwidth = Bandwidth.classic(writeCapacity, Refill.intervally(writeRefillTokens, parseDuration(writeRefillDurationStr)));
+        this.clientTtl = parseDuration(clientTtlStr);
+        this.trustedProxies = parseTrustedProxies(trustedProxiesRaw);
+    }
+
+    static Set<String> parseTrustedProxies(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(entry -> !entry.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
@@ -74,10 +121,10 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
         if (path.startsWith("/api/")) {
             String group = resolveGroup(path, method);
-            String ip = getClientIp(request);
+            String ip = resolveClientKey(request);
             String key = group + ":" + ip;
 
-            Bucket bucket = cache.computeIfAbsent(key, k -> Bucket.builder().addLimit(resolveBandwidth(group)).build());
+            Bucket bucket = resolveBucket(key, group);
 
             if (!bucket.tryConsume(1)) {
                 sendTooManyRequestsResponse(request, response);
@@ -113,12 +160,110 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         }
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null || xfHeader.isEmpty() || "unknown".equalsIgnoreCase(xfHeader)) {
-            return request.getRemoteAddr();
+    /**
+     * Resolves the address to rate-limit on.
+     *
+     * <p>{@code X-Forwarded-For} is a plain request header that any client can set to anything, so
+     * it is only consulted when the immediate peer is a configured trusted proxy. Previously it was
+     * trusted unconditionally, which meant the rate-limit key was attacker-chosen: varying the header
+     * per request produced a fresh full-capacity bucket every time and defeated the limit on
+     * {@code /api/auth/login} entirely.</p>
+     *
+     * <p>When a trusted chain is present, the <strong>rightmost untrusted</strong> hop is taken, not
+     * the leftmost. The leftmost entry is whatever the original client supplied and is therefore
+     * still forgeable; only the entries appended by trusted infrastructure can be relied on.</p>
+     */
+    String resolveClientKey(HttpServletRequest request) {
+        String peer = request.getRemoteAddr();
+
+        if (trustedProxies.isEmpty() || peer == null || !trustedProxies.contains(peer)) {
+            return peer == null ? "unknown" : peer;
         }
-        return xfHeader.split(",")[0].trim();
+
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded == null || forwarded.isBlank() || "unknown".equalsIgnoreCase(forwarded)) {
+            return peer;
+        }
+
+        String[] hops = forwarded.split(",");
+        for (int index = hops.length - 1; index >= 0; index--) {
+            String hop = hops[index].trim();
+            if (!hop.isEmpty() && !trustedProxies.contains(hop)) {
+                return hop;
+            }
+        }
+
+        // Every hop in the chain is a trusted proxy; the peer is the best available identity.
+        return peer;
+    }
+
+    /**
+     * Returns the bucket for a key, bounding the cache.
+     *
+     * <p>Entries idle for longer than {@link #clientTtl} are discarded, and when the cache is at
+     * {@link #maxTrackedClients} a sweep runs before inserting. If the sweep frees nothing - which
+     * means every tracked client is currently active - the request is served from a shared overflow
+     * bucket rather than growing the map. That degrades to a global limit under pressure instead of
+     * either failing open (no limiting) or failing closed (rejecting everyone).</p>
+     */
+    private Bucket resolveBucket(String key, String group) {
+        TrackedBucket tracked = cache.get(key);
+        if (tracked != null) {
+            tracked.touch();
+            return tracked.bucket();
+        }
+
+        if (cache.size() >= maxTrackedClients) {
+            evictIdle();
+            if (cache.size() >= maxTrackedClients) {
+                return overflowBucket(group);
+            }
+        }
+
+        return cache.computeIfAbsent(key,
+                        ignored -> new TrackedBucket(Bucket.builder().addLimit(resolveBandwidth(group)).build()))
+                .bucket();
+    }
+
+    private void evictIdle() {
+        long cutoff = System.nanoTime() - clientTtl.toNanos();
+        cache.entrySet().removeIf(entry -> entry.getValue().lastSeenNanos() < cutoff);
+    }
+
+    private Bucket overflowBucket(String group) {
+        return overflowBuckets.computeIfAbsent(group,
+                ignored -> Bucket.builder().addLimit(resolveBandwidth(group)).build());
+    }
+
+    /** Buckets shared by all clients once {@link #maxTrackedClients} is reached. */
+    private final ConcurrentHashMap<String, Bucket> overflowBuckets = new ConcurrentHashMap<>();
+
+    /** Visible for tests: how many distinct clients are currently tracked. */
+    int trackedClientCount() {
+        return cache.size();
+    }
+
+    /** A bucket plus the last time it was used, so idle entries can be reclaimed. */
+    private static final class TrackedBucket {
+        private final Bucket bucket;
+        private volatile long lastSeenNanos;
+
+        private TrackedBucket(Bucket bucket) {
+            this.bucket = bucket;
+            this.lastSeenNanos = System.nanoTime();
+        }
+
+        private Bucket bucket() {
+            return bucket;
+        }
+
+        private void touch() {
+            this.lastSeenNanos = System.nanoTime();
+        }
+
+        private long lastSeenNanos() {
+            return lastSeenNanos;
+        }
     }
 
     private Duration parseDuration(String value) {

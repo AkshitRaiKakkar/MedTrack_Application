@@ -13,6 +13,8 @@ import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +92,9 @@ public class ShipmentTrackingService {
         }
 
         ShipmentStatus currentStatus = shipment.getShipmentStatus();
+        if (newStatus == currentStatus) {
+            throw new InvalidStatusTransitionException("Shipment is already in " + currentStatus + " status");
+        }
         if (newStatus.ordinal() < currentStatus.ordinal()) {
             throw new InvalidStatusTransitionException(
                     "Cannot revert status from " + currentStatus + " to " + newStatus);
@@ -154,11 +159,10 @@ public class ShipmentTrackingService {
     }
 
     @Transactional(readOnly = true)
-    public List<ShipmentTrackingResponse> getShipmentsBySupplier(Long supplierId, Authentication authentication) {
+    public Page<ShipmentTrackingResponse> getShipmentsBySupplier(Long supplierId, Pageable pageable, Authentication authentication) {
         supplierAccessGuard.assertSelfOrHospitalAdmin(authentication, supplierId);
-        return shipmentTrackingRepository.findBySupplierId(supplierId).stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+        return shipmentTrackingRepository.findBySupplierId(supplierId, pageable)
+                .map(this::mapToResponse);
     }
 
     private void assertCanView(Authentication authentication, ShipmentTracking shipment) {

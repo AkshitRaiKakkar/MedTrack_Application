@@ -3,6 +3,7 @@ package com.medtrack.controller;
 import com.medtrack.dto.EquipmentStatisticsResponse;
 import com.medtrack.dto.LowStockSummaryResponse;
 import com.medtrack.dto.StockAdjustmentRequest;
+import com.medtrack.dto.WarrantySummaryResponse;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentCategory;
 import com.medtrack.model.EquipmentStatus;
@@ -11,12 +12,17 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import com.medtrack.dto.EquipmentDashboardResponse;
+import java.time.LocalDate;
 
 import java.security.Principal;
 import java.util.List;
@@ -31,25 +37,32 @@ public class EquipmentController {
     private final EquipmentService equipmentService;
 
     /**
-     * Retrieves all equipment records associated with the authenticated hospital.
+     * Retrieves a paginated list of equipment records associated with the authenticated hospital.
      *
+     * @param pageable  pagination information (page, size, sort)
      * @param principal the authenticated user's security principal
-     * @return a list of equipment records
+     * @return a paginated response of equipment records
      */
     @GetMapping
-    public ResponseEntity<List<Equipment>> getAllEquipment(Principal principal) {
-        return ResponseEntity.ok(equipmentService.getAllEquipment(principal.getName()));
-    }
-
-    @GetMapping("/page")
-    public ResponseEntity<Page<Equipment>> getEquipmentPage(
+    public ResponseEntity<com.medtrack.dto.PagedResponse<Equipment>> getAllEquipment(
             @PageableDefault(sort = "name") Pageable pageable,
             Principal principal) {
 
         return ResponseEntity.ok(
-                equipmentService.getEquipmentPage(
-                        principal.getName(),
-                        pageable
+                com.medtrack.dto.PagedResponse.of(
+                        equipmentService.getAllEquipment(principal.getName(), pageable)
+                )
+        );
+    }
+
+    @GetMapping("/category-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<String, Long>> getCategorySummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getCategorySummary(
+                        principal.getName()
                 )
         );
     }
@@ -67,12 +80,36 @@ public class EquipmentController {
         );
     }
 
+    @GetMapping("/age-summary")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Map<String, Long>> getEquipmentAgeSummary(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentAgeSummary(
+                        principal.getName()
+                )
+        );
+    }
+
     @GetMapping("/statistics")
     public ResponseEntity<EquipmentStatisticsResponse> getStatistics(
             Principal principal) {
 
         return ResponseEntity.ok(
                 equipmentService.getEquipmentStatistics(
+                        principal.getName()
+                )
+        );
+    }
+
+    @GetMapping("/dashboard")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<EquipmentDashboardResponse> getDashboard(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getDashboardOverview(
                         principal.getName()
                 )
         );
@@ -93,7 +130,7 @@ public class EquipmentController {
 
     @GetMapping("/warranty-summary")
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Map<String, Long>> getWarrantySummary(
+    public ResponseEntity<WarrantySummaryResponse> getWarrantySummary(
             Principal principal) {
 
         return ResponseEntity.ok(
@@ -149,6 +186,69 @@ public class EquipmentController {
     }
 
     /**
+     * Archives (soft deletes) an equipment record.
+     * Instead of hard deleting, sets deleted = true for audit compliance.
+     *
+     * @param id the equipment identifier
+     * @param principal the authenticated user's security principal
+     * @return the archived equipment record
+     */
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Equipment> archiveEquipment(@PathVariable Long id, Principal principal) {
+        validateId(id);
+        Equipment archived = equipmentService.archiveEquipment(id, principal.getName());
+        return ResponseEntity.ok(archived);
+    }
+
+    /**
+     * Restores an archived equipment record.
+     * Only available within 90 days of archival.
+     *
+     * @param id the equipment identifier
+     * @param principal the authenticated user's security principal
+     * @return the restored equipment record
+     */
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Equipment> restoreEquipment(@PathVariable Long id, Principal principal) {
+        validateId(id);
+        Equipment restored = equipmentService.restoreEquipment(id, principal.getName());
+        return ResponseEntity.ok(restored);
+    }
+
+    /**
+     * Lists all archived (soft-deleted) equipment for the user's hospital.
+     *
+     * @param pageable pagination parameters
+     * @param principal the authenticated user's security principal
+     * @return paginated list of archived equipment
+     */
+    @GetMapping("/archived")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Page<Equipment>> getArchivedEquipment(
+            @PageableDefault(sort = "deletedAt", direction = Sort.Direction.DESC) Pageable pageable,
+            Principal principal) {
+        return ResponseEntity.ok(equipmentService.getArchivedEquipment(principal.getName(), pageable));
+    }
+
+    /**
+     * Permanently deletes an archived equipment record (admin only).
+     * Only callable after 90 days from archival.
+     *
+     * @param id the equipment identifier
+     * @param principal the authenticated user's security principal
+     * @return HTTP 204 No Content when successful
+     */
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Void> permanentlyDeleteEquipment(@PathVariable Long id, Principal principal) {
+        validateId(id);
+        equipmentService.permanentlyDeleteEquipment(id, principal.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Imports equipment from an uploaded CSV file.
      * Accessible only to users with the HOSPITAL role.
      *
@@ -178,6 +278,28 @@ public class EquipmentController {
             Principal principal) {
         String base64Qr = equipmentService.generateQrCodeBase64(id, principal.getName());
         return ResponseEntity.ok(java.util.Map.of("qrCode", base64Qr));
+    }
+
+    @GetMapping("/purchase-range")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<Equipment>> getEquipmentByPurchaseRange(
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDate,
+
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate endDate,
+
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentByPurchaseDateRange(
+                        principal.getName(),
+                        startDate,
+                        endDate
+                )
+        );
     }
     /**
      * Retrieves equipment whose warranty has already expired.

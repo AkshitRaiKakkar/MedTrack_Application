@@ -1,17 +1,26 @@
 package com.medtrack.controller;
 
+import com.medtrack.dto.PagedResponse;
 import com.medtrack.model.EquipmentOrder;
+import com.medtrack.dto.PlaceOrderRequest;
 import com.medtrack.dto.SupplierMetricsDto;
 import com.medtrack.service.OrderService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+
+import org.springframework.data.domain.Sort;
 
 /**
  * REST controller for managing equipment orders.
@@ -27,20 +36,15 @@ public class OrderController {
     private final OrderService orderService;
 
     /**
-     * Retrieves all equipment orders.
+     * Retrieves a paginated list of equipment orders.
      *
-     * @return a list of equipment orders if available,
-     *         or HTTP 204 No Content when no orders exist
+     * @param pageable pagination information (page, size, sort)
+     * @return a paginated response of equipment orders
      */
     @GetMapping
-    public ResponseEntity<List<EquipmentOrder>> getAllOrders() {
-        List<EquipmentOrder> orders = orderService.getAllOrders();
-
-        if (orders.isEmpty()) {
-            return ResponseEntity.noContent().build();
-        }
-
-        return ResponseEntity.ok(orders);
+    public ResponseEntity<PagedResponse<EquipmentOrder>> getAllOrders(
+            @PageableDefault(sort = "orderDate") Pageable pageable) {
+        return ResponseEntity.ok(PagedResponse.of(orderService.getAllOrders(pageable)));
     }
 
     /**
@@ -68,14 +72,18 @@ public class OrderController {
     /**
      * Creates a new equipment order.
      * Accessible only to users with the HOSPITAL role.
+     * The requesting hospital's identity, order code, and workflow status are
+     * derived server-side from the authenticated user, never from the request body.
      *
-     * @param order the equipment order to create
+     * @param request the client-supplied order details
+     * @param authentication the authenticated hospital user placing the order
      * @return the newly created equipment order with HTTP 201 Created
      */
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<EquipmentOrder> placeOrder(@RequestBody EquipmentOrder order) {
-        EquipmentOrder createdOrder = orderService.placeOrder(order);
+    public ResponseEntity<EquipmentOrder> placeOrder(@Valid @RequestBody PlaceOrderRequest request,
+                                                       Authentication authentication) {
+        EquipmentOrder createdOrder = orderService.placeOrder(request, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdOrder);
     }
 
@@ -104,11 +112,13 @@ public class OrderController {
 
     /**
      * Updates the status of an existing equipment order.
-     * Accessible only to users with the SUPPLIER role.
+     * Accessible only to users with the SUPPLIER role, and only for orders the
+     * caller is assigned to (or by a HOSPITAL admin) once a supplier has been assigned.
      *
      * @param id the order identifier
      * @param status the updated order status
      * @param notes optional supplier notes related to the status update
+     * @param authentication the authenticated supplier making the update
      * @return the updated equipment order
      */
     @PutMapping("/{id}/status")
@@ -116,10 +126,11 @@ public class OrderController {
     public ResponseEntity<EquipmentOrder> updateStatus(
             @PathVariable Long id,
             @RequestParam String status,
-            @RequestParam(required = false) String notes) {
+            @RequestParam(required = false) String notes,
+            Authentication authentication) {
 
         validateId(id);
-        return ResponseEntity.ok(orderService.updateOrderStatus(id, status, notes));
+        return ResponseEntity.ok(orderService.updateOrderStatus(id, status, notes, authentication));
     }
 
     /**
@@ -173,6 +184,64 @@ public class OrderController {
     }
 
     /**
+     * Archives (soft deletes) an equipment order.
+     * Instead of hard deleting, sets deleted = true for audit compliance.
+     *
+     * @param id the order identifier
+     * @return the archived order
+     */
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<EquipmentOrder> archiveOrder(@PathVariable Long id) {
+        validateId(id);
+        EquipmentOrder archived = orderService.archiveOrder(id, getCurrentUsername());
+        return ResponseEntity.ok(archived);
+    }
+
+    /**
+     * Lists all archived (soft-deleted) orders.
+     *
+     * @param pageable pagination parameters
+     * @return paginated list of archived orders
+     */
+    @GetMapping("/archived")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Page<EquipmentOrder>> getArchivedOrders(
+            @PageableDefault(sort = "deletedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(orderService.getArchivedOrders(pageable));
+    }
+
+    /**
+     * Restores an archived order.
+     * Only available within 90 days of archival.
+     *
+     * @param id the order identifier
+     * @return the restored order
+     */
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<EquipmentOrder> restoreOrder(@PathVariable Long id) {
+        validateId(id);
+        EquipmentOrder restored = orderService.restoreOrder(id, getCurrentUsername());
+        return ResponseEntity.ok(restored);
+    }
+
+    /**
+     * Permanently deletes an archived order (admin only).
+     * Only callable after 90 days from archival.
+     *
+     * @param id the order identifier
+     * @return HTTP 204 No Content when successful
+     */
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<Void> permanentlyDeleteOrder(@PathVariable Long id) {
+        validateId(id);
+        orderService.permanentlyDeleteOrder(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Validates that a resource ID is a positive number.
      *
      * @param id the resource identifier
@@ -182,5 +251,10 @@ public class OrderController {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("Invalid resource ID.");
         }
+    }
+
+    private String getCurrentUsername() {
+        return org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getName();
     }
 }

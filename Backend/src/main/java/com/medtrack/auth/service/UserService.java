@@ -102,6 +102,9 @@ public class UserService {
     @Value("${security.otp.expiry-minutes:10}")
     private int otpExpiryMinutes;
 
+    @Value("${security.otp.max-attempts:5}")
+    private int otpMaxAttempts;
+
     /**
      * Registers a new user account in the application database.
      * Enforces unique email check and valid system role assignment, then encodes the password using BCrypt.
@@ -378,19 +381,7 @@ public class UserService {
         String email = request.getEmail().trim().toLowerCase();
         String otp = request.getOtp();
 
-        // Find token by email and OTP
-        PasswordResetToken token = passwordResetTokenRepository.findByEmailAndOtp(email, otp)
-                .orElseThrow(() -> new RuntimeException("Incorrect OTP"));
-
-        // Reject if expired
-        if (token.getExpiryTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("OTP has expired");
-        }
-
-        // Reject if used
-        if (token.isUsed()) {
-            throw new RuntimeException("OTP has already been used");
-        }
+        PasswordResetToken token = resolveActiveTokenForAttempt(email, otp);
 
         // Mark OTP as verified
         token.setVerified(true);
@@ -407,23 +398,11 @@ public class UserService {
         String otp = request.getOtp();
         String newPassword = request.getNewPassword();
 
-        // Verify OTP (find token by email and OTP)
-        PasswordResetToken token = passwordResetTokenRepository.findByEmailAndOtp(email, otp)
-                .orElseThrow(() -> new RuntimeException("Incorrect OTP"));
+        PasswordResetToken token = resolveActiveTokenForAttempt(email, otp);
 
         // Reject if not verified
         if (!token.isVerified()) {
             throw new RuntimeException("OTP has not been verified");
-        }
-
-        // Reject if expired
-        if (token.getExpiryTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("OTP has expired");
-        }
-
-        // Reject if used
-        if (token.isUsed()) {
-            throw new RuntimeException("OTP has already been used");
         }
 
         // Get user and update password
@@ -439,5 +418,45 @@ public class UserService {
 
         // Revoke all active sessions (refresh tokens) for the user
         refreshTokenService.revokeAllForUser(user.getId());
+    }
+
+    /**
+     * Resolves the caller's current password-reset token and checks the submitted OTP
+     * against it, tracking failed guesses so the OTP can't be brute-forced within its
+     * validity window.
+     *
+     * <p>Both {@link #verifyOtp} and {@link #resetPassword} accept an email+OTP pair
+     * directly, so both must route through this same attempt-tracking check - otherwise
+     * a caller could bypass the lockout by guessing against {@code resetPassword} instead
+     * of {@code verifyOtp}.
+     *
+     * @throws RuntimeException if there is no unused token for the email (none was ever
+     *                          requested, or it was already consumed), or the OTP is wrong
+     * @throws LockedException if the token is expired or has exceeded the maximum number
+     *                          of incorrect attempts
+     */
+    private PasswordResetToken resolveActiveTokenForAttempt(String email, String otp) {
+        PasswordResetToken token = passwordResetTokenRepository
+                .findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email)
+                .orElseThrow(() -> new RuntimeException("Incorrect OTP"));
+
+        if (token.getExpiryTime().isBefore(LocalDateTime.now())) {
+            throw new LockedException("OTP has expired");
+        }
+
+        if (token.getAttemptCount() >= otpMaxAttempts) {
+            token.setUsed(true);
+            passwordResetTokenRepository.save(token);
+            throw new LockedException(
+                    "Too many incorrect attempts. Please request a new OTP.");
+        }
+
+        if (!token.getOtp().equals(otp)) {
+            token.setAttemptCount(token.getAttemptCount() + 1);
+            passwordResetTokenRepository.save(token);
+            throw new RuntimeException("Incorrect OTP");
+        }
+
+        return token;
     }
 }
