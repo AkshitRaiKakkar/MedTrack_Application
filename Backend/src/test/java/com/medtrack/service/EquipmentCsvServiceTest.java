@@ -541,4 +541,94 @@ class EquipmentCsvServiceTest {
         assertEquals(1, summary.getFailureCount());
         verify(equipmentRepository, org.mockito.Mockito.never()).saveAll(anyList());
     }
+
+    @Test
+    @DisplayName("two rows claiming the same equipment code are rejected, not both saved")
+    void duplicateCodeWithinTheFileIsRejected() {
+        when(equipmentRepository.findByEquipmentCode("EQ-1001")).thenReturn(Optional.empty());
+
+        // equipmentCode is a unique column. Building two entities for it would fail the whole batch
+        // inside saveAll with a constraint violation, reported to the caller as a 500 for what is a
+        // fixable problem in their own file - and taking every valid row down with it.
+        String csv = "Equipment Code,Name,Department,Category,Status\r\n"
+                + "EQ-1001,First,Radiology,IMAGING,Operational\r\n"
+                + "EQ-1001,Second,Radiology,IMAGING,Operational\r\n";
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "in.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)),
+                USERNAME);
+
+        assertEquals(1, summary.getSuccessCount(), "the first row is valid and must still import");
+        assertEquals(1, summary.getFailureCount());
+        assertTrue(summary.getFailures().get(0).getReason().contains("Duplicate Equipment Code"),
+                summary.getFailures().get(0).getReason());
+        assertEquals(3, summary.getFailures().get(0).getRowNumber(),
+                "the second data row is row 3 once the header is counted");
+
+        ArgumentCaptor<List<Equipment>> saved = ArgumentCaptor.forClass(List.class);
+        verify(equipmentRepository).saveAll(saved.capture());
+        assertEquals(1, saved.getValue().size());
+        assertEquals("First", saved.getValue().get(0).getName());
+    }
+
+    @Test
+    @DisplayName("re-importing an unchanged row does not trip the serial number check on itself")
+    void upsertDoesNotRejectARowOnItsOwnSerialNumber() {
+        Equipment stored = Equipment.builder()
+                .id(500L)
+                .equipmentCode("EQ-1001")
+                .serialNumber("SN-777")
+                .name("MRI Scanner")
+                .hospital(hospital)
+                .build();
+
+        when(equipmentRepository.findByEquipmentCode("EQ-1001")).thenReturn(Optional.of(stored));
+        when(equipmentRepository.findBySerialNumber("SN-777")).thenReturn(Optional.of(stored));
+
+        // The row's own stored asset already holds this serial number. An unqualified
+        // "already exists" check would reject every re-import of an unchanged export.
+        String csv = "Equipment Code,Name,Serial Number,Department,Category,Status\r\n"
+                + "EQ-1001,MRI Scanner,SN-777,Radiology,IMAGING,Operational\r\n";
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "in.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)),
+                USERNAME);
+
+        assertEquals(1, summary.getSuccessCount(), () -> String.valueOf(summary.getFailures()));
+        assertEquals(0, summary.getFailureCount());
+
+        ArgumentCaptor<List<Equipment>> saved = ArgumentCaptor.forClass(List.class);
+        verify(equipmentRepository).saveAll(saved.capture());
+        assertEquals(500L, saved.getValue().get(0).getId(), "the stored row must be updated in place");
+    }
+
+    @Test
+    @DisplayName("a serial number held by a different asset is still rejected")
+    void serialNumberHeldByAnotherAssetIsStillRejected() {
+        Equipment other = Equipment.builder()
+                .id(600L)
+                .equipmentCode("EQ-2002")
+                .serialNumber("SN-777")
+                .hospital(hospital)
+                .build();
+
+        // No findByEquipmentCode stub: the serial-number check runs first and short-circuits the
+        // row, so the code lookup is never reached.
+        when(equipmentRepository.findBySerialNumber("SN-777")).thenReturn(Optional.of(other));
+
+        String csv = "Equipment Code,Name,Serial Number,Department,Category,Status\r\n"
+                + "EQ-1001,Imposter,SN-777,Radiology,IMAGING,Operational\r\n";
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(
+                new MockMultipartFile("file", "in.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)),
+                USERNAME);
+
+        // Narrowing the check to "another asset holds it" must not weaken it to "never checked".
+        assertEquals(0, summary.getSuccessCount());
+        assertEquals(1, summary.getFailureCount());
+        assertTrue(summary.getFailures().get(0).getReason().contains("Serial Number already exists"),
+                summary.getFailures().get(0).getReason());
+        verify(equipmentRepository, org.mockito.Mockito.never()).saveAll(anyList());
+    }
+
 }
