@@ -41,6 +41,12 @@ user ID rather than mutable email text. Migration version `4` backfills the rela
 normalized legacy emails. The relationship is nullable for unassigned work and uses `ON DELETE
 SET NULL`, preserving the historical email if a user record is removed.
 
+Maintenance deletion is auditable soft deletion. The entity stores `deleted`, `deletedAt`, and
+`deletedBy`, and Hibernate applies `@SQLRestriction("deleted = false")` so archived tasks are
+excluded from normal repository and API access. The hospital DELETE endpoint retains the row and
+records the authenticated principal and server timestamp instead of issuing a physical database
+delete.
+
 ### Maintenance request DTOs
 
 `MaintenanceCreateRequest` contains only hospital-controlled scheduling fields. Identity,
@@ -93,9 +99,10 @@ the canonical `User` and scope access by that stable user ID. The API-facing ass
 remains an email for frontend compatibility.
 
 The two list-filter queries accept optional status and equipment-code values plus a Spring Data
-`Pageable`. They retain the same dual ownership checks as the unfiltered queries and order results
-by deadline and database ID. The former global `findByStatus` method was removed because a
-tenant-agnostic status lookup is unsafe for API use.
+`Pageable`, and return `Page` internally. The service exposes only the page content so the existing
+JSON-array response contract is preserved. The queries retain the same dual ownership checks as the
+unfiltered queries, and the service supplies deterministic deadline/database-ID ordering. The former
+global `findByStatus` method was removed because a tenant-agnostic status lookup is unsafe for API use.
 
 Maintenance analytics queries enforce the same dual ownership invariant. Status totals, completed
 task SLA inputs, average work hours, and critical-pending counts require both the task's
@@ -133,7 +140,7 @@ It currently supports:
 - scheduling a task with hospital ownership derived from the authenticated user
 - always generating the task code on the server
 - allowing a technician to update only a task linked to their authenticated user ID
-- allowing a hospital to delete only its own non-completed task
+- allowing a hospital to soft-delete only its own non-completed task while retaining audit evidence
 - resolving maintenance against equipment owned by the authenticated hospital
 - validating scheduling fields and assigned technician accounts
 - enforcing agreement between task ownership and equipment ownership before persistence
@@ -143,7 +150,7 @@ It currently supports:
 - rejecting locked or disabled technician accounts
 - allowing the owning hospital to assign or reassign a technician while a task is `SCHEDULED`
 - enforcing the documented status lifecycle and non-negative work values
-- preventing edits and deletion after completion
+- preventing edits and soft deletion after completion
 - persisting technician reports including parts and signatures
 - preserving existing technician report values when optional update fields are omitted
 - preserving the hospital-configured recurrence period during technician updates
@@ -176,7 +183,7 @@ Current endpoints:
 - `DELETE /api/maintenance/{id}`
 - `GET /api/maintenance/export/calendar.ics`
 
-The controller forwards the authenticated identity to the service, uses role guards for every operation, and validates positive IDs for item-level operations. The assignment endpoint is restricted to the owning hospital and only changes a task that remains `SCHEDULED`. The list endpoint is automatically scoped to the authenticated hospital or technician and consistently returns HTTP 200 with a JSON array, including `[]` when no tasks exist.
+The controller forwards the authenticated identity to the service, uses role guards for every operation, and validates positive IDs for item-level operations. The assignment endpoint is restricted to the owning hospital and only changes a task that remains `SCHEDULED`. The list endpoint is automatically scoped to the authenticated hospital or technician and consistently returns HTTP 200 with a JSON array, including `[]` when no tasks exist. Repository `Page` metadata is intentionally not exposed, preserving the established response shape.
 
 Scheduling and technician-update DTOs use Bean Validation, with business-critical checks also
 retained in the service. `GET /api/maintenance` accepts optional `status`, `equipmentId`, `page`,
@@ -271,7 +278,8 @@ Recommended API behavior:
 - `GET /api/maintenance`: authenticated users fetch maintenance tasks
 - `GET /api/maintenance/{id}`: authenticated users fetch one task
 - `PUT /api/maintenance/{id}`: technician updates maintenance progress
-- `DELETE /api/maintenance/{id}`: hospital deletes its own non-completed maintenance task
+- `DELETE /api/maintenance/{id}`: hospital archives its own non-completed maintenance task through
+  soft deletion while retaining the existing HTTP 204 contract
 
 Supported optional filters and pagination:
 
@@ -307,7 +315,7 @@ Updating should validate:
 
 - task exists
 - status is valid
-- completed tasks cannot be edited or deleted
+- completed tasks cannot be edited or soft-deleted
 - completion requires a nonblank effective technician signature: a signature supplied in
   the current payload, or the previously stored signature when the field is omitted
 - completion time is generated by the server and cannot be supplied by a client
@@ -341,7 +349,7 @@ Current service-level checks ensure:
 - every Maintenance operation requires the authenticated account to still exist, retain the
   expected hospital or technician role, and have `AccountStatus.ACTIVE`; a locked, disabled,
   deleted, or role-changed account receives HTTP 403 even if it presents an unexpired JWT
-- hospitals can list and read only their own maintenance tasks, and can delete only
+- hospitals can list and read only their own maintenance tasks, and can soft-delete only
   their own non-completed tasks
 - hospitals can assign technicians only to their own scheduled tasks
 - technicians can list, read, and update only tasks linked to their authenticated user ID
@@ -396,6 +404,7 @@ The current frontend field names should be preserved unless frontend changes are
 - [x] Enforce valid status transitions, non-negative work values, and completion immutability.
 - [x] Prevent duplicate recurring tasks after completion.
 - [x] Prevent completed records from being deleted and serialize deletion with completion.
+- [x] Retain deleted non-completed tasks through auditable soft deletion.
 - [x] Require technician sign-off and persist the actual completion timestamp.
 - [x] Calculate maintenance SLA compliance from actual completion timestamps.
 - [x] Add a Flyway migration that normalizes legacy statuses and backfills equipment/hospital ownership.
@@ -592,6 +601,22 @@ payloads, response models, successful status codes, and valid lifecycle behavior
 Repository regression coverage verifies the canonical stored priority and ownership scope.
 Calendar regression coverage verifies the valid `VEVENT` status, Maintenance extension property,
 escaping, UTC timestamps, and UTF-8 content-line folding.
+
+### Completed on 2026-07-31
+
+1. [x] **Restored the backward-compatible Maintenance list contract.** The list endpoint again
+   returns a JSON array, including an empty array, while optional `page` and `size` values are
+   resolved in the service and bounded to 100 rows. Repository queries retain internal `Page`
+   support, results use deterministic deadline/ID ordering, and the hospital calendar export uses
+   a valid unfiltered ownership-scoped service path.
+2. [x] **Made Maintenance deletion auditable.** Deleting an owned non-completed task now records
+   `deleted`, `deletedAt`, and `deletedBy` instead of physically removing the row. Hibernate's
+   supported SQL restriction hides archived tasks from normal access, completed evidence remains
+   protected, and the public DELETE endpoint retains its HTTP 204 response.
+
+Focused service, request-validation, and repository verification covers pagination validation,
+calendar access, deletion audit fields, and exclusion of archived records. Application-wide Maven
+compilation remains blocked by pre-existing syntax errors in the unrelated `EquipmentOrder.java`.
 
 ### Recommended future work
 
