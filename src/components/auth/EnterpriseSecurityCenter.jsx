@@ -38,7 +38,8 @@ import {
   Package,
   BrainCircuit,
   Binary,
-  Radio
+  Radio,
+  FileHeart
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -60,6 +61,7 @@ import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import AiModelGovernancePanel from "./AiModelGovernancePanel";
 import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
 import IotSecurityPanel from "./IotSecurityPanel";
+import FhirEhrSecurityPanel from "./FhirEhrSecurityPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -399,7 +401,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders },
           { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit },
           { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary },
-          { id: "iot", label: "IoMT & Medical Device Security", icon: Radio }
+          { id: "iot", label: "IoMT & Medical Device Security", icon: Radio },
+          { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -850,6 +853,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 18: IOMT MEDICAL DEVICE CYBERSECURITY CONSOLE */}
       {selectedTab === "iot" && (
         <IotSecurityPanel />
+      )}
+
+      {/* TAB 19: FHIR R4 INTEROPERABILITY & EHR SECURITY CONSOLE */}
+      {selectedTab === "fhir" && (
+        <FhirEhrSecurityPanel />
       )}
 
       {/* 4. MODALS */}
