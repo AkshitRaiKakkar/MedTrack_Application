@@ -136,6 +136,24 @@ public class ShipmentTrackingServiceTest {
     }
 
     @Test
+    void createShipment_PastDeliveryDate_ThrowsException() {
+        CreateShipmentRequest request = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123456")
+                .estimatedDeliveryDate(LocalDateTime.now().minusDays(1)) // Past date
+                .build();
+
+        EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
+
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
+        when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
+        verify(shipmentTrackingRepository, never()).save(any());
+    }
+
+    @Test
     void updateShipmentStatus_ToShipped_Success() {
         UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
                 .shipmentStatus("SHIPPED")
@@ -218,6 +236,23 @@ public class ShipmentTrackingServiceTest {
         when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
 
         assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request, authentication));
+        verify(shipmentTrackingRepository, never()).save(any());
+    }
+
+    @Test
+    void updateShipmentStatus_SameStatus_ThrowsException() {
+        UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("SHIPPED") // Same state
+                .build();
+
+        ShipmentTracking shipment = ShipmentTracking.builder()
+                .id(5L)
+                .shipmentStatus(ShipmentStatus.SHIPPED)
+                .build();
+
+        when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
+
+        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request));
         verify(shipmentTrackingRepository, never()).save(any());
     }
 

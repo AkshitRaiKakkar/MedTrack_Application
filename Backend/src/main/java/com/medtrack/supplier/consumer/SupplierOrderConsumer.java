@@ -26,16 +26,18 @@ public class SupplierOrderConsumer {
             validateEvent(event);
             log.info("Received OrderPlacedEvent for order code: [{}]", event.getOrderCode());
 
-            EquipmentOrder order = orderRepository.findByOrderCode(event.getOrderCode())
-                    .orElseGet(() -> {
-                        log.info("Creating new supplier-side order record for order code: [{}]", event.getOrderCode());
-                        return EquipmentOrder.builder()
-                                .orderCode(event.getOrderCode())
-                                .status("PENDING")
-                                .shippingStatus("Processing")
-                                .orderDate(LocalDateTime.now())
-                                .build();
-                    });
+            if (orderRepository.findByOrderCode(event.getOrderCode()).isPresent()) {
+                log.warn("Duplicate OrderPlacedEvent detected for order code: [{}]. Skipping processing.", event.getOrderCode());
+                return;
+            }
+
+            log.info("Creating new supplier-side order record for order code: [{}]", event.getOrderCode());
+            EquipmentOrder order = EquipmentOrder.builder()
+                    .orderCode(event.getOrderCode())
+                    .status("PENDING")
+                    .shippingStatus("Processing")
+                    .orderDate(LocalDateTime.now())
+                    .build();
 
             // Map and update event data
             order.setEquipmentId(event.getEquipmentId());
@@ -54,6 +56,7 @@ public class SupplierOrderConsumer {
             log.error("Validation failed for OrderPlacedEvent: {}", e.getMessage());
         } catch (Exception e) {
             log.error("Failed to process OrderPlacedEvent due to error: {}", e.getMessage(), e);
+            throw e; // Rethrow to allow Kafka to retry or dead-letter
         }
     }
 

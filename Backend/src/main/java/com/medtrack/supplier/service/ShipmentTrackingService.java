@@ -92,6 +92,9 @@ public class ShipmentTrackingService {
         }
 
         ShipmentStatus currentStatus = shipment.getShipmentStatus();
+        if (newStatus == currentStatus) {
+            throw new InvalidStatusTransitionException("Shipment is already in " + currentStatus + " status");
+        }
         if (newStatus.ordinal() < currentStatus.ordinal()) {
             throw new InvalidStatusTransitionException(
                     "Cannot revert status from " + currentStatus + " to " + newStatus);
