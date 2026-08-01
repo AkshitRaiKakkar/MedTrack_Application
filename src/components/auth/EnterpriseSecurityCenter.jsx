@@ -39,7 +39,8 @@ import {
   BrainCircuit,
   Binary,
   Radio,
-  FileHeart
+  FileHeart,
+  Skull
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -62,6 +63,7 @@ import AiModelGovernancePanel from "./AiModelGovernancePanel";
 import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
 import IotSecurityPanel from "./IotSecurityPanel";
 import FhirEhrSecurityPanel from "./FhirEhrSecurityPanel";
+import ThreatIntelPanel from "./ThreatIntelPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -402,7 +404,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit },
           { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary },
           { id: "iot", label: "IoMT & Medical Device Security", icon: Radio },
-          { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart }
+          { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart },
+          { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -858,6 +861,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 19: FHIR R4 INTEROPERABILITY & EHR SECURITY CONSOLE */}
       {selectedTab === "fhir" && (
         <FhirEhrSecurityPanel />
+      )}
+
+      {/* TAB 20: STIX 2.1 / TAXII 2.1 BIOMEDICAL THREAT INTELLIGENCE CONSOLE */}
+      {selectedTab === "threatintel" && (
+        <ThreatIntelPanel />
       )}
 
       {/* 4. MODALS */}
