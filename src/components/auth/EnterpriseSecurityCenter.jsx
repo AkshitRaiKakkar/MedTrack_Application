@@ -39,7 +39,8 @@ import {
   Sliders,
   BrainCircuit,
   Binary,
-  Radio
+  Radio,
+  FileCheck
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -61,6 +62,7 @@ import GrcAuditCompliancePanel from "./GrcAuditCompliancePanel";
 import AiModelGovernancePanel from "./AiModelGovernancePanel";
 import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
 import IotSecurityPanel from "./IotSecurityPanel";
+import ClinicalTrialLedgerPanel from "./ClinicalTrialLedgerPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -400,7 +402,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "ztgovernance", label: "Zero Trust Governance", icon: Sliders },
           { id: "aimodel", label: "AI Risk & Algorithmic Bias", icon: BrainCircuit },
           { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary },
-          { id: "iot", label: "IoMT & Medical Device Security", icon: Radio }
+          { id: "iot", label: "IoMT & Medical Device Security", icon: Radio },
+          { id: "trial", label: "Clinical Trial Ledger & 21 CFR Part 11", icon: FileCheck }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -851,6 +854,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 18: IOMT MEDICAL DEVICE CYBERSECURITY CONSOLE */}
       {selectedTab === "iot" && (
         <IotSecurityPanel />
+      )}
+
+      {/* TAB 19: CLINICAL TRIAL DATA INTEGRITY & 21 CFR PART 11 AUDIT */}
+      {selectedTab === "trial" && (
+        <ClinicalTrialLedgerPanel />
       )}
 
       {/* 4. MODALS */}
