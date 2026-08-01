@@ -40,7 +40,8 @@ import {
   Binary,
   Radio,
   FileHeart,
-  Skull
+  Skull,
+  Cloud
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -64,6 +65,7 @@ import PostQuantumCryptoPanel from "./PostQuantumCryptoPanel";
 import IotSecurityPanel from "./IotSecurityPanel";
 import FhirEhrSecurityPanel from "./FhirEhrSecurityPanel";
 import ThreatIntelPanel from "./ThreatIntelPanel";
+import HealthcareCspmPanel from "./HealthcareCspmPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -405,7 +407,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "pqc", label: "Post-Quantum Cryptography", icon: Binary },
           { id: "iot", label: "IoMT & Medical Device Security", icon: Radio },
           { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart },
-          { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull }
+          { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull },
+          { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -866,6 +869,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 20: STIX 2.1 / TAXII 2.1 BIOMEDICAL THREAT INTELLIGENCE CONSOLE */}
       {selectedTab === "threatintel" && (
         <ThreatIntelPanel />
+      )}
+
+      {/* TAB 21: HEALTHCARE CLOUD SECURITY POSTURE MANAGEMENT (CSPM) */}
+      {selectedTab === "cspm" && (
+        <HealthcareCspmPanel />
       )}
 
       {/* 4. MODALS */}
