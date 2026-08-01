@@ -42,6 +42,10 @@ public class ShipmentTrackingService {
             throw new DuplicateTrackingNumberException("Tracking number already in use: " + request.getShipmentTrackingNumber());
         });
 
+        if (request.getEstimatedDeliveryDate() != null && request.getEstimatedDeliveryDate().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Estimated delivery date cannot be in the past");
+        }
+
         // 4. Create and persist ShipmentTracking
         ShipmentTracking shipment = ShipmentTracking.builder()
                 .orderId(request.getOrderId())
@@ -80,6 +84,9 @@ public class ShipmentTrackingService {
         }
 
         ShipmentStatus currentStatus = shipment.getShipmentStatus();
+        if (newStatus == currentStatus) {
+            throw new InvalidStatusTransitionException("Shipment is already in " + currentStatus + " status");
+        }
         if (newStatus.ordinal() < currentStatus.ordinal()) {
             throw new InvalidStatusTransitionException(
                     "Cannot revert status from " + currentStatus + " to " + newStatus);

@@ -79,20 +79,11 @@ public class SupplierOrderConsumerTest {
                 .build();
 
         when(orderRepository.findByOrderCode("ORD-1001")).thenReturn(Optional.of(existingOrder));
-        when(orderRepository.save(any(EquipmentOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertDoesNotThrow(() -> orderConsumer.consume(validEvent));
 
-        verify(orderRepository, times(1)).save(existingOrder);
-        assertEquals("EQ-55", existingOrder.getEquipmentId());
-        assertEquals("Defibrillator", existingOrder.getEquipmentName());
-        assertEquals(3, existingOrder.getQuantity());
-        assertEquals(new BigDecimal("5000.00"), existingOrder.getUnitCost());
-        assertEquals("City Mercy Hospital", existingOrder.getHospital());
-        assertEquals("admin@citymercy.org", existingOrder.getCreatedBy());
-        assertEquals("Deliver to ICU wing", existingOrder.getNotes());
-        assertEquals("₹15,000", existingOrder.getPrice());
-        assertNotNull(existingOrder.getUpdatedAt());
+        // We now intentionally skip duplicate events, so it should NEVER save
+        verify(orderRepository, never()).save(any(EquipmentOrder.class));
     }
 
     @Test
