@@ -19,9 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -46,15 +44,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Covers the three overloads of {@code MaintenanceService.getAllTasks} and the callers that depend
- * on each one.
+ * Covers the two supported {@code MaintenanceService.getAllTasks} entry points and the callers
+ * that depend on each one.
  *
- * <p>These exist because the pagination refactor collapsed all three into a single
- * {@code Pageable}-taking method. That deleted the unpaged overload out from under
- * {@link MaintenanceService#exportTasksToICal(Authentication)}, which broke the build, and it also
- * removed the {@code page}/{@code size} validation that kept an oversized page request from turning
- * into an unbounded scan. Both behaviours are asserted here so a future refactor has to notice
- * them.</p>
+ * <p>The public API keeps its established JSON-array response while the repository uses
+ * {@link Pageable} internally. These tests protect the unpaged calendar path and the validated,
+ * bounded {@code page}/{@code size} list path so future pagination work does not silently change
+ * the response contract or truncate calendar subscriptions.</p>
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MaintenanceService task listing")
@@ -253,46 +249,6 @@ class MaintenanceTaskListingTest {
 
             assertEquals("Page index cannot be negative", exception.getMessage());
             verifyNoInteractions(taskRepository);
-        }
-    }
-
-    @Nested
-    @DisplayName("Pageable overload")
-    class PageableOverload {
-
-        @Test
-        @DisplayName("passes the supplied Pageable straight through for a hospital caller")
-        void passesPageableThrough() {
-            authenticateAsHospital();
-            Pageable pageable = PageRequest.of(1, 5);
-            when(taskRepository.findByHospitalIdWithFilters(
-                    hospital.getId(), null, null, pageable))
-                    .thenReturn(new PageImpl<>(List.of(task), pageable, 6));
-
-            Page<MaintenanceTask> page =
-                    maintenanceService.getAllTasks(authentication, null, null, pageable);
-
-            assertEquals(6, page.getTotalElements());
-            assertEquals(1, page.getNumber());
-            verify(taskRepository).findByHospitalIdWithFilters(
-                    hospital.getId(), null, null, pageable);
-        }
-
-        @Test
-        @DisplayName("passes the supplied Pageable straight through for a technician caller")
-        void passesPageableThroughForTechnician() {
-            authenticateAsTechnician();
-            Pageable pageable = PageRequest.of(0, 5);
-            when(taskRepository.findByAssignedTechnicianIdWithFilters(
-                    technicianUser.getId(), null, null, pageable))
-                    .thenReturn(new PageImpl<>(List.of(task), pageable, 1));
-
-            Page<MaintenanceTask> page =
-                    maintenanceService.getAllTasks(authentication, null, null, pageable);
-
-            assertEquals(1, page.getTotalElements());
-            verify(taskRepository).findByAssignedTechnicianIdWithFilters(
-                    technicianUser.getId(), null, null, pageable);
         }
     }
 

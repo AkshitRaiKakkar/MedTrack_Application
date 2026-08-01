@@ -615,8 +615,21 @@ escaping, UTC timestamps, and UTF-8 content-line folding.
    protected, and the public DELETE endpoint retains its HTTP 204 response.
 
 Focused service, request-validation, and repository verification covers pagination validation,
-calendar access, deletion audit fields, and exclusion of archived records. Application-wide Maven
-compilation remains blocked by pre-existing syntax errors in the unrelated `EquipmentOrder.java`.
+calendar access, deletion audit fields, and exclusion of archived records. The complete backend
+main-source compilation succeeds. The standard Maven test lifecycle currently stops during test
+compilation on unrelated rate-limiting and equipment test-source errors.
+
+### Completed on 2026-08-01
+
+1. [x] **Realigned Maintenance verification with the backward-compatible list contract.**
+   Controller tests now assert a root JSON array and call the service's supported five-argument
+   list method. Listing tests cover the unpaged calendar path and the validated `page`/`size` path
+   without referencing a removed `Pageable` service overload. No production endpoint, payload,
+   response field, role, or status code changed.
+2. [x] **Corrected Maintenance deployment documentation.** The soft-delete migration and operator
+   verification steps now identify the real gapless Flyway version `7`. The verification record
+   also distinguishes successful main-source compilation from the remaining unrelated test-source
+   compilation blockers.
 
 ### Recommended future work
 
