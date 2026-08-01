@@ -16,9 +16,9 @@ import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -63,26 +63,39 @@ public class MaintenanceService {
             MaintenanceStatus.ON_HOLD, EnumSet.of(MaintenanceStatus.IN_PROGRESS),
             MaintenanceStatus.COMPLETED, EnumSet.noneOf(MaintenanceStatus.class)
     );
-/// updates:-
-    public Page<MaintenanceTask> getAllTasks(
+    public List<MaintenanceTask> getAllTasks(Authentication authentication) {
+        if (hasRole(authentication, "HOSPITAL")) {
+            Long hospitalId = getHospitalForUser(authentication).getId();
+            return taskRepository.findByHospitalId(hospitalId);
+        }
+        if (hasRole(authentication, "TECHNICIAN")) {
+            return taskRepository.findByAssignedTechnicianId(
+                    getAuthenticatedTechnician(authentication).getId());
+        }
+        throw new AccessDeniedException("This role cannot access maintenance tasks");
+    }
+
+    public List<MaintenanceTask> getAllTasks(
             Authentication authentication,
             String statusValue,
             String equipmentId,
-            Pageable pageable) {
+            Integer page,
+            Integer size) {
         MaintenanceStatus status = parseStatusFilter(statusValue);
         String normalizedEquipmentId = normalizeOptionalFilter(equipmentId);
+        Pageable pageable = resolvePageable(page, size);
 
         if (hasRole(authentication, "HOSPITAL")) {
             Long hospitalId = getHospitalForUser(authentication).getId();
             return taskRepository.findByHospitalIdWithFilters(
-                    hospitalId, status, normalizedEquipmentId, pageable);
+                    hospitalId, status, normalizedEquipmentId, pageable).getContent();
         }
         if (hasRole(authentication, "TECHNICIAN")) {
             return taskRepository.findByAssignedTechnicianIdWithFilters(
                     getAuthenticatedTechnician(authentication).getId(),
                     status,
                     normalizedEquipmentId,
-                    pageable);
+                    pageable).getContent();
         }
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
@@ -250,8 +263,11 @@ public class MaintenanceService {
     }
 
     private Pageable resolvePageable(Integer page, Integer size) {
+        Sort sort = Sort.by(
+                Sort.Order.asc("deadline"),
+                Sort.Order.asc("id"));
         if (page == null && size == null) {
-            return Pageable.unpaged();
+            return Pageable.unpaged(sort);
         }
 
         int resolvedPage = page != null ? page : 0;
@@ -263,7 +279,7 @@ public class MaintenanceService {
             throw new IllegalArgumentException(
                     "Page size must be between 1 and " + MAX_PAGE_SIZE);
         }
-        return PageRequest.of(resolvedPage, resolvedSize);
+        return PageRequest.of(resolvedPage, resolvedSize, sort);
     }
 
     private Equipment resolveOwnedEquipment(String equipmentReference, Long hospitalId) {
@@ -485,13 +501,17 @@ public class MaintenanceService {
     @Transactional
     public void deleteTask(Long id, Authentication authentication) {
         // Lock the owned row so deletion cannot race with technician completion.
+        Hospital hospital = getHospitalForUser(authentication);
         MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(
-                        id, getHospitalForUser(authentication).getId())
+                        id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or access denied"));
         if (task.getStatus() == MaintenanceStatus.COMPLETED) {
             throw new InvalidStatusTransitionException("Completed maintenance tasks cannot be deleted");
         }
-        taskRepository.delete(task);
+        task.setDeleted(true);
+        task.setDeletedAt(LocalDateTime.now());
+        task.setDeletedBy(authentication.getName().trim().toLowerCase(Locale.ROOT));
+        taskRepository.save(task);
     }
 
     private MaintenanceTask findOwnedTask(Long id, Authentication authentication) {

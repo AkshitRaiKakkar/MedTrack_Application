@@ -11,6 +11,7 @@ import java.sql.Statement;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -26,7 +27,7 @@ class MaintenanceMigrationIntegrationTest {
              Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("""
                      SELECT status, equipment_record_id, hospital_id, completed_at,
-                            assigned_technician_record_id
+                            assigned_technician_record_id, deleted, deleted_at, deleted_by
                      FROM maintenance_tasks
                      WHERE id = 100
                      """)) {
@@ -36,6 +37,9 @@ class MaintenanceMigrationIntegrationTest {
             assertEquals(7L, result.getLong("hospital_id"));
             assertNull(result.getTimestamp("completed_at"));
             assertEquals(20L, result.getLong("assigned_technician_record_id"));
+            assertFalse(result.getBoolean("deleted"));
+            assertNull(result.getTimestamp("deleted_at"));
+            assertNull(result.getString("deleted_by"));
         }
     }
 
@@ -129,6 +133,11 @@ class MaintenanceMigrationIntegrationTest {
                     CREATE TABLE users (
                         id BIGINT PRIMARY KEY,
                         email VARCHAR(255) UNIQUE
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE equipment_orders (
+                        id BIGINT PRIMARY KEY
                     )
                     """);
             statement.execute("""
