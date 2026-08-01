@@ -41,7 +41,8 @@ import {
   Radio,
   FileHeart,
   Skull,
-  Cloud
+  Cloud,
+  Usb
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -66,6 +67,7 @@ import IotSecurityPanel from "./IotSecurityPanel";
 import FhirEhrSecurityPanel from "./FhirEhrSecurityPanel";
 import ThreatIntelPanel from "./ThreatIntelPanel";
 import HealthcareCspmPanel from "./HealthcareCspmPanel";
+import Fido2WebAuthnPanel from "./Fido2WebAuthnPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -408,7 +410,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "iot", label: "IoMT & Medical Device Security", icon: Radio },
           { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart },
           { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull },
-          { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud }
+          { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud },
+          { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -874,6 +877,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 21: HEALTHCARE CLOUD SECURITY POSTURE MANAGEMENT (CSPM) */}
       {selectedTab === "cspm" && (
         <HealthcareCspmPanel />
+      )}
+
+      {/* TAB 22: FIDO2 WEBAUTHN HARDWARE SECURITY KEYS & BIOMETRIC PASSKEYS */}
+      {selectedTab === "fido2" && (
+        <Fido2WebAuthnPanel />
       )}
 
       {/* 4. MODALS */}
