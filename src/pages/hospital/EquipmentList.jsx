@@ -5,6 +5,11 @@ import {
   getEquipmentById,
   importEquipmentCsv,
   getEquipmentQrCode,
+  getEquipmentLifecycle,
+  createEquipmentLifecycleAction,
+  approveEquipmentLifecycleAction,
+  rejectEquipmentLifecycleAction,
+  completeEquipmentLifecycleAction,
 } from "../../services/EquipmentService";
 import { useAuth } from "../../context/AuthContext";
 import Pagination from "../../components/common/Pagination";
@@ -100,6 +105,21 @@ export default function EquipmentList({ onNavigate }) {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [equipmentDetails, setEquipmentDetails] = useState(null);
   const [detailsError, setDetailsError] = useState(null);
+  const [lifecycleActions, setLifecycleActions] = useState([]);
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState(null);
+  const [lifecycleSaving, setLifecycleSaving] = useState(false);
+  const [lifecycleForm, setLifecycleForm] = useState({
+    actionType: "TRANSFER",
+    newDepartment: "",
+    roomLocation: "",
+    wardLocation: "",
+    custodian: "",
+    effectiveDate: "",
+    replacementEquipmentId: "",
+    depreciationAmount: "",
+    notes: "",
+  });
 
   // CSV Import States
   const [showImportModal, setShowImportModal] = useState(false);
@@ -231,6 +251,8 @@ export default function EquipmentList({ onNavigate }) {
     setEquipmentDetails(null);
     setQrCode(null);
     setQrError(null);
+    setLifecycleActions([]);
+    setLifecycleError(null);
 
     const isFallbackItem = String(id).startsWith("EQ-00");
 
@@ -248,6 +270,7 @@ export default function EquipmentList({ onNavigate }) {
 
       // Fetch QR Code if it's a database item
       if (!isFallbackItem) {
+        refreshLifecycle(id);
         setQrLoading(true);
         try {
           const qrData = await getEquipmentQrCode(id);
@@ -266,6 +289,81 @@ export default function EquipmentList({ onNavigate }) {
       setDetailsError(errMsg);
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  const refreshLifecycle = async (id = selectedEquipmentId) => {
+    if (!id || String(id).startsWith("EQ-00")) return;
+    setLifecycleLoading(true);
+    setLifecycleError(null);
+    try {
+      setLifecycleActions(await getEquipmentLifecycle(id));
+    } catch (error) {
+      console.error("Failed to fetch equipment lifecycle", error);
+      setLifecycleError(error.response?.data?.message || "Failed to load lifecycle history.");
+    } finally {
+      setLifecycleLoading(false);
+    }
+  };
+
+  const handleLifecycleChange = (field, value) => {
+    setLifecycleForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleLifecycleSubmit = async (event) => {
+    event.preventDefault();
+    if (!selectedEquipmentId || String(selectedEquipmentId).startsWith("EQ-00")) return;
+    setLifecycleSaving(true);
+    setLifecycleError(null);
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(lifecycleForm).filter(([, value]) => value !== "")
+      );
+      if (payload.replacementEquipmentId) {
+        payload.replacementEquipmentId = Number(payload.replacementEquipmentId);
+      }
+      if (payload.depreciationAmount) {
+        payload.depreciationAmount = Number(payload.depreciationAmount);
+      }
+      await createEquipmentLifecycleAction(selectedEquipmentId, payload);
+      setLifecycleForm({
+        actionType: "TRANSFER",
+        newDepartment: "",
+        roomLocation: "",
+        wardLocation: "",
+        custodian: "",
+        effectiveDate: "",
+        replacementEquipmentId: "",
+        depreciationAmount: "",
+        notes: "",
+      });
+      await refreshLifecycle(selectedEquipmentId);
+    } catch (error) {
+      console.error("Failed to save lifecycle action", error);
+      setLifecycleError(error.response?.data?.message || "Failed to save lifecycle action.");
+    } finally {
+      setLifecycleSaving(false);
+    }
+  };
+
+  const handleLifecycleWorkflow = async (actionId, action) => {
+    setLifecycleSaving(true);
+    setLifecycleError(null);
+    try {
+      if (action === "approve") await approveEquipmentLifecycleAction(actionId);
+      if (action === "reject") await rejectEquipmentLifecycleAction(actionId, "Rejected from lifecycle panel");
+      if (action === "complete") await completeEquipmentLifecycleAction(actionId);
+      await refreshLifecycle(selectedEquipmentId);
+      if (selectedEquipmentId) {
+        const data = await getEquipmentById(selectedEquipmentId);
+        setEquipmentDetails(data);
+      }
+      fetchEquipment(page);
+    } catch (error) {
+      console.error("Failed to update lifecycle action", error);
+      setLifecycleError(error.response?.data?.message || "Failed to update lifecycle action.");
+    } finally {
+      setLifecycleSaving(false);
     }
   };
 
@@ -434,9 +532,9 @@ export default function EquipmentList({ onNavigate }) {
               <div className="p-5 flex-grow flex flex-col">
                 <div
                   className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block mb-3 w-fit ${
-                    item.status === "Operational"
+                    item.status === "Operational" || item.status === "ACTIVE"
                       ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
-                      : item.status === "Maintenance" || item.status === "NEEDS_MAINTENANCE"
+                      : item.status === "Maintenance" || item.status === "NEEDS_MAINTENANCE" || item.status === "UNDER_MAINTENANCE"
                       ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
                       : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                   }`}
@@ -474,12 +572,14 @@ export default function EquipmentList({ onNavigate }) {
                     Details
                   </button>
 
-                  <button
-                    onClick={() => onNavigate("schedule-maintenance")}
-                    className="flex-1 py-2 px-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg cursor-pointer font-semibold text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                  >
-                    Schedule Service
-                  </button>
+                  {item.status !== "RETIRED" && item.status !== "DISPOSED" && (
+                    <button
+                      onClick={() => onNavigate("schedule-maintenance")}
+                      className="flex-1 py-2 px-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg cursor-pointer font-semibold text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                    >
+                      Schedule Service
+                    </button>
+                  )}
 
                   {/* Hide delete button for default public items */}
                   {user?.role === "hospital" &&
@@ -513,7 +613,7 @@ export default function EquipmentList({ onNavigate }) {
       {/* Equipment Details Modal */}
       {selectedEquipmentId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-card rounded-3xl p-8 max-w-lg w-full shadow-2xl relative border border-subtle">
+          <div className="bg-card rounded-3xl p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative border border-subtle">
             <button
               onClick={() => setSelectedEquipmentId(null)}
               className="absolute top-5 right-5 w-9 h-9 rounded-full bg-hover text-secondary border-none flex items-center justify-center text-xl font-bold cursor-pointer transition-colors hover:bg-subtle"
@@ -558,9 +658,9 @@ export default function EquipmentList({ onNavigate }) {
                     </h2>
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide inline-block mt-1.5 ${
-                        equipmentDetails.status === "Operational"
+                        equipmentDetails.status === "Operational" || equipmentDetails.status === "ACTIVE"
                           ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-                          : equipmentDetails.status === "Maintenance" || equipmentDetails.status === "NEEDS_MAINTENANCE"
+                          : equipmentDetails.status === "Maintenance" || equipmentDetails.status === "NEEDS_MAINTENANCE" || equipmentDetails.status === "UNDER_MAINTENANCE"
                           ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
                           : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                       }`}
@@ -641,6 +741,179 @@ export default function EquipmentList({ onNavigate }) {
                     <span className="text-xs text-slate-400 font-medium">QR code not available for default public items</span>
                   )}
                 </div>
+
+                {!String(equipmentDetails.id).startsWith("EQ-00") && (
+                  <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle space-y-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-extrabold text-primary m-0">Asset Lifecycle</h3>
+                        <p className="text-xs text-secondary mt-1 mb-0">
+                          Track transfers, assignments, retirement, disposal, replacements, and depreciation snapshots.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => refreshLifecycle(equipmentDetails.id)}
+                        disabled={lifecycleLoading}
+                        className="px-3 py-2 rounded-lg border border-subtle bg-surface text-secondary text-xs font-bold hover:bg-subtle disabled:opacity-60"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+
+                    {user?.role === "hospital" && (
+                      <form onSubmit={handleLifecycleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <select
+                          value={lifecycleForm.actionType}
+                          onChange={(event) => handleLifecycleChange("actionType", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        >
+                          <option value="TRANSFER">Transfer</option>
+                          <option value="ASSIGNMENT">Assignment</option>
+                          <option value="RETIREMENT">Retirement</option>
+                          <option value="DISPOSAL">Disposal</option>
+                          <option value="REPLACEMENT">Replacement</option>
+                          <option value="DEPRECIATION_SNAPSHOT">Depreciation Snapshot</option>
+                        </select>
+                        <input
+                          type="date"
+                          value={lifecycleForm.effectiveDate}
+                          onChange={(event) => handleLifecycleChange("effectiveDate", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="New department"
+                          value={lifecycleForm.newDepartment}
+                          onChange={(event) => handleLifecycleChange("newDepartment", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Room / location"
+                          value={lifecycleForm.roomLocation}
+                          onChange={(event) => handleLifecycleChange("roomLocation", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Ward"
+                          value={lifecycleForm.wardLocation}
+                          onChange={(event) => handleLifecycleChange("wardLocation", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Custodian"
+                          value={lifecycleForm.custodian}
+                          onChange={(event) => handleLifecycleChange("custodian", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Replacement equipment ID"
+                          value={lifecycleForm.replacementEquipmentId}
+                          onChange={(event) => handleLifecycleChange("replacementEquipmentId", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Depreciation amount"
+                          value={lifecycleForm.depreciationAmount}
+                          onChange={(event) => handleLifecycleChange("depreciationAmount", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <textarea
+                          placeholder="Notes"
+                          value={lifecycleForm.notes}
+                          onChange={(event) => handleLifecycleChange("notes", event.target.value)}
+                          className="md:col-span-2 px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm min-h-20"
+                        />
+                        <button
+                          type="submit"
+                          disabled={lifecycleSaving}
+                          className="md:col-span-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          {lifecycleSaving ? "Saving..." : "Request Lifecycle Action"}
+                        </button>
+                      </form>
+                    )}
+
+                    {lifecycleError && (
+                      <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-sm font-semibold border border-red-200 dark:border-red-900">
+                        {lifecycleError}
+                      </div>
+                    )}
+
+                    {lifecycleLoading ? (
+                      <p className="text-sm text-secondary font-semibold">Loading lifecycle history...</p>
+                    ) : lifecycleActions.length === 0 ? (
+                      <p className="text-sm text-secondary font-semibold">No lifecycle actions recorded yet.</p>
+                    ) : (
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                        {lifecycleActions.map((action) => (
+                          <div key={action.id} className="rounded-xl border border-subtle bg-surface p-4">
+                            <div className="flex justify-between items-start gap-3">
+                              <div>
+                                <p className="m-0 text-sm font-extrabold text-primary">
+                                  {action.actionType?.replaceAll("_", " ")}
+                                </p>
+                                <p className="m-0 mt-1 text-xs text-secondary">
+                                  Requested by {action.requestedBy} on {action.requestedAt?.slice(0, 10)}
+                                </p>
+                              </div>
+                              <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                {action.status}
+                              </span>
+                            </div>
+                            <div className="mt-3 text-xs text-secondary space-y-1">
+                              {action.newDepartment && <p className="m-0"><strong>Department:</strong> {action.previousDepartment || "N/A"} → {action.newDepartment}</p>}
+                              {action.roomLocation && <p className="m-0"><strong>Room:</strong> {action.roomLocation}</p>}
+                              {action.wardLocation && <p className="m-0"><strong>Ward:</strong> {action.wardLocation}</p>}
+                              {action.custodian && <p className="m-0"><strong>Custodian:</strong> {action.custodian}</p>}
+                              {action.replacementEquipmentName && <p className="m-0"><strong>Replacement:</strong> {action.replacementEquipmentName}</p>}
+                              {action.depreciationAmount != null && <p className="m-0"><strong>Depreciation:</strong> {action.depreciationAmount}</p>}
+                              {action.notes && <p className="m-0"><strong>Notes:</strong> {action.notes}</p>}
+                            </div>
+                            {user?.role === "hospital" && action.status === "PENDING_APPROVAL" && (
+                              <div className="flex gap-2 mt-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleLifecycleWorkflow(action.id, "approve")}
+                                  disabled={lifecycleSaving}
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleLifecycleWorkflow(action.id, "reject")}
+                                  disabled={lifecycleSaving}
+                                  className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-60"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                            {user?.role === "hospital" && action.status === "APPROVED" && (
+                              <button
+                                type="button"
+                                onClick={() => handleLifecycleWorkflow(action.id, "complete")}
+                                disabled={lifecycleSaving}
+                                className="mt-3 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-60"
+                              >
+                                Complete and Apply
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex justify-end">
                   <button

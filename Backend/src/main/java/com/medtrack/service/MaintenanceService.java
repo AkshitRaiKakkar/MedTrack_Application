@@ -9,6 +9,7 @@ import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
@@ -299,6 +300,9 @@ public class MaintenanceService {
 
         if (equipment.getEquipmentCode() == null || equipment.getEquipmentCode().isBlank()) {
             throw new IllegalArgumentException("Selected equipment does not have an equipment code");
+        }
+        if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
+            throw new IllegalArgumentException("Retired or disposed equipment cannot be scheduled for maintenance");
         }
         return equipment;
     }
