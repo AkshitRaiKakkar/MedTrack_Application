@@ -44,17 +44,34 @@ Seed tasks now use `MaintenanceStatus.SCHEDULED` and `MaintenanceStatus.IN_PROGR
 
 ### `Backend/src/main/java/com/medtrack/repository/MaintenanceTaskRepository.java`
 
-The status query now accepts the enum:
+Ownership-scoped list queries accept the enum as an optional filter:
 
 ```java
-List<MaintenanceTask> findByStatus(MaintenanceStatus status);
+Page<MaintenanceTask> findByHospitalIdWithFilters(
+        Long hospitalId,
+        MaintenanceStatus status,
+        String equipmentId,
+        Pageable pageable);
 ```
 
-Example:
+The repository returns a Spring Data `Page` internally so bounded database pagination remains
+available. The service extracts its content before returning it through the existing JSON-array API
+contract. The API supports status filtering with either a display value such as `In Progress` or an
+enum name such as `IN_PROGRESS`. A global status-only repository lookup is intentionally not
+exposed because Maintenance list access must always retain hospital or technician ownership.
 
-```java
-maintenanceTaskRepository.findByStatus(MaintenanceStatus.IN_PROGRESS);
-```
+### Maintenance request DTOs
+
+`MaintenanceCreateRequest` does not expose `status`; every scheduled task starts as
+`SCHEDULED` under server control. `MaintenanceAssignmentRequest` carries only the technician
+email and can be applied by the owning hospital only while the task remains `SCHEDULED`.
+`MaintenanceUpdateRequest` requires a valid `MaintenanceStatus` and carries only
+technician-owned partial report fields.
+
+The request DTOs and entity also share Maintenance-specific length constants. Short scheduling
+and report fields are limited to the existing 255-character persistence width, notes to 16,000
+characters, and signatures to 60,000 characters. Oversized values therefore receive a structured
+HTTP 400 validation response before database access.
 
 ## API Compatibility
 
@@ -78,18 +95,72 @@ Unknown values such as `"Started"` are rejected because they are not members of 
 
 ## Database Consideration
 
-`EnumType.STRING` stores Java enum names in the database. Existing persistent rows containing display values such as `Scheduled` or `In Progress` may need a migration to `SCHEDULED` or `IN_PROGRESS`. The development H2 database is recreated and seeded, but a persistent MySQL database should be checked before deployment.
+`EnumType.STRING` stores Java enum names in the database. Existing persistent rows containing display values such as `Scheduled` or `In Progress` are now normalized by the versioned maintenance migration.
 
-Example migration:
+The migration handles all currently supported display values:
 
-```sql
-UPDATE maintenance_tasks SET status = 'SCHEDULED' WHERE status = 'Scheduled';
-UPDATE maintenance_tasks SET status = 'IN_PROGRESS' WHERE status = 'In Progress';
+```text
+Scheduled    -> SCHEDULED
+In Progress -> IN_PROGRESS
+Needs Part  -> NEEDS_PART
+On Hold     -> ON_HOLD
+Completed   -> COMPLETED
 ```
+
+Vendor-specific scripts are stored under:
+
+- `Backend/src/main/resources/db/migration/h2/`
+- `Backend/src/main/resources/db/migration/mysql/`
+
+The migrations backfill the required `equipment_record_id` relationship and missing
+`hospital_id` values. Version `3` makes ownership and status non-null and adds a restrictive
+equipment foreign key. Migration fails when equipment or ownership cannot be restored, so
+operators must resolve invalid rows instead of silently deploying incomplete data.
+
+Version `4` adds a nullable relationship from an assignment to `users.id`, backfills it using
+trimmed case-insensitive email matching, and retains the existing assignment email used by the
+API. Technician authorization uses the stable user ID. If the user is deleted, `ON DELETE SET
+NULL` clears the relationship without erasing the historical email.
+
+Version `5` adds a database check constraint containing exactly the five supported enum names.
+After version `1` normalizes recognized display values, migration fails if an unsupported legacy
+status remains. The same constraint rejects invalid direct database writes after deployment, so
+Hibernate cannot later encounter an unmappable status while reading Maintenance records.
+
+Flyway is enabled with `FLYWAY_ENABLED=true`. It remains disabled by default because the current local H2 workflow still lets Hibernate create a new development schema. Deployment and verification steps, including the unsupported-status precheck required before version `5`, are recorded in `docs/maintenance-backend-migration.md`.
 
 ## Remaining Work
 
-- Define and enforce valid status transitions.
 - Decide whether to add a `CANCELLED` status.
-- Add tests for JSON conversion, persistence, and invalid values.
-- Implement admin assignment and technician-specific progress updates.
+
+Invalid JSON status values are covered by the maintenance controller integration tests.
+`MaintenanceMigrationIntegrationTest` covers normalization, unsupported legacy statuses, and
+database rejection of invalid status writes.
+
+## Lifecycle Enforcement
+
+The maintenance service now enforces these transitions:
+
+```text
+SCHEDULED -> IN_PROGRESS
+IN_PROGRESS -> NEEDS_PART | ON_HOLD | COMPLETED
+NEEDS_PART -> IN_PROGRESS
+ON_HOLD -> IN_PROGRESS
+```
+
+Technicians may update report fields without changing a non-completed status, but completed tasks are immutable and cannot be deleted. Deleting an eligible non-completed task is an auditable soft delete: the row is retained with its deletion timestamp and authenticated principal, then excluded from normal Maintenance queries. Optional report fields use partial-update semantics: omitted or null values preserve the stored value, while an explicit empty string remains an update for text fields. Recurrence remains hospital-owned scheduling configuration: a technician payload may contain `recurrencePeriodDays` for compatibility, but it cannot overwrite the stored value used to generate the next task. The transition to `COMPLETED` requires a nonblank effective technician signature: the signature in the current payload when supplied, otherwise the previously stored signature. An explicit blank signature is rejected on completion. A successful transition records a server-controlled `completedAt` timestamp. Negative work hours are rejected, and recurring maintenance is generated only on the first transition to `COMPLETED`. Technician reads and locked updates use the stable assigned user ID rather than comparing email text. Every Maintenance operation also reloads the authenticated account and requires its current database role to match the operation and its account status to remain `ACTIVE`; locked, disabled, deleted, or role-changed accounts are denied with HTTP 403 even when an older JWT has not expired. Before copying the assignment to a recurrence, the service defensively verifies that the linked account remains active with the technician role. If eligibility changes during completion processing, the completion can retain its evidence while the new task is created unassigned. A caller already known to be ineligible cannot perform the completion. The owning hospital can assign or reassign an eligible technician while that new task remains `SCHEDULED`. Hospital assignment and deletion use ownership-scoped write locks so they cannot race with technician work on the same task, and all scoped repository access requires task ownership to agree with linked-equipment ownership.
+
+The ownership rule also applies to Maintenance analytics. Status counts, completed-task SLA
+inputs, average work hours, and critical-pending counts exclude rows whose scalar hospital owner
+does not match the hospital that owns the linked equipment. Critical-pending analytics use the
+documented canonical priority value `Critical`, matching request validation and persistence.
+
+Legacy completed rows may have a null completion timestamp. They remain readable, but maintenance SLA reporting excludes them rather than estimating when the work finished.
+
+## Calendar Export
+
+The hospital calendar export represents deadlines as `VEVENT` components. RFC 5545 permits
+`TENTATIVE`, `CONFIRMED`, or `CANCELLED` as a `VEVENT` `STATUS`, so every exported Maintenance
+event uses `STATUS:CONFIRMED`. The exact Maintenance enum name, such as `IN_PROGRESS` or
+`COMPLETED`, is preserved separately in `X-MEDTRACK-STATUS` and remains present as a
+human-readable value in the event description.

@@ -7,6 +7,7 @@ import {
   getEquipmentQrCode,
 } from "../../services/EquipmentService";
 import { useAuth } from "../../context/AuthContext";
+import Pagination from "../../components/common/Pagination";
 
 /* ===========================
    DEFAULT PUBLIC EQUIPMENT
@@ -92,6 +93,9 @@ export default function EquipmentList({ onNavigate }) {
   const [statusFilter, setStatusFilter] = useState("All");
   const [hoveredCard, setHoveredCard] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [equipmentDetails, setEquipmentDetails] = useState(null);
@@ -200,17 +204,24 @@ export default function EquipmentList({ onNavigate }) {
     return Array.from(equipmentMap.values());
   };
 
-  const fetchEquipment = async () => {
+  const fetchEquipment = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllEquipment();
-      setEquipment(Array.isArray(data) ? mergeEquipment(data) : PUBLIC_EQUIPMENT);
+      const response = await getAllEquipment(pageNum, pageSize);
+      const items = response?.content || response?.data || [];
+      setEquipment(Array.isArray(items) ? mergeEquipment(items) : PUBLIC_EQUIPMENT);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
     } catch (error) {
       console.error("Failed to fetch equipment", error);
       setEquipment(PUBLIC_EQUIPMENT);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchEquipment(newPage);
   };
 
   const handleViewDetails = async (id) => {
@@ -288,11 +299,12 @@ export default function EquipmentList({ onNavigate }) {
 
   const statusOptions = [
     "All",
-    ...new Set(equipment.map((item) => item.status).filter(Boolean)),
+    ...new Set(equipment.map((item) => item.status || "Unknown").filter(Boolean)),
   ];
 
   const filtered = equipment.filter((item) => {
     const searchValue = search.toLowerCase().trim();
+    const itemStatus = item.status || "Unknown";
 
     const matchesSearch =
       !searchValue ||
@@ -300,12 +312,12 @@ export default function EquipmentList({ onNavigate }) {
       String(item.id).toLowerCase().includes(searchValue) ||
       item.model?.toLowerCase().includes(searchValue) ||
       item.department?.toLowerCase().includes(searchValue) ||
-      item.status?.toLowerCase().includes(searchValue);
+      itemStatus.toLowerCase().includes(searchValue);
 
     const matchesDepartment =
       departmentFilter === "All" || item.department === departmentFilter;
 
-    const matchesStatus = statusFilter === "All" || item.status === statusFilter;
+    const matchesStatus = statusFilter === "All" || itemStatus === statusFilter;
 
     return matchesSearch && matchesDepartment && matchesStatus;
   });
@@ -378,7 +390,7 @@ export default function EquipmentList({ onNavigate }) {
       {/* Result Summary */}
       <div className="mb-6 rounded-xl border border-subtle bg-card p-4 shadow-sm">
         <p className="text-primary font-semibold">
-          Showing {filtered.length} of {equipment.length} equipment items
+          Showing {filtered.length} of {equipment.length} equipment items (Page {page + 1} of {totalPages})
         </p>
         <p className="text-secondary text-sm mt-1">
           Department: {departmentFilter === "All" ? "All Departments" : departmentFilter}
@@ -424,10 +436,12 @@ export default function EquipmentList({ onNavigate }) {
                   className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block mb-3 w-fit ${
                     item.status === "Operational"
                       ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
-                      : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                      : item.status === "Maintenance" || item.status === "NEEDS_MAINTENANCE"
+                      ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                      : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                   }`}
                 >
-                  {item.status}
+                  {item.status || "Unknown"}
                 </div>
 
                 <h3 className="text-xl font-semibold mb-2 text-primary">
@@ -492,6 +506,10 @@ export default function EquipmentList({ onNavigate }) {
         </div>
       )}
 
+      {!loading && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+      )}
+
       {/* Equipment Details Modal */}
       {selectedEquipmentId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
@@ -542,10 +560,12 @@ export default function EquipmentList({ onNavigate }) {
                       className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide inline-block mt-1.5 ${
                         equipmentDetails.status === "Operational"
                           ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-                          : "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
+                          : equipmentDetails.status === "Maintenance" || equipmentDetails.status === "NEEDS_MAINTENANCE"
+                          ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
+                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                       }`}
                     >
-                      {equipmentDetails.status}
+                      {equipmentDetails.status || "Unknown"}
                     </span>
                   </div>
                 </div>

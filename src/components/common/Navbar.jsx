@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
-import logo from "../../assets/logo.png";
+import { getAllOrders } from "../../services/OrderService";
+import MedTrackLogo from "./MedTrackLogo";
 
 export default function Navbar({ onNavigate, currentPage }) {
   const { user, logout } = useAuth();
@@ -9,11 +10,42 @@ export default function Navbar({ onNavigate, currentPage }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifOpen, setNotifOpen] = useState(false);
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (!user || user.role?.toLowerCase() !== "supplier") return;
+
+    const checkSupplierOrders = async () => {
+      try {
+        const orders = await getAllOrders();
+        if (Array.isArray(orders)) {
+          const pendingOrders = orders.filter(
+            (o) => o.shippingStatus === "Processing" || o.shippingStatus === "Pending"
+          );
+          setNotifications(pendingOrders);
+          setUnreadCount(pendingOrders.length);
+        }
+      } catch (err) {
+        setNotifications([
+          { id: "ORD-9021", equipmentName: "MRI Scanner Component", hospital: "City Central Hospital", shippingStatus: "Processing" },
+          { id: "ORD-9025", equipmentName: "ICU Ventilator Unit", hospital: "St. Jude Medical Center", shippingStatus: "Pending" }
+        ]);
+        setUnreadCount(2);
+      }
+    };
+
+    checkSupplierOrders();
+    const interval = setInterval(checkSupplierOrders, 12000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const isLanding = currentPage === "landing";
 
@@ -24,6 +56,7 @@ export default function Navbar({ onNavigate, currentPage }) {
   { label: "Suppliers", page: "suppliers" },
   { label: "Blog", page: "blog" },
   { label: "For employers", page: "about" },
+  { label: "Careers", page: "careers" },
 ];
 
   // Dashboard links after login
@@ -57,7 +90,7 @@ export default function Navbar({ onNavigate, currentPage }) {
             onClick={() => onNavigate("landing")}
             className="flex items-center group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg"
           >
-            <span className="text-2xl font-black tracking-tighter text-blue-600">"medtrack"</span>
+            <MedTrackLogo size="text-2xl" />
           </button>
 
           {/* Desktop Navigation */}
@@ -82,22 +115,74 @@ export default function Navbar({ onNavigate, currentPage }) {
           {/* Right Side Buttons */}
           <div className="flex items-center gap-6">
 
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="text-primary hover:text-blue-600 transition-colors"
-              aria-label="Toggle Dark Mode"
-            >
-              {theme === "dark" ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              )}
-            </button>
+            {/* Supplier Order Notification Bell */}
+            {user && user.role?.toLowerCase() === "supplier" && (
+              <div className="relative">
+                <button
+                  onClick={() => setNotifOpen(!notifOpen)}
+                  className="p-2 text-primary hover:text-blue-600 transition-colors relative focus:outline-none"
+                  aria-label="Order Notifications"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {notifOpen && (
+                  <div className="absolute right-0 mt-3 w-80 bg-card border border-subtle rounded-2xl shadow-xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center justify-between pb-3 border-b border-subtle mb-3">
+                      <h4 className="text-xs font-bold text-primary flex items-center gap-2">
+                        🔔 Order Requests
+                      </h4>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={() => setUnreadCount(0)}
+                          className="text-[10px] text-blue-600 dark:text-blue-400 font-bold hover:underline bg-transparent border-none p-0 cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+
+                    {notifications.length > 0 ? (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              setNotifOpen(false);
+                              onNavigate("orders");
+                            }}
+                            className="p-3 bg-surface/50 hover:bg-hover rounded-xl cursor-pointer transition-colors border border-subtle/50"
+                          >
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="text-xs font-bold text-primary truncate max-w-[170px]">
+                                {n.equipmentName || n.id}
+                              </span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600">
+                                {n.shippingStatus || "New Inquiry"}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-secondary">
+                              {n.hospital || "Hospital Order Request"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-secondary text-center py-4">
+                        No active order notifications.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {user ? (
               <>

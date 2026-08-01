@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -71,6 +72,7 @@ public class PasswordResetTest {
         );
         ReflectionTestUtils.setField(userService, "otpLength", 6);
         ReflectionTestUtils.setField(userService, "otpExpiryMinutes", 10);
+        ReflectionTestUtils.setField(userService, "otpMaxAttempts", 5);
     }
 
     @Test
@@ -109,13 +111,21 @@ public class PasswordResetTest {
     }
 
     @Test
-    void forgotPassword_UserNotFound_ThrowsException() {
+    void forgotPassword_UserNotFound_IsIndistinguishableFromSuccess() {
         String email = "unknown@example.com";
         ForgotPasswordRequest request = new ForgotPasswordRequest(email);
 
         when(userRepository.findByEmail(email)).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> userService.forgotPassword(request));
+        // forgotPassword returns silently for an unknown address, on purpose. Throwing - which this
+        // test used to assert - makes the endpoint an account-enumeration oracle: a caller can tell
+        // a registered address from an unregistered one by whether the request errors, which is
+        // exactly what an unauthenticated password-reset endpoint must not reveal.
+        //
+        // The observable behaviour must therefore be identical to the success path from outside, and
+        // differ only in that no token is issued and no mail is sent.
+        assertDoesNotThrow(() -> userService.forgotPassword(request));
+
         verify(passwordResetTokenRepository, never()).save(any());
         verify(emailService, never()).sendOtp(any(), any());
     }
@@ -134,7 +144,8 @@ public class PasswordResetTest {
                 .used(false)
                 .build();
 
-        when(passwordResetTokenRepository.findByEmailAndOtp(email, otp)).thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.of(token));
         when(passwordResetTokenRepository.save(any(PasswordResetToken.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -145,12 +156,12 @@ public class PasswordResetTest {
     }
 
     @Test
-    void verifyOtp_IncorrectOtp_ThrowsException() {
+    void verifyOtp_NoActiveToken_ThrowsException() {
         String email = "test@example.com";
-        String otp = "123456";
-        VerifyOtpRequest request = new VerifyOtpRequest(email, otp);
+        VerifyOtpRequest request = new VerifyOtpRequest(email, "123456");
 
-        when(passwordResetTokenRepository.findByEmailAndOtp(email, otp)).thenReturn(Optional.empty());
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.empty());
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.verifyOtp(request));
         assertEquals("Incorrect OTP", ex.getMessage());
@@ -158,7 +169,32 @@ public class PasswordResetTest {
     }
 
     @Test
-    void verifyOtp_ExpiredOtp_ThrowsException() {
+    void verifyOtp_IncorrectOtp_ThrowsExceptionAndIncrementsAttemptCount() {
+        String email = "test@example.com";
+        VerifyOtpRequest request = new VerifyOtpRequest(email, "000000");
+
+        PasswordResetToken token = PasswordResetToken.builder()
+                .email(email)
+                .otp("123456")
+                .expiryTime(LocalDateTime.now().plusMinutes(10))
+                .verified(false)
+                .used(false)
+                .attemptCount(0)
+                .build();
+
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.save(any(PasswordResetToken.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.verifyOtp(request));
+        assertEquals("Incorrect OTP", ex.getMessage());
+        assertEquals(1, token.getAttemptCount());
+        verify(passwordResetTokenRepository).save(token);
+    }
+
+    @Test
+    void verifyOtp_ExpiredOtp_ThrowsLockedException() {
         String email = "test@example.com";
         String otp = "123456";
         VerifyOtpRequest request = new VerifyOtpRequest(email, otp);
@@ -171,32 +207,66 @@ public class PasswordResetTest {
                 .used(false)
                 .build();
 
-        when(passwordResetTokenRepository.findByEmailAndOtp(email, otp)).thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.of(token));
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.verifyOtp(request));
+        LockedException ex = assertThrows(LockedException.class, () -> userService.verifyOtp(request));
         assertEquals("OTP has expired", ex.getMessage());
         verify(passwordResetTokenRepository, never()).save(any());
     }
 
     @Test
-    void verifyOtp_UsedOtp_ThrowsException() {
+    void verifyOtp_MaxAttemptsExceeded_InvalidatesTokenAndThrowsLockedException() {
         String email = "test@example.com";
-        String otp = "123456";
-        VerifyOtpRequest request = new VerifyOtpRequest(email, otp);
+        VerifyOtpRequest request = new VerifyOtpRequest(email, "999999");
 
         PasswordResetToken token = PasswordResetToken.builder()
                 .email(email)
-                .otp(otp)
+                .otp("123456")
                 .expiryTime(LocalDateTime.now().plusMinutes(10))
-                .verified(true)
-                .used(true) // Already used
+                .verified(false)
+                .used(false)
+                .attemptCount(5) // already at the configured max
                 .build();
 
-        when(passwordResetTokenRepository.findByEmailAndOtp(email, otp)).thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.save(any(PasswordResetToken.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.verifyOtp(request));
-        assertEquals("OTP has already been used", ex.getMessage());
-        verify(passwordResetTokenRepository, never()).save(any());
+        assertThrows(LockedException.class, () -> userService.verifyOtp(request));
+
+        assertTrue(token.isUsed());
+        verify(passwordResetTokenRepository).save(token);
+    }
+
+    @Test
+    void verifyOtp_BruteForceAttempt_LocksOutAfterFiveWrongGuesses() {
+        String email = "test@example.com";
+        PasswordResetToken token = PasswordResetToken.builder()
+                .email(email)
+                .otp("123456")
+                .expiryTime(LocalDateTime.now().plusMinutes(10))
+                .verified(false)
+                .used(false)
+                .attemptCount(0)
+                .build();
+
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.save(any(PasswordResetToken.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        for (int i = 0; i < 5; i++) {
+            assertThrows(RuntimeException.class,
+                    () -> userService.verifyOtp(new VerifyOtpRequest(email, "000000")));
+        }
+        assertEquals(5, token.getAttemptCount());
+        assertFalse(token.isUsed());
+
+        // The 6th guess - even if it happens to be correct - is now locked out.
+        assertThrows(LockedException.class, () -> userService.verifyOtp(new VerifyOtpRequest(email, "123456")));
+        assertTrue(token.isUsed());
     }
 
     @Test
@@ -220,7 +290,8 @@ public class PasswordResetTest {
                 .password("old_encoded_password")
                 .build();
 
-        when(passwordResetTokenRepository.findByEmailAndOtp(email, otp)).thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.of(token));
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         when(passwordEncoder.encode(newPassword)).thenReturn("new_encoded_password");
         when(userRepository.save(any(User.class))).thenReturn(user);
@@ -251,12 +322,39 @@ public class PasswordResetTest {
                 .used(false)
                 .build();
 
-        when(passwordResetTokenRepository.findByEmailAndOtp(email, otp)).thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.of(token));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.resetPassword(request));
         assertEquals("OTP has not been verified", ex.getMessage());
         verify(userRepository, never()).save(any());
         verify(passwordResetTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void resetPassword_IncorrectOtp_TracksAttemptWithoutRevealingVerifiedState() {
+        String email = "test@example.com";
+        String newPassword = "newPassword123";
+        ResetPasswordRequest request = new ResetPasswordRequest(email, "000000", newPassword);
+
+        PasswordResetToken token = PasswordResetToken.builder()
+                .email(email)
+                .otp("123456")
+                .expiryTime(LocalDateTime.now().plusMinutes(10))
+                .verified(true)
+                .used(false)
+                .attemptCount(0)
+                .build();
+
+        when(passwordResetTokenRepository.findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email))
+                .thenReturn(Optional.of(token));
+        when(passwordResetTokenRepository.save(any(PasswordResetToken.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.resetPassword(request));
+        assertEquals("Incorrect OTP", ex.getMessage());
+        assertEquals(1, token.getAttemptCount());
+        verify(userRepository, never()).save(any());
     }
 
     @Test

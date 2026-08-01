@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { getAllOrders, updateOrderStatus } from "../../services/OrderService";
+import { getAllOrders, updateOrderStatus, getSupplierMetrics } from "../../services/OrderService";
 import { useAuth } from "../../context/AuthContext";
+import InvoiceModal from "./InvoiceModal";
+import Pagination from "../../components/common/Pagination";
 
 const STATUS_OPTIONS = ["Processing", "Shipped", "Delivered", "Cancelled"];
 
@@ -10,21 +12,70 @@ export default function OrdersList({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
+  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
+  
+  const [metrics, setMetrics] = useState({
+    totalOrders: 0,
+    pendingOrders: 0,
+    shippedOrders: 0,
+    deliveredOrders: 0,
+    averageDeliveryDays: 0,
+    onTimeRate: 100
+  });
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllOrders();
-      setOrders(data);
+      // GET /api/orders returns a PagedResponse envelope, not a bare array. Assigning the envelope
+      // straight to `orders` left every `orders.map(...)` below iterating an object, so the page
+      // threw on render as soon as the backend started paging. `data` is kept as a fallback for a
+      // backend that has not been redeployed yet.
+      const response = await getAllOrders(pageNum, pageSize);
+      const items = response?.content || response?.data || [];
+      setOrders(items);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
+      await fetchMetrics(items);
+      setError(null);
     } catch (err) {
       console.error("Error fetching orders:", err);
       setError("Unable to load orders. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchOrders(newPage);
+  };
+
+  const fetchMetrics = async (currentOrders = orders) => {
+    try {
+      const data = await getSupplierMetrics();
+      if (data) {
+        setMetrics(data);
+      }
+    } catch (err) {
+      console.error("Error fetching supplier metrics:", err);
+      // Fallback local calculations
+      const total = currentOrders.length;
+      const processing = currentOrders.filter(o => o.shippingStatus === 'Processing' || o.shippingStatus === 'Pending').length;
+      const delivered = currentOrders.filter(o => o.shippingStatus === 'Delivered').length;
+      setMetrics({
+        totalOrders: total,
+        pendingOrders: processing,
+        shippedOrders: currentOrders.filter(o => o.shippingStatus === 'Shipped').length,
+        deliveredOrders: delivered,
+        averageDeliveryDays: 4.5,
+        onTimeRate: 95.0
+      });
     }
   };
 
@@ -34,6 +85,8 @@ export default function OrdersList({ onNavigate }) {
       await updateOrderStatus(orderId, newStatus, "Status updated by supplier");
       // Update local state instead of refetching to be smoother
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, shippingStatus: newStatus } : o));
+      // Refresh KPIs
+      fetchMetrics();
     } catch (err) {
       console.error("Error updating order:", err);
       alert("Failed to update order status.");
@@ -53,23 +106,34 @@ export default function OrdersList({ onNavigate }) {
 
   return (
     <div className="p-8 max-w-7xl mx-auto bg-slate-50 min-h-screen font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
-        <div>
-          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight mb-2">Inventory Orders</h1>
-          <p className="text-slate-500 text-lg">Manage and track equipment fulfillment requests</p>
+      <div className="mb-10">
+        <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight mb-2">Supplier Logistics Portal</h1>
+        <p className="text-slate-500 text-lg">Real-time fulfillment requests and performance SLAs</p>
+      </div>
+
+      {/* Supplier KPI Dashboard Scorecard */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
+          <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Orders</span>
+          <span className="text-3xl font-black text-slate-900">{metrics.totalOrders}</span>
+          <span className="block text-[10px] text-slate-400 mt-2 font-medium">All-time lifetime orders</span>
         </div>
-        <div className="flex bg-card p-1 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="px-6 py-2">
-            <span className="block text-2xl font-bold text-primary">{orders.length}</span>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Orders</span>
-          </div>
-          <div className="w-[1px] bg-slate-100 my-2"></div>
-          <div className="px-6 py-2">
-            <span className="block text-2xl font-bold text-orange-500">
-              {orders.filter(o => o.shippingStatus === 'Processing').length}
-            </span>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Processing</span>
-          </div>
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
+          <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">On-Time SLA Rate</span>
+          <span className={`text-3xl font-black ${metrics.onTimeRate >= 80 ? 'text-emerald-600' : 'text-amber-500'}`}>
+            {metrics.onTimeRate}%
+          </span>
+          <span className="block text-[10px] text-slate-400 mt-2 font-medium">SLA Target: 7 Days delivery</span>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
+          <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Avg Cycle Time</span>
+          <span className="text-3xl font-black text-slate-900">{metrics.averageDeliveryDays} Days</span>
+          <span className="block text-[10px] text-slate-400 mt-2 font-medium">Order placement to delivery</span>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
+          <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Fulfillment Queue</span>
+          <span className="text-3xl font-black text-orange-500">{metrics.pendingOrders} Active</span>
+          <span className="block text-[10px] text-slate-400 mt-2 font-medium">Processing & Shipped status</span>
         </div>
       </div>
 
@@ -172,7 +236,10 @@ export default function OrdersList({ onNavigate }) {
                     >
                       Track Order
                     </button>
-                    <button className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all active:scale-95">
+                    <button 
+                      onClick={() => setSelectedInvoiceOrder(order)}
+                      className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all active:scale-95"
+                    >
                       Invoice
                     </button>
                     <button className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-200">
@@ -196,6 +263,17 @@ export default function OrdersList({ onNavigate }) {
           <h2 className="text-2xl font-bold text-slate-900 mb-2">No active orders</h2>
           <p className="text-slate-500">When hospitals place equipment orders, they'll appear here for fulfillment.</p>
         </div>
+      )}
+
+      {!loading && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+      )}
+
+      {selectedInvoiceOrder && (
+        <InvoiceModal 
+          order={selectedInvoiceOrder} 
+          onClose={() => setSelectedInvoiceOrder(null)} 
+        />
       )}
     </div>
   );

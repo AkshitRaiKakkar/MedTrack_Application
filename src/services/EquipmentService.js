@@ -1,8 +1,8 @@
 import API from "./HttpService";
 
-// Fetch all equipment
-export const getAllEquipment = async () => {
-  const response = await API.get("/api/equipment");
+// Fetch equipment with pagination
+export const getAllEquipment = async (page = 0, size = 20) => {
+  const response = await API.get(`/api/equipment?page=${page}&size=${size}`);
   return response.data;
 };
 
