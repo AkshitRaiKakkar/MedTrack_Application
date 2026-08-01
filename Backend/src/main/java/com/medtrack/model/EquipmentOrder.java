@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -44,7 +45,8 @@ import java.time.LocalDateTime;
         @UniqueConstraint(columnNames = "orderCode", name = "uk_order_code")
     }
 )
-@Where(clause = "deleted = false")
+// Hibernate 7 removed @Where; @SQLRestriction is its replacement and carries the same semantics.
+@SQLRestriction("deleted = false")
 @Data
 @Builder
 @NoArgsConstructor
@@ -193,27 +195,16 @@ public class EquipmentOrder {
      */
     @Column(columnDefinition = "TEXT")
     private String supplierNotes;
-@PrePersist
+
+    /**
+     * Keeps {@code totalCost} consistent with {@code quantity * unitCost} on every write.
+     */
+    @PrePersist
     @PreUpdate
     void calculateTotalCost() {
         if (quantity != null && unitCost != null) {
             totalCost = unitCost.multiply(BigDecimal.valueOf(quantity.longValue()));
         }
-    }
-
-    /**
-     * Soft delete fields - records are never hard deleted for audit compliance
-     */
-    @Builder.Default
-    @Column(name = "deleted", nullable = false)
-    private Boolean deleted = false;
-
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
-    @Column(name = "deleted_by", length = 255)
-    private String deletedBy;
-}
     }
 
     /**

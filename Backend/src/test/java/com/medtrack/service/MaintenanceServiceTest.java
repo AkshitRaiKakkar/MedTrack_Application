@@ -669,6 +669,7 @@ public class MaintenanceServiceTest {
                 .when(authentication).getAuthorities();
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
         when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        // findByHospitalIdWithFilters is a paged query, so the stub has to hand back a Page.
         when(taskRepository.findByHospitalIdWithFilters(
                 eq(mockHospital.getId()),
                 eq(MaintenanceStatus.IN_PROGRESS),

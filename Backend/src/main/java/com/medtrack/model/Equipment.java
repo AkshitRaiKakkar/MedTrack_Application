@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,7 +23,8 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "equipment")
-@Where(clause = "deleted = false")
+// Hibernate 7 removed @Where; @SQLRestriction is its replacement and carries the same semantics.
+@SQLRestriction("deleted = false")
 @Data
 @Builder
 @NoArgsConstructor

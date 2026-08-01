@@ -12,7 +12,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,10 +27,6 @@ import java.time.LocalDate;
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 
 @RestController
 @RequestMapping("/api/equipment")
@@ -52,7 +50,7 @@ public class EquipmentController {
 
         return ResponseEntity.ok(
                 com.medtrack.dto.PagedResponse.of(
-                        equipmentService.getEquipmentPage(principal.getName(), pageable)
+                        equipmentService.getAllEquipment(principal.getName(), pageable)
                 )
         );
     }
@@ -229,7 +227,7 @@ public class EquipmentController {
     @GetMapping("/archived")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<Page<Equipment>> getArchivedEquipment(
-            @PageableDefault(sort = "deletedAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable,
+            @PageableDefault(sort = "deletedAt", direction = Sort.Direction.DESC) Pageable pageable,
             Principal principal) {
         return ResponseEntity.ok(equipmentService.getArchivedEquipment(principal.getName(), pageable));
     }
@@ -444,56 +442,5 @@ public class EquipmentController {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("Invalid resource ID.");
         }
-    }
-
-    /**
-     * Archives (soft deletes) an equipment record.
-     */
-    @PostMapping("/{id}/archive")
-    @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Void> archiveEquipment(
-            @PathVariable Long id,
-            Principal principal) {
-        validateId(id);
-        equipmentService.archiveEquipment(id, principal.getName());
-        return ResponseEntity.ok().build();
-    }
-
-    /**
-     * Lists archived equipment for the current hospital.
-     */
-    @GetMapping("/archived")
-    @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Page<Equipment>> getArchivedEquipment(
-            @PageableDefault(size = 20, sort = "deletedAt", direction = Sort.Direction.DESC) Pageable pageable,
-            Principal principal) {
-        Page<Equipment> archived = equipmentService.getArchivedEquipment(pageable, principal.getName());
-        return ResponseEntity.ok(archived);
-    }
-
-    /**
-     * Restores an archived equipment record.
-     */
-    @PostMapping("/{id}/restore")
-    @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Void> restoreEquipment(
-            @PathVariable Long id,
-            Principal principal) {
-        validateId(id);
-        equipmentService.restoreEquipment(id, principal.getName());
-        return ResponseEntity.ok().build();
-    }
-
-    /**
-     * Permanently deletes an archived equipment record (after 90 days).
-     */
-    @DeleteMapping("/{id}/permanent")
-    @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<Void> permanentlyDeleteEquipment(
-            @PathVariable Long id,
-            Principal principal) {
-        validateId(id);
-        equipmentService.permanentlyDeleteEquipment(id, principal.getName());
-        return ResponseEntity.ok().build();
     }
 }

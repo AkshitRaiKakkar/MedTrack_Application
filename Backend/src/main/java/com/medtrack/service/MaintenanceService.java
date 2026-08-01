@@ -416,6 +416,9 @@ public class MaintenanceService {
     }
 
     public String exportTasksToICal(Authentication authentication) {
+        // The calendar feed is a subscription, not a page: a client fetches this URL and expects
+        // every scheduled task back. Deliberately the unpaged overload, so the feed can never be
+        // silently truncated to whatever the default page size happens to be.
         List<MaintenanceTask> tasks = getAllTasks(authentication);
         StringBuilder ical = new StringBuilder();
         ical.append("BEGIN:VCALENDAR\r\n")

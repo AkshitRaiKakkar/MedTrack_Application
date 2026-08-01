@@ -8,9 +8,11 @@ import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
+import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.medtrack.util.SupplierInvoicePdf;
 import com.medtrack.auth.service.EmailService;
@@ -28,7 +31,6 @@ import com.medtrack.auth.service.EmailService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -58,10 +60,43 @@ public class OrderServiceTest {
     @Mock
     private SupplierAccessGuard supplierAccessGuard;
 
+    @Mock
+    private UserRepository userRepository;
+
     @InjectMocks
     private OrderService orderService;
 
     private EquipmentOrder mockOrder;
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    /**
+     * Puts an authenticated caller into the {@link SecurityContextHolder}.
+     *
+     * <p>{@link OrderService} reads the caller's identity, role and organisation straight off the
+     * security context rather than taking them as parameters, so a test that exercises
+     * {@code getAllOrders}, {@code getOrderById} or {@code getSupplierMetrics} has to populate that
+     * context first. The user lookup is stubbed leniently because not every code path that needs an
+     * authenticated caller also needs to resolve their organisation - a supplier, for instance,
+     * short-circuits before the repository is consulted.</p>
+     *
+     * @param email        the principal name
+     * @param organization the organisation recorded against the user
+     * @param role         the granted authority, e.g. {@code ROLE_SUPPLIER}
+     */
+    private void authenticateAs(String email, String organization, String role) {
+        User user = new User();
+        user.setEmail(email);
+        user.setOrganization(organization);
+        lenient().when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        email, null, List.of(new SimpleGrantedAuthority(role))));
+    }
 
     private final Authentication supplierAuth = new UsernamePasswordAuthenticationToken(
             "supplier@medsupply.com", null, List.of(new SimpleGrantedAuthority("ROLE_SUPPLIER")));

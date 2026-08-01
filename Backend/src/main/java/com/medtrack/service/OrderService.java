@@ -5,6 +5,7 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
+import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
 import com.medtrack.util.PurchaseOrderPdf;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.medtrack.exception.ResourceNotFoundException;
 
 import org.springframework.data.domain.Page;
@@ -25,9 +27,6 @@ import java.util.List;
 
 import com.medtrack.util.SupplierInvoicePdf;
 import com.medtrack.auth.service.EmailService;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
@@ -92,11 +91,40 @@ public class OrderService {
         return authentication.getName();
     }
 
-    public List<EquipmentOrder> getAllOrders() {
+    /**
+     * Returns one page of orders visible to the caller.
+     *
+     * <p>Suppliers see every order; a hospital user sees only their own organisation's orders.
+     * The {@code Pageable} is required: {@link com.medtrack.controller.OrderController} supplies a
+     * {@code @PageableDefault}, so callers never have to construct one themselves.</p>
+     *
+     * @param pageable the page to fetch; must not be {@code null}
+     * @return the requested page of orders
+     */
+    public Page<EquipmentOrder> getAllOrders(Pageable pageable) {
+        if (pageable == null) {
+            throw new IllegalArgumentException("Pageable is required");
+        }
         if (isSupplier()) {
             return orderRepository.findAll(pageable);
         }
         return orderRepository.findByHospital(getCurrentUserOrganization(), pageable);
+    }
+
+    /**
+     * Returns every order visible to the caller, unpaged.
+     *
+     * <p>Kept separate from {@link #getAllOrders(Pageable)} because the supplier scorecard has to
+     * aggregate over the caller's whole order history. Paging that call would have computed the
+     * on-time rate from whichever page happened to be requested.</p>
+     *
+     * @return all orders the caller may see
+     */
+    public List<EquipmentOrder> getAllOrdersUnpaged() {
+        if (isSupplier()) {
+            return orderRepository.findAll();
+        }
+        return orderRepository.findByHospital(getCurrentUserOrganization());
     }
 
     public EquipmentOrder getOrderById(Long id) {
@@ -258,7 +286,7 @@ public class OrderService {
     }
 
     public SupplierMetricsDto getSupplierMetrics() {
-        List<EquipmentOrder> orders = getAllOrders();
+        List<EquipmentOrder> orders = getAllOrdersUnpaged();
         long total = orders.size();
         
         long pending = orders.stream()
