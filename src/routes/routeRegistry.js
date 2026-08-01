@@ -14,76 +14,88 @@
 // runs from `prebuild` and fails the build if a page under src/pages/auth/ is missing from this
 // list, if two entries claim the same slug, or if a referenced component is never imported.
 
-import LandingPage from "../pages/LandingPage";
-import Blog from "../pages/Blog";
-import BlogPost from "../pages/BlogPost";
-import CareersPage from "../pages/CareersPage";
-import JobApplicationPage from "../pages/JobApplicationPage";
-import CertificateGeneratorPage from "../pages/CertificateGeneratorPage";
-import AboutPage from "../pages/AboutPage";
-import ContactPage from "../pages/ContactPage";
-import GuidelinesPage from "../pages/GuidelinesPage";
-import HelpCenterPage from "../pages/HelpCenterPage";
-import AwardsPage from "../pages/AwardsPage";
-import TermsPage from "../pages/TermsPage";
-import GuidesPage from "../pages/GuidesPage";
-import SecurityPage from "../pages/SecurityPage";
-import SystemStatusPage from "../pages/SystemStatusPage";
+import { lazy } from "react";
 
-import LoginPage from "../pages/auth/LoginPage";
-import RegisterPage from "../pages/auth/RegisterPage";
-import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
-import VerifyOtpPage from "../pages/auth/VerifyOtpPage";
-import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
+const LandingPage = lazy(() => import("../pages/LandingPage"));
+const NotFoundPage = lazy(() => import("../pages/NotFoundPage"));
+const Blog = lazy(() => import("../pages/Blog"));
+const BlogPost = lazy(() => import("../pages/BlogPost"));
+const CareersPage = lazy(() => import("../pages/CareersPage"));
+const JobApplicationPage = lazy(() => import("../pages/JobApplicationPage"));
+const CertificateGeneratorPage = lazy(() => import("../pages/CertificateGeneratorPage"));
+const AboutPage = lazy(() => import("../pages/AboutPage"));
+const ContactPage = lazy(() => import("../pages/ContactPage"));
+const GuidelinesPage = lazy(() => import("../pages/GuidelinesPage"));
+const HelpCenterPage = lazy(() => import("../pages/HelpCenterPage"));
+const AwardsPage = lazy(() => import("../pages/AwardsPage"));
+const TermsPage = lazy(() => import("../pages/TermsPage"));
+const GuidesPage = lazy(() => import("../pages/GuidesPage"));
+const SecurityPage = lazy(() => import("../pages/SecurityPage"));
+const SystemStatusPage = lazy(() => import("../pages/SystemStatusPage"));
 
-import Dashboard from "../pages/hospital/Dashboard";
-import AnalyticsDashboard from "../pages/hospital/AnalyticsDashboard";
-import EquipmentList from "../pages/hospital/EquipmentList";
-import MaintenanceSchedule from "../pages/hospital/MaintenanceSchedule";
-import AddEquipmentForm from "../pages/hospital/AddEquipmentForm";
-import EditEquipmentForm from "../pages/hospital/EditEquipmentForm";
-import ScheduleMaintenancePage from "../pages/hospital/ScheduleMaintenancePage";
-import RequestEquipmentPage from "../pages/hospital/RequestEquipmentPage";
+const LoginPage = lazy(() => import("../pages/auth/LoginPage"));
+const RegisterPage = lazy(() => import("../pages/auth/RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("../pages/auth/ForgotPasswordPage"));
+const VerifyOtpPage = lazy(() => import("../pages/auth/VerifyOtpPage"));
+const ResetPasswordPage = lazy(() => import("../pages/auth/ResetPasswordPage"));
 
-import TaskList from "../pages/technician/TaskList";
-import UpdateTask from "../pages/technician/UpdateTask";
+const Dashboard = lazy(() => import("../pages/hospital/Dashboard"));
+const AnalyticsDashboard = lazy(() => import("../pages/hospital/AnalyticsDashboard"));
+const EquipmentList = lazy(() => import("../pages/hospital/EquipmentList"));
+const MaintenanceSchedule = lazy(() => import("../pages/hospital/MaintenanceSchedule"));
+const AddEquipmentForm = lazy(() => import("../pages/hospital/AddEquipmentForm"));
+const EditEquipmentForm = lazy(() => import("../pages/hospital/EditEquipmentForm"));
+const ScheduleMaintenancePage = lazy(() => import("../pages/hospital/ScheduleMaintenancePage"));
+const RequestEquipmentPage = lazy(() => import("../pages/hospital/RequestEquipmentPage"));
 
-import OrdersList from "../pages/supplier/OrdersList";
-import OrderStatus from "../pages/supplier/OrderStatus";
+const TaskList = lazy(() => import("../pages/technician/TaskList"));
+const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
 
-import AuthoritySecurityPage from "../pages/auth/AuthoritySecurityPage";
-import MfaSecurityPage from "../pages/auth/MfaSecurityPage";
-import EnterpriseSsoPage from "../pages/auth/EnterpriseSsoPage";
-import RbacSecurityPage from "../pages/auth/RbacSecurityPage";
-import ZeroTrustSecurityPage from "../pages/auth/ZeroTrustSecurityPage";
-import ComplianceSecurityPage from "../pages/auth/ComplianceSecurityPage";
-import ThreatDetectionSoarPage from "../pages/auth/ThreatDetectionSoarPage";
-import KeyVaultSecurityPage from "../pages/auth/KeyVaultSecurityPage";
-import SecurityKeyVaultPage from "../pages/auth/SecurityKeyVaultPage";
-import DlpPrivacyGuardPage from "../pages/auth/DlpPrivacyGuardPage";
-import PasskeyPasswordlessPage from "../pages/auth/PasskeyPasswordlessPage";
-import ZeroTrustNetworkPage from "../pages/auth/ZeroTrustNetworkPage";
-import MicrosegmentationPage from "../pages/auth/MicrosegmentationPage";
-import ScimProvisioningPage from "../pages/auth/ScimProvisioningPage";
-import SiemSecurityAnalyticsPage from "../pages/auth/SiemSecurityAnalyticsPage";
-import GrcAuditCompliancePage from "../pages/auth/GrcAuditCompliancePage";
-import SecurityPosturePage from "../pages/auth/SecurityPosturePage";
-import SecurityCommandCenterPage from "../pages/auth/SecurityCommandCenterPage";
-import VulnerabilityManagementPage from "../pages/auth/VulnerabilityManagementPage";
-import SecurityVulnerabilityPage from "../pages/auth/SecurityVulnerabilityPage";
-import PamPage from "../pages/auth/PamPage";
-import SbomPage from "../pages/auth/SbomPage";
-import CspmPage from "../pages/auth/CspmPage";
-import SoarPage from "../pages/auth/SoarPage";
-import SamlIdentityProviderPage from "../pages/auth/SamlIdentityProviderPage";
-import ThreatIntelligencePage from "../pages/auth/ThreatIntelligencePage";
-import SecurityThreatPage from "../pages/auth/SecurityThreatPage";
-import SecurityGovernancePage from "../pages/auth/SecurityGovernancePage";
-import SecurityObservabilityPage from "../pages/auth/SecurityObservabilityPage";
-import SecurityPlaybookPage from "../pages/auth/SecurityPlaybookPage";
-import IncidentResponsePlaybookPage from "../pages/auth/IncidentResponsePlaybookPage";
-import ComplianceEvidencePage from "../pages/auth/ComplianceEvidencePage";
-import ComplianceReportingPage from "../pages/auth/ComplianceReportingPage";
+const OrdersList = lazy(() => import("../pages/supplier/OrdersList"));
+const OrderStatus = lazy(() => import("../pages/supplier/OrderStatus"));
+
+const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
+const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
+const EnterpriseSsoPage = lazy(() => import("../pages/auth/EnterpriseSsoPage"));
+const RbacSecurityPage = lazy(() => import("../pages/auth/RbacSecurityPage"));
+const ZeroTrustSecurityPage = lazy(() => import("../pages/auth/ZeroTrustSecurityPage"));
+const ComplianceSecurityPage = lazy(() => import("../pages/auth/ComplianceSecurityPage"));
+const ThreatDetectionSoarPage = lazy(() => import("../pages/auth/ThreatDetectionSoarPage"));
+const KeyVaultSecurityPage = lazy(() => import("../pages/auth/KeyVaultSecurityPage"));
+const SecurityKeyVaultPage = lazy(() => import("../pages/auth/SecurityKeyVaultPage"));
+const DlpPrivacyGuardPage = lazy(() => import("../pages/auth/DlpPrivacyGuardPage"));
+const PasskeyPasswordlessPage = lazy(() => import("../pages/auth/PasskeyPasswordlessPage"));
+const ZeroTrustNetworkPage = lazy(() => import("../pages/auth/ZeroTrustNetworkPage"));
+const MicrosegmentationPage = lazy(() => import("../pages/auth/MicrosegmentationPage"));
+const ScimProvisioningPage = lazy(() => import("../pages/auth/ScimProvisioningPage"));
+const SiemSecurityAnalyticsPage = lazy(() => import("../pages/auth/SiemSecurityAnalyticsPage"));
+const GrcAuditCompliancePage = lazy(() => import("../pages/auth/GrcAuditCompliancePage"));
+const SecurityPosturePage = lazy(() => import("../pages/auth/SecurityPosturePage"));
+const SecurityCommandCenterPage = lazy(() => import("../pages/auth/SecurityCommandCenterPage"));
+const VulnerabilityManagementPage = lazy(() => import("../pages/auth/VulnerabilityManagementPage"));
+const SecurityVulnerabilityPage = lazy(() => import("../pages/auth/SecurityVulnerabilityPage"));
+const PamPage = lazy(() => import("../pages/auth/PamPage"));
+const SbomPage = lazy(() => import("../pages/auth/SbomPage"));
+const CspmPage = lazy(() => import("../pages/auth/CspmPage"));
+const SoarPage = lazy(() => import("../pages/auth/SoarPage"));
+const SamlIdentityProviderPage = lazy(() => import("../pages/auth/SamlIdentityProviderPage"));
+const ThreatIntelligencePage = lazy(() => import("../pages/auth/ThreatIntelligencePage"));
+const SecurityThreatPage = lazy(() => import("../pages/auth/SecurityThreatPage"));
+const SecurityGovernancePage = lazy(() => import("../pages/auth/SecurityGovernancePage"));
+const SecurityObservabilityPage = lazy(() => import("../pages/auth/SecurityObservabilityPage"));
+const SecurityPlaybookPage = lazy(() => import("../pages/auth/SecurityPlaybookPage"));
+const IncidentResponsePlaybookPage = lazy(() => import("../pages/auth/IncidentResponsePlaybookPage"));
+const ComplianceEvidencePage = lazy(() => import("../pages/auth/ComplianceEvidencePage"));
+const ComplianceReportingPage = lazy(() => import("../pages/auth/ComplianceReportingPage"));
+
+/**
+ * Path prefix the bundle is served under on GitHub Pages.
+ *
+ * Declared here rather than in App.jsx so the two halves of the round trip - stripping it when
+ * reading `window.location`, re-adding it when pushing state - can never disagree about what the
+ * prefix is.
+ */
+export const BASE_PATH = "/MedTrack_Application";
 
 /**
  * Access levels.
@@ -111,6 +123,9 @@ const HOSPITAL_ONLY = ["hospital"];
 export const ROUTES = [
   // --- public marketing and content -----------------------------------------
   { page: "landing", slugs: [""], component: LandingPage, access: PUBLIC },
+  // Terminal route for an unrecognised slug. resolvePath() resolves to this rather than silently
+  // showing the landing page, so a mistyped URL is visibly a mistyped URL.
+  { page: "not-found", slugs: ["not-found"], component: NotFoundPage, access: PUBLIC },
   { page: "blog", slugs: ["blog"], component: Blog, access: PUBLIC },
   { page: "blog-post", slugs: ["blog"], component: BlogPost, access: PUBLIC, param: "slug" },
   { page: "careers", slugs: ["careers"], component: CareersPage, access: PUBLIC },

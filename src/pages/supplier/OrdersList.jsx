@@ -33,15 +33,27 @@ export default function OrdersList({ onNavigate }) {
   const fetchOrders = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllOrders();
-      setOrders(data);
-      await fetchMetrics(data);
+      // GET /api/orders returns a PagedResponse envelope, not a bare array. Assigning the envelope
+      // straight to `orders` left every `orders.map(...)` below iterating an object, so the page
+      // threw on render as soon as the backend started paging. `data` is kept as a fallback for a
+      // backend that has not been redeployed yet.
+      const response = await getAllOrders(pageNum, pageSize);
+      const items = response?.content || response?.data || [];
+      setOrders(items);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
+      await fetchMetrics(items);
+      setError(null);
     } catch (err) {
       console.error("Error fetching orders:", err);
       setError("Unable to load orders. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchOrders(newPage);
   };
 
   const fetchMetrics = async (currentOrders = orders) => {

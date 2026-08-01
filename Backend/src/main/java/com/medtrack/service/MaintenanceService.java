@@ -16,9 +16,9 @@ import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -63,25 +63,10 @@ public class MaintenanceService {
             MaintenanceStatus.ON_HOLD, EnumSet.of(MaintenanceStatus.IN_PROGRESS),
             MaintenanceStatus.COMPLETED, EnumSet.noneOf(MaintenanceStatus.class)
     );
-    /**
-     * Every task the caller may see, unfiltered and unpaged.
-     *
-     * <p>Scope comes from the trusted JWT identity, never from a client-supplied filter: a hospital
-     * user sees their hospital's tasks, a technician sees the tasks assigned to their own user ID.
-     * </p>
-     *
-     * <p>Kept alongside the paged overload because two callers genuinely need the whole set rather
-     * than a window of it - the iCal feed, which a calendar client subscribes to and expects to be
-     * complete, and internal aggregation. Returning a page to those callers silently truncates the
-     * answer to the first 20 rows.</p>
-     *
-     * @param authentication the authenticated caller
-     * @return every task visible to the caller
-     * @throws AccessDeniedException if the caller holds neither the HOSPITAL nor TECHNICIAN role
-     */
     public List<MaintenanceTask> getAllTasks(Authentication authentication) {
         if (hasRole(authentication, "HOSPITAL")) {
-            return taskRepository.findByHospitalId(getHospitalForUser(authentication).getId());
+            Long hospitalId = getHospitalForUser(authentication).getId();
+            return taskRepository.findByHospitalId(hospitalId);
         }
         if (hasRole(authentication, "TECHNICIAN")) {
             return taskRepository.findByAssignedTechnicianId(
@@ -90,68 +75,27 @@ public class MaintenanceService {
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
 
-    /**
-     * Filtered tasks addressed by a plain {@code page}/{@code size} pair.
-     *
-     * <p>This is the shape the HTTP API has always exposed, and the shape the existing callers and
-     * tests use. It validates the two numbers before touching the repository - a negative page or a
-     * size above {@value #MAX_PAGE_SIZE} is rejected as a bad request rather than turned into an
-     * unbounded scan - and then delegates to {@link #getAllTasks(Authentication, String, String,
-     * Pageable)}.</p>
-     *
-     * <p>Passing {@code null} for both numbers means "no paging", which is how an unfiltered list
-     * request with no query parameters behaves.</p>
-     *
-     * @param authentication the authenticated caller
-     * @param statusValue    optional status filter, accepted as either display name or enum constant
-     * @param equipmentId    optional equipment code filter
-     * @param page           zero-based page index, or {@code null} for unpaged
-     * @param size           page size, or {@code null} to fall back to {@value #DEFAULT_PAGE_SIZE}
-     * @return the matching tasks
-     * @throws IllegalArgumentException if the page index is negative or the size is out of range
-     */
     public List<MaintenanceTask> getAllTasks(
             Authentication authentication,
             String statusValue,
             String equipmentId,
             Integer page,
             Integer size) {
-        return getAllTasks(authentication, statusValue, equipmentId, resolvePageable(page, size))
-                .getContent();
-    }
-
-    /**
-     * Filtered, paged tasks.
-     *
-     * <p>The ownership predicate lives in the repository query, so no filter combination can reach
-     * another hospital's or another technician's records.</p>
-     *
-     * @param authentication the authenticated caller
-     * @param statusValue    optional status filter
-     * @param equipmentId    optional equipment code filter
-     * @param pageable       the page to fetch
-     * @return the requested page of tasks
-     * @throws AccessDeniedException if the caller holds neither the HOSPITAL nor TECHNICIAN role
-     */
-    public Page<MaintenanceTask> getAllTasks(
-            Authentication authentication,
-            String statusValue,
-            String equipmentId,
-            Pageable pageable) {
         MaintenanceStatus status = parseStatusFilter(statusValue);
         String normalizedEquipmentId = normalizeOptionalFilter(equipmentId);
+        Pageable pageable = resolvePageable(page, size);
 
         if (hasRole(authentication, "HOSPITAL")) {
             Long hospitalId = getHospitalForUser(authentication).getId();
             return taskRepository.findByHospitalIdWithFilters(
-                    hospitalId, status, normalizedEquipmentId, pageable);
+                    hospitalId, status, normalizedEquipmentId, pageable).getContent();
         }
         if (hasRole(authentication, "TECHNICIAN")) {
             return taskRepository.findByAssignedTechnicianIdWithFilters(
                     getAuthenticatedTechnician(authentication).getId(),
                     status,
                     normalizedEquipmentId,
-                    pageable);
+                    pageable).getContent();
         }
         throw new AccessDeniedException("This role cannot access maintenance tasks");
     }
@@ -319,8 +263,11 @@ public class MaintenanceService {
     }
 
     private Pageable resolvePageable(Integer page, Integer size) {
+        Sort sort = Sort.by(
+                Sort.Order.asc("deadline"),
+                Sort.Order.asc("id"));
         if (page == null && size == null) {
-            return Pageable.unpaged();
+            return Pageable.unpaged(sort);
         }
 
         int resolvedPage = page != null ? page : 0;
@@ -332,7 +279,7 @@ public class MaintenanceService {
             throw new IllegalArgumentException(
                     "Page size must be between 1 and " + MAX_PAGE_SIZE);
         }
-        return PageRequest.of(resolvedPage, resolvedSize);
+        return PageRequest.of(resolvedPage, resolvedSize, sort);
     }
 
     private Equipment resolveOwnedEquipment(String equipmentReference, Long hospitalId) {
@@ -557,13 +504,17 @@ public class MaintenanceService {
     @Transactional
     public void deleteTask(Long id, Authentication authentication) {
         // Lock the owned row so deletion cannot race with technician completion.
+        Hospital hospital = getHospitalForUser(authentication);
         MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(
-                        id, getHospitalForUser(authentication).getId())
+                        id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance task not found or access denied"));
         if (task.getStatus() == MaintenanceStatus.COMPLETED) {
             throw new InvalidStatusTransitionException("Completed maintenance tasks cannot be deleted");
         }
-        taskRepository.delete(task);
+        task.setDeleted(true);
+        task.setDeletedAt(LocalDateTime.now());
+        task.setDeletedBy(authentication.getName().trim().toLowerCase(Locale.ROOT));
+        taskRepository.save(task);
     }
 
     private MaintenanceTask findOwnedTask(Long id, Authentication authentication) {

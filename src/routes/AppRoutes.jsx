@@ -2,55 +2,15 @@
 import React, { Suspense } from "react";
 import { useAuth } from "../context/AuthContext";
 import PageLoader from "../components/common/PageLoader";
+import { checkAccess, getRoute, resolveEffectivePage } from "./routeRegistry";
 
-const LandingPage = React.lazy(() => import("../pages/LandingPage"));
-const NotFoundPage = React.lazy(() => import("../pages/NotFoundPage"));
-const Blog = React.lazy(() => import("../pages/Blog"));
-const BlogPost = React.lazy(() => import("../pages/BlogPost"));
-const CareersPage = React.lazy(() => import("../pages/CareersPage"));
-const JobApplicationPage = React.lazy(() => import("../pages/JobApplicationPage"));
-const HelpPage = React.lazy(() => import("../pages/HelpPage"));
-const CertificateGeneratorPage = React.lazy(() => import("../pages/CertificateGeneratorPage"));
-const LoginPage = React.lazy(() => import("../pages/auth/LoginPage"));
-const RegisterPage = React.lazy(() => import("../pages/auth/RegisterPage"));
-const ForgotPasswordPage = React.lazy(() => import("../pages/auth/ForgotPasswordPage"));
-const VerifyOtpPage = React.lazy(() => import("../pages/auth/VerifyOtpPage"));
-const ResetPasswordPage = React.lazy(() => import("../pages/auth/ResetPasswordPage"));
-const Dashboard = React.lazy(() => import("../pages/hospital/Dashboard"));
-const AnalyticsDashboard = React.lazy(() => import("../pages/hospital/AnalyticsDashboard"));
-const EquipmentList = React.lazy(() => import("../pages/hospital/EquipmentList"));
-const MaintenanceSchedule = React.lazy(() => import("../pages/hospital/MaintenanceSchedule"));
-const TaskList = React.lazy(() => import("../pages/technician/TaskList"));
-const UpdateTask = React.lazy(() => import("../pages/technician/UpdateTask"));
-const OrdersList = React.lazy(() => import("../pages/supplier/OrdersList"));
-const OrderStatus = React.lazy(() => import("../pages/supplier/OrderStatus"));
-const AuthoritySecurityPage = React.lazy(() => import("../pages/auth/AuthoritySecurityPage"));
-const MfaSecurityPage = React.lazy(() => import("../pages/auth/MfaSecurityPage"));
-const EnterpriseSsoPage = React.lazy(() => import("../pages/auth/EnterpriseSsoPage"));
-const RbacSecurityPage = React.lazy(() => import("../pages/auth/RbacSecurityPage"));
-const ZeroTrustSecurityPage = React.lazy(() => import("../pages/auth/ZeroTrustSecurityPage"));
-const ComplianceSecurityPage = React.lazy(() => import("../pages/auth/ComplianceSecurityPage"));
-const ThreatDetectionSoarPage = React.lazy(() => import("../pages/auth/ThreatDetectionSoarPage"));
-const SecurityKeyVaultPage = React.lazy(() => import("../pages/auth/SecurityKeyVaultPage"));
-const KeyVaultSecurityPage = React.lazy(() => import("../pages/auth/KeyVaultSecurityPage"));
-const DlpPrivacyGuardPage = React.lazy(() => import("../pages/auth/DlpPrivacyGuardPage"));
-const PasskeyPasswordlessPage = React.lazy(() => import("../pages/auth/PasskeyPasswordlessPage"));
-const ZeroTrustNetworkPage = React.lazy(() => import("../pages/auth/ZeroTrustNetworkPage"));
-const ScimProvisioningPage = React.lazy(() => import("../pages/auth/ScimProvisioningPage"));
-const SiemSecurityAnalyticsPage = React.lazy(() => import("../pages/auth/SiemSecurityAnalyticsPage"));
-const GrcAuditCompliancePage = React.lazy(() => import("../pages/auth/GrcAuditCompliancePage"));
-const SecurityPosturePage = React.lazy(() => import("../pages/auth/SecurityPosturePage"));
-const SecurityCommandCenterPage = React.lazy(() => import("../pages/auth/SecurityCommandCenterPage"));
-const VulnerabilityManagementPage = React.lazy(() => import("../pages/auth/VulnerabilityManagementPage"));
-const MicrosegmentationPage = React.lazy(() => import("../pages/auth/MicrosegmentationPage"));
-const PamPage = React.lazy(() => import("../pages/auth/PamPage"));
-
-// --- Connected Imports ---
-const AddEquipmentForm = React.lazy(() => import("../pages/hospital/AddEquipmentForm"));
-const EditEquipmentForm = React.lazy(() => import("../pages/hospital/EditEquipmentForm"));
-const ScheduleMaintenancePage = React.lazy(() => import("../pages/hospital/ScheduleMaintenancePage"));
-const RequestEquipmentPage = React.lazy(() => import("../pages/hospital/RequestEquipmentPage"));
-
+/**
+ * Shown when a signed-in user reaches a console their role is not permitted to open.
+ *
+ * Distinct from the login substitution on purpose: an unauthenticated visitor is sent to the login
+ * screen because signing in would fix it, whereas a technician opening an admin console has a
+ * problem that signing in again will not solve.
+ */
 const UnauthorizedPage = ({ onNavigate, message }) => (
   <div className="min-h-screen bg-slate-900 flex items-center justify-center font-sans text-white p-6">
     <div className="bg-slate-800 rounded-[2rem] p-16 text-center border border-red-500/20 max-w-md shadow-2xl">
@@ -71,147 +31,61 @@ const UnauthorizedPage = ({ onNavigate, message }) => (
   </div>
 );
 
-export default function AppRouter({ currentPage, onNavigate, pageData }) {
+/**
+ * Renders whichever page the registry resolves for `currentPage`.
+ *
+ * This file used to carry a 130-line `switch` listing every route by hand, in parallel with a
+ * `routeMap` object in App.jsx and an import list at the top of this file. Nothing kept the three
+ * consistent and they had drifted badly: `keyvault-security` appeared as a `case` label twice in
+ * the same switch, `microsegmentation` appeared in two separate case groups so the second was
+ * unreachable, and the `ProtectedRoute` helper the switch called was deleted by a merge while every
+ * one of its ~30 call sites stayed - leaving a bare `return` statement floating between the
+ * component's body and the switch, which is what stopped the whole bundle from parsing.
+ *
+ * Route information now lives in exactly one place - routeRegistry.js - and this component is the
+ * generic renderer for it, so a new console cannot be half-registered.
+ *
+ * Access control is applied here, once, rather than per route:
+ *
+ *   - an unknown slug resolves to the 404 page;
+ *   - an unauthenticated visitor to a protected route gets the login screen (App.jsx derives layout
+ *     chrome from the same `resolveEffectivePage` call, so the two cannot disagree);
+ *   - a signed-in user whose role is not on the route's allow-list gets the Access Denied page.
+ */
+export default function AppRoutes({ currentPage, onNavigate, pageData }) {
   const { user } = useAuth();
 
   // resolveEffectivePage decides which page actually renders: the requested one, or the login
   // screen for an unauthenticated caller, or the 404 page for an unknown slug. App.jsx calls the
   // same function to decide layout chrome, so the two cannot disagree about what is on screen.
   const effectivePage = resolveEffectivePage(user, currentPage);
-
-    return <Component onNavigate={onNavigate} {...props} />;
-  };
+  const route = getRoute(effectivePage);
 
   const renderContent = () => {
-    switch (currentPage) {
-      // --- Public Routes ---
-      case "landing":
-        return <LandingPage onNavigate={onNavigate} />;
-      case "blog":
-        return <Blog onNavigate={onNavigate} />;
-      case "blog-post":
-        return <BlogPost onNavigate={onNavigate} slug={pageData} />;
-      case "careers":
-        return <CareersPage onNavigate={onNavigate} />;
-      case "apply":
-        return <JobApplicationPage onNavigate={onNavigate} jobId={pageData} />;
-      case "certificate":
-        return <CertificateGeneratorPage />;
-      case "login":
-        return <LoginPage onNavigate={onNavigate} />;
-      case "register":
-        return <RegisterPage onNavigate={onNavigate} defaultRole={pageData} />;
-      case "forgot-password":
-        return <ForgotPasswordPage onNavigate={onNavigate} />;
-      case "verify-otp":
-        return <VerifyOtpPage onNavigate={onNavigate} />;
-      case "reset-password":
-        return <ResetPasswordPage onNavigate={onNavigate} />;
-
-      // --- Protected Routes: Hospital Admin ---
-      case "dashboard":
-        return ProtectedRoute(Dashboard);
-      case "equipment":
-        return ProtectedRoute(EquipmentList);
-      case "add-equipment":
-        return ProtectedRoute(AddEquipmentForm, {}, ["hospital"]);
-      case "edit-equipment":
-        return ProtectedRoute(EditEquipmentForm, { equipmentId: pageData }, ["hospital"]);
-      case "schedule-maintenance":
-        return ProtectedRoute(ScheduleMaintenancePage, {}, ["hospital"]);
-      case "request-equipment":
-        return ProtectedRoute(RequestEquipmentPage, {}, ["hospital"]);
-      case "maintenance":
-        return ProtectedRoute(MaintenanceSchedule);
-      case "analytics":
-        return ProtectedRoute(AnalyticsDashboard, {}, ["hospital"]);
-
-      // --- Protected Routes: Technician ---
-      case "tasks":
-        return ProtectedRoute(TaskList);
-      case "update-task":
-        return ProtectedRoute(UpdateTask, { task: pageData });
-      case "updatetask":
-        return ProtectedRoute(UpdateTask, { task: pageData });
-
-      // --- Protected Routes: Supplier ---
-      case "orders":
-        return ProtectedRoute(OrdersList);
-      case "orderstatus":
-        return ProtectedRoute(OrderStatus, { order: pageData });
-
-      // --- Protected Routes: Security & Authority ---
-      case "authority-security":
-      case "authority":
-        return ProtectedRoute(AuthoritySecurityPage, {}, ["hospital"]);
-      case "mfa-security":
-      case "mfa":
-        return ProtectedRoute(MfaSecurityPage);
-      case "sso-security":
-      case "sso":
-        return ProtectedRoute(EnterpriseSsoPage, {}, ["hospital"]);
-      case "rbac-security":
-      case "rbac":
-        return ProtectedRoute(RbacSecurityPage, {}, ["hospital"]);
-      case "zerotrust-security":
-      case "zerotrust":
-        return ProtectedRoute(ZeroTrustSecurityPage, {}, ["hospital"]);
-      case "compliance-security":
-      case "compliance":
-        return ProtectedRoute(ComplianceSecurityPage);
-      case "threat-detection":
-      case "soar-security":
-      case "soar":
-        return ProtectedRoute(ThreatDetectionSoarPage);
-      case "keyvault-security":
-      case "keyvault":
-      case "keyvault-security":
-        return ProtectedRoute(KeyVaultSecurityPage);
-      case "dlp":
-      case "dlp-privacy":
-      case "privacy-guard":
-        return ProtectedRoute(DlpPrivacyGuardPage);
-      case "passkeys":
-      case "passwordless":
-      case "webauthn":
-        return ProtectedRoute(PasskeyPasswordlessPage);
-      case "ztna":
-      case "microsegmentation":
-      case "network-access":
-        return ProtectedRoute(ZeroTrustNetworkPage);
-      case "siem":
-      case "siem-analytics":
-      case "siem-security":
-        return ProtectedRoute(SiemSecurityAnalyticsPage);
-      case "scim-provisioning":
-      case "scim":
-        return ProtectedRoute(ScimProvisioningPage);
-      case "security-commandcenter":
-      case "command-center":
-        return ProtectedRoute(SecurityCommandCenterPage);
-      case "vulnerability":
-      case "patch-management":
-        return ProtectedRoute(VulnerabilityManagementPage);
-      case "microsegmentation":
-      case "sdp":
-      case "perimeter-security":
-        return ProtectedRoute(MicrosegmentationPage);
-      case "grc":
-      case "grc-compliance":
-      case "audit-ledger":
-        return ProtectedRoute(GrcAuditCompliancePage);
-      case "pam":
-      case "privileged-access":
-      case "jit-elevation":
-        return ProtectedRoute(PamPage);
-      case "help":
-      case "help-center":
-        return <HelpPage onNavigate={onNavigate} />;
-
-      // --- Fallback: 404 ---
-      default:
-        return <NotFoundPage onNavigate={onNavigate} />;
+    // resolveEffectivePage only ever returns a page key the registry knows, so a missing route here
+    // means the registry itself has lost its 404 entry. Fail visibly rather than render nothing.
+    if (!route) {
+      return (
+        <UnauthorizedPage
+          onNavigate={onNavigate}
+          message="This page is not registered in the route registry."
+        />
+      );
     }
+
+    const { allowed, reason } = checkAccess(user, effectivePage);
+    if (!allowed) {
+      return <UnauthorizedPage onNavigate={onNavigate} message={reason} />;
+    }
+
+    const Component = route.component;
+
+    // A parameterised route names the prop its component expects for the dynamic segment, so
+    // `/edit-equipment/EQ-1001` arrives as `equipmentId` and `/blog/my-post` as `slug` without this
+    // file needing to know either name.
+    const params = route.param ? { [route.param]: pageData } : {};
+
+    return <Component onNavigate={onNavigate} {...params} />;
   };
 
   return <Suspense fallback={<PageLoader />}>{renderContent()}</Suspense>;

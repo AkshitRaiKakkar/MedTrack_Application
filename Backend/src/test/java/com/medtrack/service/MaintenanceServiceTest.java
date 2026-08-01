@@ -689,6 +689,7 @@ public class MaintenanceServiceTest {
                 pageableCaptor.capture());
         assertEquals(1, pageableCaptor.getValue().getPageNumber());
         assertEquals(25, pageableCaptor.getValue().getPageSize());
+        assertEquals("deadline: ASC,id: ASC", pageableCaptor.getValue().getSort().toString());
     }
 
     @Test
@@ -711,7 +712,11 @@ public class MaintenanceServiceTest {
 
         maintenanceService.deleteTask(50L, authentication);
 
-        verify(taskRepository).delete(mockTask);
+        assertTrue(mockTask.getDeleted());
+        assertNotNull(mockTask.getDeletedAt());
+        assertEquals(email, mockTask.getDeletedBy());
+        verify(taskRepository).save(mockTask);
+        verify(taskRepository, never()).delete(any());
     }
 
     @Test
@@ -726,6 +731,7 @@ public class MaintenanceServiceTest {
                 maintenanceService.deleteTask(999L, authentication)
         );
 
+        verify(taskRepository, never()).save(any());
         verify(taskRepository, never()).delete(any());
     }
 
@@ -741,6 +747,7 @@ public class MaintenanceServiceTest {
         assertThrows(com.medtrack.exception.InvalidStatusTransitionException.class,
                 () -> maintenanceService.deleteTask(50L, authentication));
 
+        verify(taskRepository, never()).save(any());
         verify(taskRepository, never()).delete(any());
     }
 }

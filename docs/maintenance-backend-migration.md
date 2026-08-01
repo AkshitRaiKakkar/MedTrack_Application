@@ -14,6 +14,7 @@ It includes:
 - stable empty-list API responses
 - maintenance controller and migration integration tests
 - server-controlled maintenance completion timestamps
+- auditable soft deletion for non-completed maintenance tasks
 
 ## Migration Files
 
@@ -27,6 +28,8 @@ It includes:
 - `Backend/src/main/resources/db/migration/mysql/V4__link_maintenance_technician_identity.sql`
 - `Backend/src/main/resources/db/migration/h2/V5__enforce_maintenance_status_values.sql`
 - `Backend/src/main/resources/db/migration/mysql/V5__enforce_maintenance_status_values.sql`
+- `Backend/src/main/resources/db/migration/h2/V8__add_soft_delete_columns.sql`
+- `Backend/src/main/resources/db/migration/mysql/V8__add_soft_delete_columns.sql`
 
 The scripts:
 
@@ -42,6 +45,7 @@ The scripts:
 10. Add a user foreign key with `ON DELETE SET NULL` so historical email evidence is retained.
 11. Reject unsupported legacy status values and constrain future status writes to the
     `MaintenanceStatus` enum names.
+12. Add Maintenance soft-delete audit columns and an index on the active/archive flag.
 
 The final constraint is also a safety check. If any maintenance row cannot be matched to equipment, the migration fails instead of leaving a partially upgraded database.
 
@@ -62,6 +66,12 @@ Migration version `5` adds a database check constraint for `SCHEDULED`, `IN_PROG
 values, version `5` intentionally fails when an unsupported legacy value remains. This prevents a
 single invalid row from causing Hibernate enum-conversion failures during list, history, or
 analytics reads.
+
+Migration version `8` adds `deleted`, `deleted_at`, and `deleted_by` to `maintenance_tasks`.
+Application deletion sets those values rather than physically removing the task. Hibernate's
+entity-level SQL restriction excludes archived rows from normal repository queries, while the row
+remains available for database-level audit and retention processes. The public DELETE endpoint
+continues to return HTTP 204 for a successful archive.
 
 The database constraints make both ownership fields present and ensure that
 `equipment_record_id` references real equipment, but they do not by themselves compare
@@ -144,7 +154,7 @@ For an existing persistent schema:
 1. Back up the database.
 2. Run the unmatched-row checks above.
 3. Set `FLYWAY_ENABLED=true`.
-4. Start the backend and confirm Flyway reports migration version `5`.
+4. Start the backend and confirm Flyway reports migration version `8`.
 5. Verify that every maintenance row has a non-null `equipment_record_id`.
 
 The configuration uses `baseline-on-migrate=true` and baseline version `0`. This allows migration version `1` to run against the existing unversioned MedTrack schema.
@@ -160,6 +170,11 @@ For a completely empty database, first allow Hibernate to create the current sch
 ```
 
 Method-level access denials are explicitly mapped to HTTP 403. This prevents `@PreAuthorize` failures from being handled by the generic runtime exception handler as HTTP 400.
+
+`DELETE /api/maintenance/{id}` is implemented as soft deletion for an owned, non-completed task.
+It records the server timestamp and authenticated principal, hides the task from normal reads, and
+preserves the existing HTTP 204 response. Completed maintenance evidence remains immutable and
+cannot be archived through this endpoint.
 
 The Maintenance service also reloads the caller's account for every operation. A locked, disabled,
 deleted, or role-changed hospital or technician account receives HTTP 403 even if an older JWT is
@@ -198,6 +213,7 @@ Integration tests that manage their own database state disable it.
 - preservation of the historical assignment email when a user is deleted
 - migration failure for unsupported legacy status values
 - database rejection of unsupported status writes after migration
+- creation and default values of Maintenance soft-delete audit columns
 
 `MaintenanceControllerIntegrationTest` verifies:
 
@@ -247,10 +263,10 @@ Calendar verification additionally requires each exported `VEVENT` to use the RF
 `X-MEDTRACK-STATUS`. Existing escaping, UTC timestamp, injection-resistance, Unicode, and
 content-line-folding coverage remains in place.
 
-Main backend compilation succeeds. A fresh isolated compilation and execution of
-`MaintenanceServiceTest`, `MaintenanceTaskRepositoryTest`, and `AnalyticsServiceTest` passes all
-33 tests. The standard Maven test lifecycle currently stops during test compilation in the
-unrelated `EquipmentStockServiceTest`, whose compiled view of `Equipment` cannot resolve the stock
-builder/accessor methods. Maven therefore cannot execute the focused Maintenance tests through the
-normal test goal until that application-wide test-compilation issue is corrected. That unrelated
-blocker remains outside this Maintenance-only change.
+The changed Maintenance controller, entity, repository, service, and focused test sources compile
+successfully in isolation. `MaintenanceServiceTest`, `MaintenanceRequestValidationTest`,
+`MaintenanceTaskRepositoryTest`, and `MaintenanceMigrationIntegrationTest` pass 41 focused tests.
+The standard Maven lifecycle currently stops
+earlier on syntax errors in the unrelated `EquipmentOrder.java`, so application-wide compilation
+and context-heavy controller verification remain blocked until that file is corrected. That
+unrelated blocker remains outside this Maintenance-only change.

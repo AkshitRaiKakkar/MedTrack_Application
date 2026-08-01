@@ -49,14 +49,31 @@ function readRegistry() {
   return fs.readFileSync(registryPath, 'utf8');
 }
 
-/** `import Foo from "../pages/auth/Foo";` -> { Foo: '../pages/auth/Foo' } */
+/**
+ * Collects the component bindings the registry can render, in either of the two forms it uses.
+ *
+ *   import Foo from "../pages/auth/Foo";                     -> { Foo: '../pages/auth/Foo' }
+ *   const Foo = lazy(() => import("../pages/auth/Foo"));     -> { Foo: '../pages/auth/Foo' }
+ *
+ * The registry moved to the second form so each page ships as its own chunk instead of being pulled
+ * into the main bundle. Recognising only the first form would have made every one of the ~66 checks
+ * below report a false "never imported" and this script useless the moment it mattered.
+ */
 function parseImports(source) {
   const imports = {};
-  const pattern = /^import\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];/gm;
+
+  const eagerPattern = /^import\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+)["'];/gm;
   let match;
-  while ((match = pattern.exec(source)) !== null) {
+  while ((match = eagerPattern.exec(source)) !== null) {
     imports[match[1]] = match[2];
   }
+
+  const lazyPattern =
+    /^const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:React\.)?lazy\(\s*\(\s*\)\s*=>\s*import\(\s*["']([^"']+)["']\s*\)\s*\);/gm;
+  while ((match = lazyPattern.exec(source)) !== null) {
+    imports[match[1]] = match[2];
+  }
+
   return imports;
 }
 
