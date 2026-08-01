@@ -229,6 +229,39 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
+            <!--
+                Supplies the JWT signing secret for the test run.
+
+                application.properties declares app.jwt.secret from a bare ${JWT_SECRET} with no
+                default, and JWT_SECRET is not set in a developer shell or on a CI runner. Spring
+                could not resolve the placeholder, jwtUtil failed to construct, and with it
+                jwtAuthFilter and securityConfig, so every test that starts an ApplicationContext
+                died before running a single assertion with:
+
+                  PlaceholderResolutionException: Could not resolve placeholder 'JWT_SECRET'
+
+                That accounted for 39 of the 48 red tests.
+
+                Set here rather than as a default in application.properties on purpose. A default
+                there would ship a known signing key to production, where every token the service
+                issues could then be forged by anyone who has read this repository. Production still
+                has to supply JWT_SECRET, and JwtUtil.validateSecret() still rejects a missing or
+                too short one at startup.
+
+                A system property rather than src/test/resources/application.properties, because a
+                test classpath application.properties replaces the main one wholesale rather than
+                merging with it: the test run would silently lose the datasource, Flyway, rate limit
+                and Kafka configuration it is meant to be exercising.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <app.jwt.secret>medtrack-test-signing-secret-not-used-in-production</app.jwt.secret>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
