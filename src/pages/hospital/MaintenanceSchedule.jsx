@@ -70,7 +70,10 @@ export default function MaintenanceSchedule({ onNavigate }) {
           maintenanceType: t.maintenanceType || "N/A",
           scheduledDate: t.deadline || "",
           assignedTechnician: t.assignedTechnician || "Unassigned",
-          status: t.status ? t.status.getDisplayName ? t.status.getDisplayName() : t.status : "Scheduled"
+          status: t.status ? t.status.getDisplayName ? t.status.getDisplayName() : t.status : "Scheduled",
+          slaState: t.slaState ? (t.slaState.getDisplayName ? t.slaState.getDisplayName() : t.slaState) : "Upcoming",
+          ruleSource: t.policyRuleId ? `Rule #${t.policyRuleId}` : null,
+          escalatedTo: t.escalatedTo || null
         }));
         setTasks(mapped);
         if (response?.totalPages) setTotalPages(response.totalPages);
@@ -132,6 +135,13 @@ export default function MaintenanceSchedule({ onNavigate }) {
     "Completed": "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800",
   };
 
+  const slaStyles = {
+    "Upcoming": "bg-blue-50 text-blue-600 border-blue-200",
+    "Warning": "bg-amber-50 text-amber-600 border-amber-200",
+    "Breached": "bg-red-50 text-red-600 border-red-200",
+    "Escalated": "bg-purple-50 text-purple-600 border-purple-200",
+  };
+
   return (
     <div className="min-h-screen bg-surface">
       {/* Header Section */}
@@ -143,6 +153,22 @@ export default function MaintenanceSchedule({ onNavigate }) {
               <p className="text-sm text-secondary mt-1">Managing {tasks.length} tasks</p>
             </div>
             <div className="flex gap-2">
+              {user?.role === "hospital" && (
+                <>
+                  <button
+                    onClick={() => onNavigate('maintenance-rules')}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-lg shadow-sm transition-colors border border-subtle cursor-pointer"
+                  >
+                    ⚙️ Automation Rules
+                  </button>
+                  <button
+                    onClick={() => onNavigate('sla-dashboard')}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-lg shadow-sm transition-colors border border-subtle cursor-pointer"
+                  >
+                    📊 SLA Dashboard
+                  </button>
+                </>
+              )}
               <button
                 onClick={handleExportICal}
                 disabled={exporting}
@@ -177,12 +203,13 @@ export default function MaintenanceSchedule({ onNavigate }) {
                   <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">Technician</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-secondary uppercase tracking-wider">SLA</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle bg-card">
                 {tasks.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="text-center py-16 text-secondary">
+                    <td colSpan="6" className="text-center py-16 text-secondary">
                       <div className="flex flex-col items-center">
                         <span className="text-4xl mb-2">🛠️</span>
                         <p className="font-medium">No maintenance tasks scheduled yet.</p>
@@ -236,6 +263,19 @@ export default function MaintenanceSchedule({ onNavigate }) {
                         <span className={`px-3 py-1 text-xs font-bold rounded-full border ${statusStyles[task.status] || statusStyles.Scheduled}`}>
                           {task.status}
                         </span>
+                      </td>
+
+                      {/* SLA State Badge */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {task.ruleSource && (
+                          <div className="text-[10px] text-secondary mb-1">{task.ruleSource}</div>
+                        )}
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full border ${slaStyles[task.slaState] || slaStyles.Upcoming}`}>
+                          {task.slaState}
+                        </span>
+                        {task.escalatedTo && (
+                          <div className="text-[10px] text-purple-600 mt-1">→ {task.escalatedTo}</div>
+                        )}
                       </td>
                     </tr>
                   ))

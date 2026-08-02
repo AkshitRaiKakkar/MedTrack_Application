@@ -2,6 +2,8 @@ package com.medtrack.repository;
 
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceStatus;
+import com.medtrack.model.SlaState;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -224,5 +226,70 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
     long countSchedulableEquipment(
             @Param("equipmentId") Long equipmentId,
             @Param("hospitalId") Long hospitalId);
+
+    // ---------------------------------------------------------------------
+    // Preventive-maintenance automation queries
+    // ---------------------------------------------------------------------
+
+    // Idempotency: a rule must not generate a second task for the same equipment in the same window.
+    @Query("SELECT COUNT(task) FROM MaintenanceTask task "
+            + "WHERE task.hospitalId = :hospitalId "
+            + "AND task.equipmentRecord.hospital.id = :hospitalId "
+            + "AND task.policyRuleId = :ruleId "
+            + "AND task.equipmentRecord.id = :equipmentRecordId "
+            + "AND task.deadline >= :windowStart "
+            + "AND task.deadline <= :windowEnd")
+    long countByRuleAndEquipmentInWindow(
+            @Param("hospitalId") Long hospitalId,
+            @Param("ruleId") Long ruleId,
+            @Param("equipmentRecordId") Long equipmentRecordId,
+            @Param("windowStart") java.time.LocalDate windowStart,
+            @Param("windowEnd") java.time.LocalDate windowEnd);
+    @Query("SELECT task FROM MaintenanceTask task "
+            + "WHERE task.hospitalId = :hospitalId "
+            + "AND task.equipmentRecord.hospital.id = :hospitalId "
+            + "AND task.slaState = :slaState "
+            + "AND task.status <> :status "
+            + "ORDER BY task.deadline ASC")
+    List<MaintenanceTask> findByHospitalIdAndSlaStateAndStatusNot(
+            @Param("hospitalId") Long hospitalId,
+            @Param("slaState") SlaState slaState,
+            @Param("status") MaintenanceStatus status);
+
+    @Query("SELECT COUNT(task) FROM MaintenanceTask task "
+            + "WHERE task.hospitalId = :hospitalId "
+            + "AND task.equipmentRecord.hospital.id = :hospitalId "
+            + "AND task.slaState = :slaState "
+            + "AND task.status <> :status")
+    long countByHospitalIdAndSlaStateAndStatusNot(
+            @Param("hospitalId") Long hospitalId,
+            @Param("slaState") SlaState slaState,
+            @Param("status") MaintenanceStatus status);
+
+    // Technician workload: open tasks grouped by the assigned technician identity.
+    @Query("SELECT task.assignedTechnicianRecord.id, task.assignedTechnician, COUNT(task) "
+            + "FROM MaintenanceTask task "
+            + "WHERE task.hospitalId = :hospitalId "
+            + "AND task.equipmentRecord.hospital.id = :hospitalId "
+            + "AND task.status <> :status "
+            + "AND task.assignedTechnicianRecord IS NOT NULL "
+            + "GROUP BY task.assignedTechnicianRecord.id, task.assignedTechnician "
+            + "ORDER BY COUNT(task) ASC")
+    List<Object[]> findOpenWorkloadByTechnician(
+            @Param("hospitalId") Long hospitalId,
+            @Param("status") MaintenanceStatus status);
+
+    // Open, unassigned high-priority tasks that are candidates for workload-aware assignment.
+    @Query("SELECT task FROM MaintenanceTask task "
+            + "WHERE task.hospitalId = :hospitalId "
+            + "AND task.equipmentRecord.hospital.id = :hospitalId "
+            + "AND task.status <> :status "
+            + "AND task.assignedTechnicianRecord IS NULL "
+            + "AND task.priority IN :priorities "
+            + "ORDER BY CASE task.priority WHEN 'Critical' THEN 0 WHEN 'High' THEN 1 ELSE 2 END, task.deadline ASC")
+    List<MaintenanceTask> findUnassignedByPriority(
+            @Param("hospitalId") Long hospitalId,
+            @Param("status") MaintenanceStatus status,
+            @Param("priorities") List<String> priorities);
 
 }
