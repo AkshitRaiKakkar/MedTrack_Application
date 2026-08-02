@@ -58,7 +58,9 @@ class FlywayMigrationConsistencyTest {
      */
     private static final Set<String> FLYWAY_MANAGED_TABLES = Set.of(
             "maintenance_tasks",
-            "equipment");
+            "equipment",
+            "maintenance_policy_rules",
+            "maintenance_generation_runs");
 
     private static final Pattern TABLE_REFERENCE = Pattern.compile(
             "\\b(?:ALTER\\s+TABLE|CREATE\\s+TABLE|INSERT\\s+INTO|UPDATE|CREATE\\s+INDEX\\s+\\w+\\s+ON|"

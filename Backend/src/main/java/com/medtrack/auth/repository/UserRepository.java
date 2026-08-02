@@ -1,9 +1,11 @@
 package com.medtrack.auth.repository;
 
 import com.medtrack.auth.model.User;
+import com.medtrack.auth.model.AccountStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -30,12 +32,21 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
     /**
-     * Retrieves a user from the database matching the specified username.
+     * Checks if a user already exists in the database with the given username.
      *
-     * @param username the username of the user to search for
-     * @return an {@link Optional} containing the matched {@link User} entity if found, or {@link Optional#empty()} if no match exists
+     * @param username the username to check for existence
+     * @return {@code true} if a user record exists with the specified username, {@code false} otherwise
      */
     Optional<User> findByUsername(String username);
+
+    /**
+     * Retrieves all active users holding the given role.
+     *
+     * @param role the role name (hospital, technician, or supplier)
+     * @param accountStatus the account status that must be present
+     * @return the matching active user records
+     */
+    List<User> findByRoleAndAccountStatus(String role, AccountStatus accountStatus);
 
     /**
      * Checks if a user already exists in the database with the given email address.
