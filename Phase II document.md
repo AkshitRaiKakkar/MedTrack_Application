@@ -192,6 +192,8 @@ technician-owned progress updates, completion evidence, and completion-driven re
 - model/MaintenanceTask.java — equipment relationship, deadline, priority, typed status, technician report, completion timestamp, and recurrence period
 - service/MaintenanceService.java — hospital-scoped scheduling/reads/auditable soft deletion, technician-scoped updates, recurrence, and iCalendar export
 - Completion-driven recurrence using the hospital-configured interval; concurrent completion is serialized with a database write lock
+- Completion-driven recurrence revalidates equipment availability and is skipped for archived,
+  retired, or disposed equipment without rolling back valid completion evidence
 - Priority values: Normal / High / Critical
 - Status lifecycle: SCHEDULED → IN_PROGRESS → COMPLETED, with NEEDS_PART and ON_HOLD returning to IN_PROGRESS
 - Versioned H2/MySQL constraints keep persisted task statuses within the same closed enum set and
@@ -209,6 +211,8 @@ technician-owned progress updates, completion evidence, and completion-driven re
 - Critical-pending Maintenance analytics use the documented canonical `Critical` value consistently
   across persistence and repository aggregation
 - Focused unit/repository/migration tests for ownership, validation, lifecycle, recurrence, locking, and calendar generation
+- Archived equipment retains ownership-scoped Maintenance history and analytics; archiving the
+  Maintenance task itself remains the operation that hides it from normal Maintenance access
 
 Quartz-based overdue detection, Kafka maintenance events, automatic SLA escalation, and a separate
 deployable Maintenance microservice remain architecture-roadmap items; they are not implemented in
