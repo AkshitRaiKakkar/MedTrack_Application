@@ -42,7 +42,8 @@ import {
   FileHeart,
   Skull,
   Cloud,
-  Usb
+  Usb,
+  UserCheck
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -68,6 +69,7 @@ import FhirEhrSecurityPanel from "./FhirEhrSecurityPanel";
 import ThreatIntelPanel from "./ThreatIntelPanel";
 import HealthcareCspmPanel from "./HealthcareCspmPanel";
 import Fido2WebAuthnPanel from "./Fido2WebAuthnPanel";
+import PamSessionPanel from "./PamSessionPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -411,7 +413,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart },
           { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull },
           { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud },
-          { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb }
+          { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb },
+          { id: "pam", label: "PAM & Privileged Sessions", icon: UserCheck }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -882,6 +885,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 22: FIDO2 WEBAUTHN HARDWARE SECURITY KEYS & BIOMETRIC PASSKEYS */}
       {selectedTab === "fido2" && (
         <Fido2WebAuthnPanel />
+      )}
+
+      {/* TAB 23: PRIVILEGED ACCESS MANAGEMENT (PAM) & SESSION RECORDING */}
+      {selectedTab === "pam" && (
+        <PamSessionPanel />
       )}
 
       {/* 4. MODALS */}
