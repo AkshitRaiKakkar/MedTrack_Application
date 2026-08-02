@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { getAllOrders } from "../../services/OrderService";
+import { getUnreadCounts } from "../../services/EventStreamService";
 import MedTrackLogo from "./MedTrackLogo";
+import ActivityCenter from "../../pages/hospital/ActivityCenter";
 
 export default function Navbar({ onNavigate, currentPage }) {
   const { user, logout } = useAuth();
@@ -14,12 +16,17 @@ export default function Navbar({ onNavigate, currentPage }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
 
+  // Activity Center (real-time events)
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityUnreadCount, setActivityUnreadCount] = useState(0);
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Supplier order polling (legacy - will be replaced by event stream)
   useEffect(() => {
     if (!user || user.role?.toLowerCase() !== "supplier") return;
 
@@ -44,6 +51,24 @@ export default function Navbar({ onNavigate, currentPage }) {
 
     checkSupplierOrders();
     const interval = setInterval(checkSupplierOrders, 12000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Activity Center unread counts for hospital users
+  useEffect(() => {
+    if (!user || user.role?.toLowerCase() !== "hospital") return;
+
+    const fetchUnreadCounts = async () => {
+      try {
+        const data = await getUnreadCounts();
+        setActivityUnreadCount(data.total || 0);
+      } catch (err) {
+        console.error('Failed to fetch unread counts:', err);
+      }
+    };
+
+    fetchUnreadCounts();
+    const interval = setInterval(fetchUnreadCounts, 30000); // Poll every 30s as fallback
     return () => clearInterval(interval);
   }, [user]);
 
@@ -181,6 +206,33 @@ export default function Navbar({ onNavigate, currentPage }) {
                       </p>
                     )}
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Activity Center Notification Bell (Hospital) */}
+            {user && user.role?.toLowerCase() === "hospital" && (
+              <div className="relative">
+                <button
+                  onClick={() => setActivityOpen(!activityOpen)}
+                  className="p-2 text-primary hover:text-blue-600 transition-colors relative focus:outline-none"
+                  aria-label="Activity Center"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {activityUnreadCount > 0 && (
+                    <span className="absolute top-0 right-0 w-4 h-4 bg-blue-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center animate-pulse">
+                      {activityUnreadCount > 99 ? '99+' : activityUnreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {activityOpen && (
+                  <ActivityCenter
+                    onClose={() => setActivityOpen(false)}
+                    onNavigate={onNavigate}
+                  />
                 )}
               </div>
             )}

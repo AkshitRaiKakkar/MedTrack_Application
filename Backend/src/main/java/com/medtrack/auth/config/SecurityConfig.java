@@ -252,6 +252,13 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/shipments").hasRole("SUPPLIER")
                 .requestMatchers(HttpMethod.PUT, "/api/shipments/**").hasRole("SUPPLIER")
 
+                // Real-time operations event stream boundaries:
+                // WebSocket/SSE endpoint for authenticated users.
+                // REST endpoints for event history and read receipts.
+                .requestMatchers("/api/events/stream/**").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/events/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/events/**").authenticated()
+
                 // All other endpoints require authentication.
                 .anyRequest().authenticated()
             )
