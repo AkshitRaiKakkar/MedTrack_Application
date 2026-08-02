@@ -45,7 +45,8 @@ import {
   Usb,
   UserCheck,
   HeartPulse,
-  Route
+  Route,
+  Dna
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -74,6 +75,7 @@ import Fido2WebAuthnPanel from "./Fido2WebAuthnPanel";
 import PamSessionPanel from "./PamSessionPanel";
 import RpmTelemetryPanel from "./RpmTelemetryPanel";
 import ApiGatewaySecurityPanel from "./ApiGatewaySecurityPanel";
+import GenomicDataVaultPanel from "./GenomicDataVaultPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -420,7 +422,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb },
           { id: "pam", label: "PAM & Privileged Sessions", icon: UserCheck },
           { id: "rpm", label: "RPM Wearable Telemetry", icon: HeartPulse },
-          { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route }
+          { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route },
+          { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -906,6 +909,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 25: HEALTHCARE API GATEWAY & OAUTH 2.1 TOKEN SECURITY */}
       {selectedTab === "apigateway" && (
         <ApiGatewaySecurityPanel />
+      )}
+
+      {/* TAB 26: GENOMIC EHR PRIVACY & DNA DATA CRYPTOGRAPHIC VAULT */}
+      {selectedTab === "genomics" && (
+        <GenomicDataVaultPanel />
       )}
 
       {/* 4. MODALS */}
