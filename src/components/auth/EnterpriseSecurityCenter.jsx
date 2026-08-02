@@ -43,7 +43,8 @@ import {
   Skull,
   Cloud,
   Usb,
-  UserCheck
+  UserCheck,
+  HeartPulse
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -70,6 +71,7 @@ import ThreatIntelPanel from "./ThreatIntelPanel";
 import HealthcareCspmPanel from "./HealthcareCspmPanel";
 import Fido2WebAuthnPanel from "./Fido2WebAuthnPanel";
 import PamSessionPanel from "./PamSessionPanel";
+import RpmTelemetryPanel from "./RpmTelemetryPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -414,7 +416,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull },
           { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud },
           { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb },
-          { id: "pam", label: "PAM & Privileged Sessions", icon: UserCheck }
+          { id: "pam", label: "PAM & Privileged Sessions", icon: UserCheck },
+          { id: "rpm", label: "RPM Wearable Telemetry", icon: HeartPulse }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -890,6 +893,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 23: PRIVILEGED ACCESS MANAGEMENT (PAM) & SESSION RECORDING */}
       {selectedTab === "pam" && (
         <PamSessionPanel />
+      )}
+
+      {/* TAB 24: REMOTE PATIENT MONITORING (RPM) & BIOMETRIC TELEMETRY */}
+      {selectedTab === "rpm" && (
+        <RpmTelemetryPanel />
       )}
 
       {/* 4. MODALS */}
