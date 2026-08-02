@@ -15,7 +15,6 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.SQLRestriction;
 import lombok.ToString;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -56,6 +55,12 @@ public class MaintenanceTask {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Equipment equipmentRecord;
+
+    // Read-only access to the relationship key lets ownership checks inspect the retained
+    // equipment row even when that equipment has been archived and its entity is SQL-restricted.
+    @Column(name = "equipment_record_id", insertable = false, updatable = false)
+    @JsonIgnore
+    private Long equipmentRecordId;
 
     @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Hospital name must not exceed 255 characters")
     @Column(length = SHORT_TEXT_MAX_LENGTH)

@@ -2,11 +2,9 @@ package com.medtrack.repository;
 
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.model.MaintenanceStatus;
-import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,118 +16,213 @@ import java.util.Optional;
 public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask, Long> {
     Optional<MaintenanceTask> findByTaskCode(String taskCode);
 
-    @Query("SELECT task FROM MaintenanceTask task "
-            + "WHERE task.assignedTechnicianRecord.id = :technicianId "
-            + "AND task.equipmentRecord.hospital.id = task.hospitalId")
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.assigned_technician_record_id = :technicianId "
+            + "AND e.hospital_id = mt.hospital_id",
+            nativeQuery = true)
     List<MaintenanceTask> findByAssignedTechnicianId(
             @Param("technicianId") Long technicianId);
 
     // Ownership-scoped queries prevent cross-hospital and cross-technician record access.
-    @Query("SELECT task FROM MaintenanceTask task "
-            + "WHERE task.hospitalId = :hospitalId "
-            + "AND task.equipmentRecord.hospital.id = :hospitalId")
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId",
+            nativeQuery = true)
     List<MaintenanceTask> findByHospitalId(@Param("hospitalId") Long hospitalId);
 
-    @Query(value = "SELECT task FROM MaintenanceTask task "
-            + "WHERE task.hospitalId = :hospitalId "
-            + "AND task.equipmentRecord.hospital.id = :hospitalId "
-            + "AND (:status IS NULL OR task.status = :status) "
-            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId)",
-            countQuery = "SELECT COUNT(task) FROM MaintenanceTask task "
-            + "WHERE task.hospitalId = :hospitalId "
-            + "AND task.equipmentRecord.hospital.id = :hospitalId "
-            + "AND (:status IS NULL OR task.status = :status) "
-            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId)")
-    Page<MaintenanceTask> findByHospitalIdWithFilters(
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId "
+            + "AND (:status IS NULL OR mt.status = :status) "
+            + "AND (:equipmentId IS NULL OR mt.equipment_id = :equipmentId) "
+            + "ORDER BY mt.deadline ASC, mt.id ASC",
+            countQuery = "SELECT COUNT(*) FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId "
+            + "AND (:status IS NULL OR mt.status = :status) "
+            + "AND (:equipmentId IS NULL OR mt.equipment_id = :equipmentId)",
+            nativeQuery = true)
+    Page<MaintenanceTask> findByHospitalIdWithFiltersNative(
             @Param("hospitalId") Long hospitalId,
-            @Param("status") MaintenanceStatus status,
+            @Param("status") String status,
             @Param("equipmentId") String equipmentId,
             Pageable pageable);
 
-    @Query("SELECT task FROM MaintenanceTask task "
-            + "WHERE task.id = :id AND task.hospitalId = :hospitalId "
-            + "AND task.equipmentRecord.hospital.id = :hospitalId")
+    default Page<MaintenanceTask> findByHospitalIdWithFilters(
+            Long hospitalId,
+            MaintenanceStatus status,
+            String equipmentId,
+            Pageable pageable) {
+        return findByHospitalIdWithFiltersNative(
+                hospitalId, status != null ? status.name() : null, equipmentId, pageable);
+    }
+
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.id = :id AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId",
+            nativeQuery = true)
     Optional<MaintenanceTask> findByIdAndHospitalId(
             @Param("id") Long id,
             @Param("hospitalId") Long hospitalId);
 
-    @Query("SELECT task FROM MaintenanceTask task "
-            + "WHERE task.id = :id AND task.assignedTechnicianRecord.id = :technicianId "
-            + "AND task.equipmentRecord.hospital.id = task.hospitalId")
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.id = :id AND mt.assigned_technician_record_id = :technicianId "
+            + "AND e.hospital_id = mt.hospital_id",
+            nativeQuery = true)
     Optional<MaintenanceTask> findByIdAndAssignedTechnicianId(
             @Param("id") Long id,
             @Param("technicianId") Long technicianId);
 
-    @Query(value = "SELECT task FROM MaintenanceTask task "
-            + "WHERE task.assignedTechnicianRecord.id = :technicianId "
-            + "AND task.equipmentRecord.hospital.id = task.hospitalId "
-            + "AND (:status IS NULL OR task.status = :status) "
-            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId)",
-            countQuery = "SELECT COUNT(task) FROM MaintenanceTask task "
-            + "WHERE task.assignedTechnicianRecord.id = :technicianId "
-            + "AND task.equipmentRecord.hospital.id = task.hospitalId "
-            + "AND (:status IS NULL OR task.status = :status) "
-            + "AND (:equipmentId IS NULL OR task.equipmentId = :equipmentId)")
-    Page<MaintenanceTask> findByAssignedTechnicianIdWithFilters(
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.assigned_technician_record_id = :technicianId "
+            + "AND e.hospital_id = mt.hospital_id "
+            + "AND (:status IS NULL OR mt.status = :status) "
+            + "AND (:equipmentId IS NULL OR mt.equipment_id = :equipmentId) "
+            + "ORDER BY mt.deadline ASC, mt.id ASC",
+            countQuery = "SELECT COUNT(*) FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.assigned_technician_record_id = :technicianId "
+            + "AND e.hospital_id = mt.hospital_id "
+            + "AND (:status IS NULL OR mt.status = :status) "
+            + "AND (:equipmentId IS NULL OR mt.equipment_id = :equipmentId)",
+            nativeQuery = true)
+    Page<MaintenanceTask> findByAssignedTechnicianIdWithFiltersNative(
             @Param("technicianId") Long technicianId,
-            @Param("status") MaintenanceStatus status,
+            @Param("status") String status,
             @Param("equipmentId") String equipmentId,
             Pageable pageable);
 
+    default Page<MaintenanceTask> findByAssignedTechnicianIdWithFilters(
+            Long technicianId,
+            MaintenanceStatus status,
+            String equipmentId,
+            Pageable pageable) {
+        return findByAssignedTechnicianIdWithFiltersNative(
+                technicianId, status != null ? status.name() : null, equipmentId, pageable);
+    }
+
     // Serialize updates to one assigned task so completion cannot create duplicate recurrences.
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT task FROM MaintenanceTask task "
-            + "WHERE task.id = :id AND task.assignedTechnicianRecord.id = :technicianId "
-            + "AND task.equipmentRecord.hospital.id = task.hospitalId")
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.id = :id AND mt.assigned_technician_record_id = :technicianId "
+            + "AND e.hospital_id = mt.hospital_id FOR UPDATE",
+            nativeQuery = true)
     Optional<MaintenanceTask> findByIdAndAssignedTechnicianIdForUpdate(
             @Param("id") Long id,
             @Param("technicianId") Long technicianId);
 
     // Serialize hospital deletion with technician completion of the same task.
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT task FROM MaintenanceTask task "
-            + "WHERE task.id = :id AND task.hospitalId = :hospitalId "
-            + "AND task.equipmentRecord.hospital.id = :hospitalId")
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.id = :id AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId FOR UPDATE",
+            nativeQuery = true)
     Optional<MaintenanceTask> findByIdAndHospitalIdForUpdate(
             @Param("id") Long id,
             @Param("hospitalId") Long hospitalId);
 
     // Equipment history remains hospital-scoped so it cannot leak another hospital's records.
-    @Query("SELECT task FROM MaintenanceTask task "
-            + "WHERE task.equipmentRecord.id = :equipmentId "
-            + "AND task.hospitalId = :hospitalId "
-            + "AND task.equipmentRecord.hospital.id = :hospitalId")
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.equipment_record_id = :equipmentId "
+            + "AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId",
+            nativeQuery = true)
     List<MaintenanceTask> findByEquipmentRecord_IdAndHospitalId(
             @Param("equipmentId") Long equipmentId,
             @Param("hospitalId") Long hospitalId);
 
     // Analytics aggregation queries
-    @Query("SELECT COUNT(t) FROM MaintenanceTask t "
-            + "WHERE t.hospitalId = :hospitalId "
-            + "AND t.equipmentRecord.hospital.id = :hospitalId "
-            + "AND t.status = :status")
-    long countByHospitalIdAndStatus(@Param("hospitalId") Long hospitalId, @Param("status") MaintenanceStatus status);
+    @Query(value = "SELECT COUNT(*) FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId AND mt.status = :status",
+            nativeQuery = true)
+    long countByHospitalIdAndStatusNative(
+            @Param("hospitalId") Long hospitalId, @Param("status") String status);
 
-    @Query("SELECT t FROM MaintenanceTask t "
-            + "WHERE t.hospitalId = :hospitalId "
-            + "AND t.equipmentRecord.hospital.id = :hospitalId "
-            + "AND t.status = :status "
-            + "AND t.completedAt IS NOT NULL "
-            + "AND t.deadline IS NOT NULL")
-    List<MaintenanceTask> findCompletedTasksWithTimestamps(@Param("hospitalId") Long hospitalId, @Param("status") MaintenanceStatus status);
+    default long countByHospitalIdAndStatus(Long hospitalId, MaintenanceStatus status) {
+        return countByHospitalIdAndStatusNative(hospitalId, status.name());
+    }
 
-    @Query("SELECT AVG(t.hoursWorked) FROM MaintenanceTask t "
-            + "WHERE t.hospitalId = :hospitalId "
-            + "AND t.equipmentRecord.hospital.id = :hospitalId "
-            + "AND t.status = :status "
-            + "AND t.hoursWorked IS NOT NULL")
-    Double averageHoursWorkedByHospitalIdAndStatus(@Param("hospitalId") Long hospitalId, @Param("status") MaintenanceStatus status);
+    @Query(value = "SELECT mt.* FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId AND mt.status = :status "
+            + "AND mt.completed_at IS NOT NULL AND mt.deadline IS NOT NULL",
+            nativeQuery = true)
+    List<MaintenanceTask> findCompletedTasksWithTimestampsNative(
+            @Param("hospitalId") Long hospitalId, @Param("status") String status);
 
-    @Query("SELECT COUNT(t) FROM MaintenanceTask t "
-            + "WHERE t.hospitalId = :hospitalId "
-            + "AND t.equipmentRecord.hospital.id = :hospitalId "
-            + "AND t.status != :status "
-            + "AND t.priority = :priority")
-    long countByHospitalIdAndStatusNotAndPriority(@Param("hospitalId") Long hospitalId, @Param("status") MaintenanceStatus status, @Param("priority") String priority);
+    default List<MaintenanceTask> findCompletedTasksWithTimestamps(
+            Long hospitalId, MaintenanceStatus status) {
+        return findCompletedTasksWithTimestampsNative(hospitalId, status.name());
+    }
+
+    @Query(value = "SELECT AVG(mt.hours_worked) FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId AND mt.status = :status "
+            + "AND mt.hours_worked IS NOT NULL",
+            nativeQuery = true)
+    Double averageHoursWorkedByHospitalIdAndStatusNative(
+            @Param("hospitalId") Long hospitalId, @Param("status") String status);
+
+    default Double averageHoursWorkedByHospitalIdAndStatus(
+            Long hospitalId, MaintenanceStatus status) {
+        return averageHoursWorkedByHospitalIdAndStatusNative(hospitalId, status.name());
+    }
+
+    @Query(value = "SELECT COUNT(*) FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.deleted = FALSE AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId AND mt.status != :status "
+            + "AND mt.priority = :priority",
+            nativeQuery = true)
+    long countByHospitalIdAndStatusNotAndPriorityNative(
+            @Param("hospitalId") Long hospitalId,
+            @Param("status") String status,
+            @Param("priority") String priority);
+
+    default long countByHospitalIdAndStatusNotAndPriority(
+            Long hospitalId, MaintenanceStatus status, String priority) {
+        return countByHospitalIdAndStatusNotAndPriorityNative(
+                hospitalId, status.name(), priority);
+    }
+
+    @Query(value = "SELECT COUNT(*) FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.id = :taskId AND mt.deleted = FALSE "
+            + "AND mt.hospital_id = :hospitalId AND e.hospital_id = :hospitalId",
+            nativeQuery = true)
+    long countValidOwnership(
+            @Param("taskId") Long taskId,
+            @Param("hospitalId") Long hospitalId);
+
+    @Query(value = "SELECT COUNT(*) FROM equipment e "
+            + "WHERE e.id = :equipmentId AND e.hospital_id = :hospitalId "
+            + "AND e.deleted = FALSE AND e.status NOT IN ('RETIRED', 'DISPOSED')",
+            nativeQuery = true)
+    long countSchedulableEquipment(
+            @Param("equipmentId") Long equipmentId,
+            @Param("hospitalId") Long hospitalId);
 
 }

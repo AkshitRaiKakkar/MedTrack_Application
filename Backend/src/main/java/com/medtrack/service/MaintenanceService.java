@@ -19,7 +19,6 @@ import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -202,7 +201,8 @@ public class MaintenanceService {
         if (previousStatus != MaintenanceStatus.COMPLETED
                 && savedTask.getStatus() == MaintenanceStatus.COMPLETED
                 && savedTask.getRecurrencePeriodDays() != null
-                && savedTask.getRecurrencePeriodDays() > 0) {
+                && savedTask.getRecurrencePeriodDays() > 0
+                && isEquipmentEligibleForRecurrence(savedTask)) {
 
             User recurringTechnician = resolveRecurringTechnician(savedTask);
             MaintenanceTask nextTask = MaintenanceTask.builder()
@@ -228,6 +228,17 @@ public class MaintenanceService {
         }
 
         return savedTask;
+    }
+
+    private boolean isEquipmentEligibleForRecurrence(MaintenanceTask completedTask) {
+        Long equipmentRecordId = completedTask.getEquipmentRecordId();
+        if (equipmentRecordId == null && completedTask.getEquipmentRecord() != null) {
+            equipmentRecordId = completedTask.getEquipmentRecord().getId();
+        }
+        return equipmentRecordId != null
+                && completedTask.getHospitalId() != null
+                && taskRepository.countSchedulableEquipment(
+                        equipmentRecordId, completedTask.getHospitalId()) == 1;
     }
 
     private void validateSchedulingRequest(MaintenanceCreateRequest request) {
@@ -264,11 +275,8 @@ public class MaintenanceService {
     }
 
     private Pageable resolvePageable(Integer page, Integer size) {
-        Sort sort = Sort.by(
-                Sort.Order.asc("deadline"),
-                Sort.Order.asc("id"));
         if (page == null && size == null) {
-            return Pageable.unpaged(sort);
+            return Pageable.unpaged();
         }
 
         int resolvedPage = page != null ? page : 0;
@@ -280,7 +288,7 @@ public class MaintenanceService {
             throw new IllegalArgumentException(
                     "Page size must be between 1 and " + MAX_PAGE_SIZE);
         }
-        return PageRequest.of(resolvedPage, resolvedSize, sort);
+        return PageRequest.of(resolvedPage, resolvedSize);
     }
 
     private Equipment resolveOwnedEquipment(String equipmentReference, Long hospitalId) {
@@ -375,6 +383,14 @@ public class MaintenanceService {
     }
 
     private void validateOwnershipInvariant(MaintenanceTask task) {
+        if (task.getId() != null && task.getEquipmentRecordId() != null) {
+            if (task.getHospitalId() == null
+                    || taskRepository.countValidOwnership(task.getId(), task.getHospitalId()) != 1) {
+                throw new IllegalStateException(
+                        "Maintenance task hospital ownership does not match its equipment");
+            }
+            return;
+        }
         Equipment equipment = task.getEquipmentRecord();
         if (task.getHospitalId() == null
                 || equipment == null

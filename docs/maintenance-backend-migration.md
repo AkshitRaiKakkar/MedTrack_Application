@@ -73,6 +73,12 @@ entity-level SQL restriction excludes archived rows from normal repository queri
 remains available for database-level audit and retention processes. The public DELETE endpoint
 continues to return HTTP 204 for a successful archive.
 
+Equipment archival is independent from Maintenance archival. Maintenance repository queries use
+the retained `equipment` row for the dual-hospital ownership check without applying the Equipment
+entity's active-only restriction. A non-deleted maintenance task therefore remains available for
+history, technician access, locking, and analytics after its equipment is archived. Only
+`maintenance_tasks.deleted` hides the Maintenance record from normal Maintenance access.
+
 The database constraints make both ownership fields present and ensure that
 `equipment_record_id` references real equipment, but they do not by themselves compare
 `maintenance_tasks.hospital_id` with the linked equipment's `hospital_id`. Maintenance repository
@@ -154,7 +160,9 @@ For an existing persistent schema:
 1. Back up the database.
 2. Run the unmatched-row checks above.
 3. Set `FLYWAY_ENABLED=true`.
-4. Start the backend and confirm Flyway reports migration version `7`.
+4. Start the backend and confirm Flyway reports migration version `8`. Maintenance soft deletion
+   remains version `7`; the repository's current gapless migration chain now continues through the
+   equipment lifecycle migration at version `8`.
 5. Verify that every maintenance row has a non-null `equipment_record_id`.
 
 The configuration uses `baseline-on-migrate=true` and baseline version `0`. This allows migration version `1` to run against the existing unversioned MedTrack schema.
@@ -258,6 +266,11 @@ analytics service.
 
 It also verifies that completion requires an effective technician signature, accepts a previously stored signature when a partial completion payload omits the field, rejects an explicit blank signature, records `completedAt`, and preserves hospital-owned recurrence configuration during technician updates. Dedicated request DTOs now prevent client binding of completion timestamps and other server-controlled fields. `AnalyticsServiceTest` verifies that SLA compliance uses actual completion timestamps and excludes unverifiable legacy completions.
 
+The repository test also verifies that equipment archival does not hide retained Maintenance
+history or analytics, while retired, disposed, and archived equipment are all ineligible for a new
+completion-driven recurrence. `MaintenanceServiceTest` verifies that completion evidence remains
+committed and only the recurrence is skipped when equipment is unavailable.
+
 Calendar verification additionally requires each exported `VEVENT` to use the RFC 5545-valid
 `STATUS:CONFIRMED` value and to preserve the exact Maintenance enum name in
 `X-MEDTRACK-STATUS`. Existing escaping, UTC timestamp, injection-resistance, Unicode, and
@@ -265,8 +278,10 @@ content-line-folding coverage remains in place.
 
 The complete backend main-source compilation succeeds with `./mvnw -B -ntp -DskipTests compile`.
 The Maintenance controller and listing tests target the current JSON-array contract and the
-five-argument service method. The six focused Maintenance test classes compile independently
-against the current main classes and test dependencies. The standard Maven test lifecycle still
-stops during test compilation on 37 errors in unrelated rate-limiting and equipment test sources,
+five-argument service method. The seven focused Maintenance and soft-delete test classes compile
+independently against the current main classes and test dependencies. All 80 focused tests pass
+when executed independently of the unrelated test-source compilation failures. The standard Maven test lifecycle still
+stops during test compilation on two unrelated supplier test calls whose argument lists no longer
+match `ShipmentTrackingService`,
 before Maven can execute the focused Maintenance tests. Those unrelated test-source blockers
 remain outside this Maintenance-only change.
