@@ -104,7 +104,11 @@ export default function Navbar({ onNavigate, currentPage }) {
         ]
     : [];
 
-  const navLinks = user ? privateLinks : publicLinks;
+  // Add procurement links for hospital
+  const navLinks = user ? (user.role === "hospital" ? [...privateLinks, ...[
+    { label: "New Procurement", page: "procurement-wizard" },
+    { label: "Approval Inbox", page: "approval-inbox" },
+  ]] : privateLinks) : publicLinks;
 
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${isLanding ? (scrolled ? 'top-0 bg-surface/95 backdrop-blur-md shadow-sm border-b border-subtle' : 'top-0 bg-transparent border-transparent') : 'sticky top-0 bg-surface/80 backdrop-blur-lg border-b border-subtle'}`}>
