@@ -44,7 +44,8 @@ import {
   Cloud,
   Usb,
   UserCheck,
-  HeartPulse
+  HeartPulse,
+  Route
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -72,6 +73,7 @@ import HealthcareCspmPanel from "./HealthcareCspmPanel";
 import Fido2WebAuthnPanel from "./Fido2WebAuthnPanel";
 import PamSessionPanel from "./PamSessionPanel";
 import RpmTelemetryPanel from "./RpmTelemetryPanel";
+import ApiGatewaySecurityPanel from "./ApiGatewaySecurityPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -417,7 +419,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud },
           { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb },
           { id: "pam", label: "PAM & Privileged Sessions", icon: UserCheck },
-          { id: "rpm", label: "RPM Wearable Telemetry", icon: HeartPulse }
+          { id: "rpm", label: "RPM Wearable Telemetry", icon: HeartPulse },
+          { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -898,6 +901,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 24: REMOTE PATIENT MONITORING (RPM) & BIOMETRIC TELEMETRY */}
       {selectedTab === "rpm" && (
         <RpmTelemetryPanel />
+      )}
+
+      {/* TAB 25: HEALTHCARE API GATEWAY & OAUTH 2.1 TOKEN SECURITY */}
+      {selectedTab === "apigateway" && (
+        <ApiGatewaySecurityPanel />
       )}
 
       {/* 4. MODALS */}
