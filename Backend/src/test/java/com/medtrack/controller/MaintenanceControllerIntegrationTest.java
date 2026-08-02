@@ -43,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
         "security.rate-limit.capacity=1000",
         "security.rate-limit.refill-tokens=1000",
+        "app.jwt.secret=maintenance-integration-test-secret-123456789",
         "app.data-initializer.enabled=false"
 })
 // Custom JWT filters replace the test SecurityContext when no bearer token is

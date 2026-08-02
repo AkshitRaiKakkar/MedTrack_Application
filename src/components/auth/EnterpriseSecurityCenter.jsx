@@ -42,7 +42,12 @@ import {
   FileHeart,
   Skull,
   Cloud,
-  Usb
+  Usb,
+  UserCheck,
+  HeartPulse,
+  Route,
+  Dna,
+  Brain
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -68,6 +73,11 @@ import FhirEhrSecurityPanel from "./FhirEhrSecurityPanel";
 import ThreatIntelPanel from "./ThreatIntelPanel";
 import HealthcareCspmPanel from "./HealthcareCspmPanel";
 import Fido2WebAuthnPanel from "./Fido2WebAuthnPanel";
+import PamSessionPanel from "./PamSessionPanel";
+import RpmTelemetryPanel from "./RpmTelemetryPanel";
+import ApiGatewaySecurityPanel from "./ApiGatewaySecurityPanel";
+import GenomicDataVaultPanel from "./GenomicDataVaultPanel";
+import ClinicalAiDefensePanel from "./ClinicalAiDefensePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -411,7 +421,12 @@ export default function EnterpriseSecurityCenter() {
           { id: "fhir", label: "FHIR R4 & EHR Security", icon: FileHeart },
           { id: "threatintel", label: "STIX/TAXII Threat Intelligence", icon: Skull },
           { id: "cspm", label: "Healthcare Cloud CSPM", icon: Cloud },
-          { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb }
+          { id: "fido2", label: "FIDO2 & Hardware Passkeys", icon: Usb },
+          { id: "pam", label: "PAM & Privileged Sessions", icon: UserCheck },
+          { id: "rpm", label: "RPM Wearable Telemetry", icon: HeartPulse },
+          { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route },
+          { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna },
+          { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -882,6 +897,31 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 22: FIDO2 WEBAUTHN HARDWARE SECURITY KEYS & BIOMETRIC PASSKEYS */}
       {selectedTab === "fido2" && (
         <Fido2WebAuthnPanel />
+      )}
+
+      {/* TAB 23: PRIVILEGED ACCESS MANAGEMENT (PAM) & SESSION RECORDING */}
+      {selectedTab === "pam" && (
+        <PamSessionPanel />
+      )}
+
+      {/* TAB 24: REMOTE PATIENT MONITORING (RPM) & BIOMETRIC TELEMETRY */}
+      {selectedTab === "rpm" && (
+        <RpmTelemetryPanel />
+      )}
+
+      {/* TAB 25: HEALTHCARE API GATEWAY & OAUTH 2.1 TOKEN SECURITY */}
+      {selectedTab === "apigateway" && (
+        <ApiGatewaySecurityPanel />
+      )}
+
+      {/* TAB 26: GENOMIC EHR PRIVACY & DNA DATA CRYPTOGRAPHIC VAULT */}
+      {selectedTab === "genomics" && (
+        <GenomicDataVaultPanel />
+      )}
+
+      {/* TAB 27: CLINICAL AI MODEL SECURITY & ADVERSARIAL ATTACK DEFENSE */}
+      {selectedTab === "clinicalai" && (
+        <ClinicalAiDefensePanel />
       )}
 
       {/* 4. MODALS */}

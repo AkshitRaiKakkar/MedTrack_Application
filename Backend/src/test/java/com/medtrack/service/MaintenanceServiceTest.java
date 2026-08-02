@@ -22,13 +22,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import com.medtrack.exception.ResourceNotFoundException;
 
-import jakarta.persistence.LockModeType;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -116,6 +115,7 @@ public class MaintenanceServiceTest {
         mockTask.setEquipmentRecord(mockEquipment);
         lenient().when(userRepository.findByEmail("tech@medtrack.com"))
                 .thenReturn(Optional.of(mockTechnician));
+        lenient().when(taskRepository.countSchedulableEquipment(100L, 10L)).thenReturn(1L);
     }
 
     @Test
@@ -386,6 +386,29 @@ public class MaintenanceServiceTest {
     }
 
     @Test
+    void updateTask_CompletesWithoutRecurrenceWhenEquipmentIsUnavailable() {
+        mockTask.setSignature("stored-technician-signature");
+        when(authentication.getName()).thenReturn("tech@medtrack.com");
+        when(taskRepository.findByIdAndAssignedTechnicianIdForUpdate(50L, mockTechnician.getId()))
+                .thenReturn(Optional.of(mockTask));
+        when(taskRepository.countSchedulableEquipment(100L, 10L)).thenReturn(0L);
+        when(taskRepository.save(any(MaintenanceTask.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        MaintenanceTask result = maintenanceService.updateTask(
+                50L,
+                MaintenanceUpdateRequest.builder()
+                        .status(MaintenanceStatus.COMPLETED)
+                        .build(),
+                authentication);
+
+        assertEquals(MaintenanceStatus.COMPLETED, result.getStatus());
+        assertNotNull(result.getCompletedAt());
+        verify(taskRepository, times(1)).save(mockTask);
+        verify(taskRepository).countSchedulableEquipment(100L, 10L);
+    }
+
+    @Test
     void updateTask_RejectsMismatchedEquipmentHospitalOwnership() {
         mockTask.setHospitalId(99L);
         when(authentication.getName()).thenReturn("tech@medtrack.com");
@@ -541,25 +564,27 @@ public class MaintenanceServiceTest {
     }
 
     @Test
-    void updateQuery_UsesPessimisticWriteLock() throws NoSuchMethodException {
+    void updateQuery_UsesNativeWriteLock() throws NoSuchMethodException {
         Method method = MaintenanceTaskRepository.class.getMethod(
                 "findByIdAndAssignedTechnicianIdForUpdate", Long.class, Long.class);
 
-        Lock lock = method.getAnnotation(Lock.class);
+        Query query = method.getAnnotation(Query.class);
 
-        assertNotNull(lock);
-        assertEquals(LockModeType.PESSIMISTIC_WRITE, lock.value());
+        assertNotNull(query);
+        assertTrue(query.nativeQuery());
+        assertTrue(query.value().toUpperCase().contains("FOR UPDATE"));
     }
 
     @Test
-    void deleteQuery_UsesPessimisticWriteLock() throws NoSuchMethodException {
+    void deleteQuery_UsesNativeWriteLock() throws NoSuchMethodException {
         Method method = MaintenanceTaskRepository.class.getMethod(
                 "findByIdAndHospitalIdForUpdate", Long.class, Long.class);
 
-        Lock lock = method.getAnnotation(Lock.class);
+        Query query = method.getAnnotation(Query.class);
 
-        assertNotNull(lock);
-        assertEquals(LockModeType.PESSIMISTIC_WRITE, lock.value());
+        assertNotNull(query);
+        assertTrue(query.nativeQuery());
+        assertTrue(query.value().toUpperCase().contains("FOR UPDATE"));
     }
 
     @Test
@@ -689,7 +714,7 @@ public class MaintenanceServiceTest {
                 pageableCaptor.capture());
         assertEquals(1, pageableCaptor.getValue().getPageNumber());
         assertEquals(25, pageableCaptor.getValue().getPageSize());
-        assertEquals("deadline: ASC,id: ASC", pageableCaptor.getValue().getSort().toString());
+        assertTrue(pageableCaptor.getValue().getSort().isUnsorted());
     }
 
     @Test

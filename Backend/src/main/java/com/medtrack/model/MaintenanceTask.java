@@ -15,7 +15,6 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.SQLRestriction;
 import lombok.ToString;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -56,6 +55,12 @@ public class MaintenanceTask {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Equipment equipmentRecord;
+
+    // Read-only access to the relationship key lets ownership checks inspect the retained
+    // equipment row even when that equipment has been archived and its entity is SQL-restricted.
+    @Column(name = "equipment_record_id", insertable = false, updatable = false)
+    @JsonIgnore
+    private Long equipmentRecordId;
 
     @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Hospital name must not exceed 255 characters")
     @Column(length = SHORT_TEXT_MAX_LENGTH)
@@ -121,6 +126,36 @@ public class MaintenanceTask {
 
     @PositiveOrZero(message = "Recurrence period cannot be negative")
     private Integer recurrencePeriodDays;
+
+    // Preventive-maintenance automation linkage: which rule generated this task, and from which run.
+    // A null ruleId means the task was scheduled manually and is outside the automation engine.
+    @Column(name = "policy_rule_id")
+    private Long policyRuleId;
+
+    @Column(name = "generation_run_id")
+    private Long generationRunId;
+
+    /**
+     * SLA state of an open task, derived from the generating rule's warning/breach windows.
+     * Stored so queries and the frontend can filter without recomputing thresholds on every read.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sla_state", length = 50)
+    @Builder.Default
+    private SlaState slaState = SlaState.UPCOMING;
+
+    // The day the task is considered overdue. Computed from deadline + slaBreachDays.
+    @Column(name = "sla_breached_at")
+    private LocalDateTime slaBreachedAt;
+
+    // SLA timestamps persisted for compliance evidence and dashboards.
+    @Column(name = "sla_warning_at")
+    private LocalDateTime slaWarningAt;
+
+    // Who an escalated task was routed to (e.g. a hospital admin email).
+    @Size(max = SHORT_TEXT_MAX_LENGTH, message = "Escalated to must not exceed 255 characters")
+    @Column(name = "escalated_to", length = SHORT_TEXT_MAX_LENGTH)
+    private String escalatedTo;
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

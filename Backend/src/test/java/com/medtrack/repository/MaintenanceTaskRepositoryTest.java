@@ -3,6 +3,7 @@ package com.medtrack.repository;
 import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.model.User;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
@@ -63,6 +64,71 @@ class MaintenanceTaskRepositoryTest {
         assertTrue(taskRepository.findById(taskId).isEmpty());
         assertTrue(taskRepository.findByHospitalId(hospital.getId()).isEmpty());
         assertTrue(taskRepository.findByAssignedTechnicianId(technician.getId()).isEmpty());
+    }
+
+    @Test
+    void archivedEquipmentDoesNotHideRetainedMaintenanceHistory() {
+        Hospital hospital = persistHospital("Archived Equipment Hospital");
+        Equipment equipment = persistEquipment(hospital);
+        User technician = persistTechnician("archived-equipment-tech");
+        MaintenanceTask task = persistTask(
+                "MNT-ARCHIVED-EQUIPMENT", equipment, hospital, technician);
+        Long taskId = task.getId();
+        Long equipmentId = equipment.getId();
+
+        equipment.setDeleted(true);
+        equipment.setDeletedAt(LocalDateTime.now());
+        equipment.setDeletedBy("hospital@medtrack.com");
+        entityManager.flush();
+        entityManager.clear();
+
+        assertEquals(1, taskRepository.findByHospitalId(hospital.getId()).size());
+        assertEquals(1, taskRepository.findByAssignedTechnicianId(technician.getId()).size());
+        assertTrue(taskRepository.findByIdAndHospitalId(taskId, hospital.getId()).isPresent());
+        assertTrue(taskRepository.findByIdAndAssignedTechnicianId(
+                taskId, technician.getId()).isPresent());
+        assertEquals(1, taskRepository.findByEquipmentRecord_IdAndHospitalId(
+                equipmentId, hospital.getId()).size());
+        assertEquals(1, taskRepository.findByHospitalIdWithFilters(
+                hospital.getId(), MaintenanceStatus.SCHEDULED,
+                equipment.getEquipmentCode(), Pageable.unpaged()).getTotalElements());
+        assertEquals(1, taskRepository.findByAssignedTechnicianIdWithFilters(
+                technician.getId(), MaintenanceStatus.SCHEDULED,
+                equipment.getEquipmentCode(), Pageable.unpaged()).getTotalElements());
+        assertEquals(1, taskRepository.countByHospitalIdAndStatus(
+                hospital.getId(), MaintenanceStatus.SCHEDULED));
+        assertEquals(2.0, taskRepository.averageHoursWorkedByHospitalIdAndStatus(
+                hospital.getId(), MaintenanceStatus.SCHEDULED));
+        assertEquals(1, taskRepository.countByHospitalIdAndStatusNotAndPriority(
+                hospital.getId(), MaintenanceStatus.COMPLETED, "Critical"));
+        assertEquals(0, taskRepository.countSchedulableEquipment(
+                equipmentId, hospital.getId()));
+    }
+
+    @Test
+    void recurrenceEligibilityExcludesRetiredDisposedAndArchivedEquipment() {
+        Hospital hospital = persistHospital("Recurrence Eligibility Hospital");
+        Equipment equipment = persistEquipment(hospital);
+        entityManager.flush();
+
+        assertEquals(1, taskRepository.countSchedulableEquipment(
+                equipment.getId(), hospital.getId()));
+
+        equipment.setStatus(EquipmentStatus.RETIRED);
+        entityManager.flush();
+        assertEquals(0, taskRepository.countSchedulableEquipment(
+                equipment.getId(), hospital.getId()));
+
+        equipment.setStatus(EquipmentStatus.DISPOSED);
+        entityManager.flush();
+        assertEquals(0, taskRepository.countSchedulableEquipment(
+                equipment.getId(), hospital.getId()));
+
+        equipment.setStatus(EquipmentStatus.ACTIVE);
+        equipment.setDeleted(true);
+        entityManager.flush();
+        assertEquals(0, taskRepository.countSchedulableEquipment(
+                equipment.getId(), hospital.getId()));
     }
 
     @Test
@@ -235,7 +301,9 @@ class MaintenanceTaskRepositoryTest {
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
             factory.setJpaPropertyMap(Map.of(
                     "hibernate.hbm2ddl.auto", "create-drop",
-                    "hibernate.show_sql", "false"));
+                    "hibernate.show_sql", "false",
+                    "hibernate.physical_naming_strategy",
+                    "org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy"));
             return factory;
         }
 

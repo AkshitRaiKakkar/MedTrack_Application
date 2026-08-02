@@ -246,6 +246,11 @@ public class SecurityConfig {
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.
                 // Updates/Completions: Restricted to Technicians.
+                //
+                // Preventive-maintenance automation is a hospital-admin console: rule CRUD,
+                // generation, SLA recomputation, and workload are all HOSPITAL-scoped, so its
+                // matchers must precede the generic maintenance PUT (technician) rule below.
+                .requestMatchers("/api/maintenance/automation/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.GET, "/api/maintenance/**").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/maintenance/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.PUT, "/api/maintenance/**").hasRole("TECHNICIAN")
@@ -257,6 +262,13 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/shipments/**").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/shipments").hasRole("SUPPLIER")
                 .requestMatchers(HttpMethod.PUT, "/api/shipments/**").hasRole("SUPPLIER")
+
+                // Real-time operations event stream boundaries:
+                // WebSocket/SSE endpoint for authenticated users.
+                // REST endpoints for event history and read receipts.
+                .requestMatchers("/api/events/stream/**").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/events/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/events/**").authenticated()
 
                 // All other endpoints require authentication.
                 .anyRequest().authenticated()
