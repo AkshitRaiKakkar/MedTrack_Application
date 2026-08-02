@@ -1,0 +1,33 @@
+-- Flyway migration V9: Add real-time operations events tables (MySQL)
+
+CREATE TABLE operations_events (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    category VARCHAR(32) NOT NULL,
+    type VARCHAR(64) NOT NULL,
+    title VARCHAR(256) NOT NULL,
+    detail TEXT,
+    hospital_id BIGINT NOT NULL,
+    entity_id BIGINT,
+    entity_type VARCHAR(32),
+    actor VARCHAR(255),
+    severity VARCHAR(16) NOT NULL DEFAULT 'INFO',
+    read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_operations_events_hospital_created ON operations_events(hospital_id, created_at DESC);
+CREATE INDEX idx_operations_events_hospital_read ON operations_events(hospital_id, read);
+CREATE INDEX idx_operations_events_hospital_category ON operations_events(hospital_id, category);
+CREATE INDEX idx_operations_events_entity ON operations_events(entity_type, entity_id);
+CREATE INDEX idx_operations_events_actor ON operations_events(actor);
+
+CREATE TABLE event_read_receipts (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    event_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    read_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_event_read_receipts_event_user UNIQUE (event_id, user_id)
+);
+
+CREATE INDEX idx_event_read_receipts_user ON event_read_receipts(user_id);
+CREATE INDEX idx_event_read_receipts_event ON event_read_receipts(event_id);
