@@ -46,7 +46,8 @@ import {
   UserCheck,
   HeartPulse,
   Route,
-  Dna
+  Dna,
+  Brain
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -76,6 +77,7 @@ import PamSessionPanel from "./PamSessionPanel";
 import RpmTelemetryPanel from "./RpmTelemetryPanel";
 import ApiGatewaySecurityPanel from "./ApiGatewaySecurityPanel";
 import GenomicDataVaultPanel from "./GenomicDataVaultPanel";
+import ClinicalAiDefensePanel from "./ClinicalAiDefensePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -423,7 +425,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "pam", label: "PAM & Privileged Sessions", icon: UserCheck },
           { id: "rpm", label: "RPM Wearable Telemetry", icon: HeartPulse },
           { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route },
-          { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna }
+          { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna },
+          { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -914,6 +917,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 26: GENOMIC EHR PRIVACY & DNA DATA CRYPTOGRAPHIC VAULT */}
       {selectedTab === "genomics" && (
         <GenomicDataVaultPanel />
+      )}
+
+      {/* TAB 27: CLINICAL AI MODEL SECURITY & ADVERSARIAL ATTACK DEFENSE */}
+      {selectedTab === "clinicalai" && (
+        <ClinicalAiDefensePanel />
       )}
 
       {/* 4. MODALS */}
