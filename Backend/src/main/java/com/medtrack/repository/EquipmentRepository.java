@@ -119,4 +119,18 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     @Query(value = "SELECT * FROM equipment WHERE id = :id AND deleted = TRUE", nativeQuery = true)
     Optional<Equipment> findByIdAndDeletedTrue(@Param("id") Long id);
+
+    // ---------------------------------------------------------------------
+    // Preventive-maintenance automation matching queries
+    // ---------------------------------------------------------------------
+
+    List<Equipment> findByHospitalIdAndCategory(Long hospitalId, EquipmentCategory category);
+
+    @Query("SELECT e FROM Equipment e "
+            + "WHERE e.hospital.id = :hospitalId "
+            + "AND (LOWER(e.model) LIKE LOWER(CONCAT('%', :manufacturer, '%')) "
+            + "OR LOWER(e.name) LIKE LOWER(CONCAT('%', :manufacturer, '%')))")
+    List<Equipment> findByHospitalIdAndManufacturer(
+            @Param("hospitalId") Long hospitalId,
+            @Param("manufacturer") String manufacturer);
 }

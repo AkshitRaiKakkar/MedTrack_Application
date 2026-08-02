@@ -235,6 +235,11 @@ public class SecurityConfig {
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.
                 // Updates/Completions: Restricted to Technicians.
+                //
+                // Preventive-maintenance automation is a hospital-admin console: rule CRUD,
+                // generation, SLA recomputation, and workload are all HOSPITAL-scoped, so its
+                // matchers must precede the generic maintenance PUT (technician) rule below.
+                .requestMatchers("/api/maintenance/automation/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.GET, "/api/maintenance/**").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/maintenance/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.PUT, "/api/maintenance/**").hasRole("TECHNICIAN")

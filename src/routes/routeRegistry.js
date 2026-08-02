@@ -47,7 +47,8 @@ const AddEquipmentForm = lazy(() => import("../pages/hospital/AddEquipmentForm")
 const EditEquipmentForm = lazy(() => import("../pages/hospital/EditEquipmentForm"));
 const ScheduleMaintenancePage = lazy(() => import("../pages/hospital/ScheduleMaintenancePage"));
 const RequestEquipmentPage = lazy(() => import("../pages/hospital/RequestEquipmentPage"));
-const ActivityCenter = lazy(() => import("../pages/hospital/ActivityCenter"));
+const PreventiveMaintenanceRules = lazy(() => import("../pages/hospital/PreventiveMaintenanceRules"));
+const MaintenanceSlaDashboard = lazy(() => import("../pages/hospital/MaintenanceSlaDashboard"));
 
 const TaskList = lazy(() => import("../pages/technician/TaskList"));
 const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
@@ -158,7 +159,8 @@ export const ROUTES = [
   { page: "edit-equipment", slugs: ["edit-equipment"], component: EditEquipmentForm, access: HOSPITAL_ONLY, param: "equipmentId" },
   { page: "schedule-maintenance", slugs: ["schedule-maintenance"], component: ScheduleMaintenancePage, access: HOSPITAL_ONLY },
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
-  { page: "activity-center", slugs: ["activity-center"], component: ActivityCenter, access: HOSPITAL_ONLY },
+  { page: "maintenance-rules", slugs: ["maintenance-rules"], component: PreventiveMaintenanceRules, access: HOSPITAL_ONLY },
+  { page: "sla-dashboard", slugs: ["sla-dashboard"], component: MaintenanceSlaDashboard, access: HOSPITAL_ONLY },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },

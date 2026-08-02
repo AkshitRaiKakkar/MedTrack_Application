@@ -91,6 +91,7 @@ export default function Navbar({ onNavigate, currentPage }) {
           { label: "Dashboard", page: "dashboard" },
           { label: "Equipment", page: "equipment" },
           { label: "Maintenance", page: "maintenance" },
+          { label: "PM Rules", page: "maintenance-rules" },
         ]
       : user.role === "technician"
       ? [
