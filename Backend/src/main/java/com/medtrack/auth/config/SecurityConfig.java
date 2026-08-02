@@ -231,6 +231,17 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/orders/*/status").hasRole("SUPPLIER")
                 .requestMatchers(HttpMethod.DELETE, "/api/orders/**").hasRole("HOSPITAL")
 
+                // Procurement approval & receiving workflow boundaries:
+                // Reads (requests, policies, quotes, receiving, invoice match, audit, budget):
+                // authorized users. Quote submission/management: suppliers. Everything else:
+                // Hospital admins (approval decisions, receiving, invoice match, policies).
+                .requestMatchers(HttpMethod.GET, "/api/procurement/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/procurement/*/quotes").hasRole("SUPPLIER")
+                .requestMatchers(HttpMethod.POST, "/api/procurement/quotes/**").hasRole("SUPPLIER")
+                .requestMatchers(HttpMethod.POST, "/api/procurement/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT, "/api/procurement/**").hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/procurement/**").hasRole("HOSPITAL")
+
                 // Maintenance schedules boundaries:
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.
