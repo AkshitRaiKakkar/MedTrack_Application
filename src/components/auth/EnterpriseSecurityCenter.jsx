@@ -47,7 +47,8 @@ import {
   HeartPulse,
   Route,
   Dna,
-  Brain
+  Brain,
+  Boxes
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -78,6 +79,7 @@ import RpmTelemetryPanel from "./RpmTelemetryPanel";
 import ApiGatewaySecurityPanel from "./ApiGatewaySecurityPanel";
 import GenomicDataVaultPanel from "./GenomicDataVaultPanel";
 import ClinicalAiDefensePanel from "./ClinicalAiDefensePanel";
+import BiomedicalBlockchainPanel from "./BiomedicalBlockchainPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -426,7 +428,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "rpm", label: "RPM Wearable Telemetry", icon: HeartPulse },
           { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route },
           { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna },
-          { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain }
+          { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain },
+          { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -922,6 +925,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 27: CLINICAL AI MODEL SECURITY & ADVERSARIAL ATTACK DEFENSE */}
       {selectedTab === "clinicalai" && (
         <ClinicalAiDefensePanel />
+      )}
+
+      {/* TAB 28: BIOMEDICAL BLOCKCHAIN AUDIT & CRYPTOGRAPHIC PROVENANCE */}
+      {selectedTab === "blockchain" && (
+        <BiomedicalBlockchainPanel />
       )}
 
       {/* 4. MODALS */}
