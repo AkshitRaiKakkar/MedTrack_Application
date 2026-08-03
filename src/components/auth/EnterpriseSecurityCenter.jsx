@@ -50,7 +50,8 @@ import {
   Brain,
   Boxes,
   Siren,
-  Atom
+  Atom,
+  Stamp
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -85,6 +86,7 @@ import BiomedicalBlockchainPanel from "./BiomedicalBlockchainPanel";
 import ZeroTrustSdpPanel from "./ZeroTrustSdpPanel";
 import BiomedicalSoarPanel from "./BiomedicalSoarPanel";
 import QkdKeyDistributionPanel from "./QkdKeyDistributionPanel";
+import BiomedicalAiWatermarkPanel from "./BiomedicalAiWatermarkPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -437,7 +439,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes },
           { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network },
           { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren },
-          { id: "qkd", label: "Quantum Key Distribution (QKD)", icon: Atom }
+          { id: "qkd", label: "Quantum Key Distribution (QKD)", icon: Atom },
+          { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -953,6 +956,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 31: QUANTUM KEY DISTRIBUTION (QKD) & POST-QUANTUM MESH */}
       {selectedTab === "qkd" && (
         <QkdKeyDistributionPanel />
+      )}
+
+      {/* TAB 32: BIOMEDICAL AI WATERMARKING & C2PA PROVENANCE */}
+      {selectedTab === "watermark" && (
+        <BiomedicalAiWatermarkPanel />
       )}
 
       {/* 4. MODALS */}
