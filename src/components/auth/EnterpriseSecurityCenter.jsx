@@ -48,7 +48,10 @@ import {
   Route,
   Dna,
   Brain,
-  Boxes
+  Boxes,
+  Siren,
+  Atom,
+  Stamp
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -80,6 +83,10 @@ import ApiGatewaySecurityPanel from "./ApiGatewaySecurityPanel";
 import GenomicDataVaultPanel from "./GenomicDataVaultPanel";
 import ClinicalAiDefensePanel from "./ClinicalAiDefensePanel";
 import BiomedicalBlockchainPanel from "./BiomedicalBlockchainPanel";
+import ZeroTrustSdpPanel from "./ZeroTrustSdpPanel";
+import BiomedicalSoarPanel from "./BiomedicalSoarPanel";
+import QkdKeyDistributionPanel from "./QkdKeyDistributionPanel";
+import BiomedicalAiWatermarkPanel from "./BiomedicalAiWatermarkPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -429,7 +436,11 @@ export default function EnterpriseSecurityCenter() {
           { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route },
           { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna },
           { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain },
-          { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes }
+          { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes },
+          { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network },
+          { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren },
+          { id: "qkd", label: "Quantum Key Distribution (QKD)", icon: Atom },
+          { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -930,6 +941,26 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 28: BIOMEDICAL BLOCKCHAIN AUDIT & CRYPTOGRAPHIC PROVENANCE */}
       {selectedTab === "blockchain" && (
         <BiomedicalBlockchainPanel />
+      )}
+
+      {/* TAB 29: ZERO TRUST SOFTWARE-DEFINED PERIMETER (SDP) */}
+      {selectedTab === "sdp" && (
+        <ZeroTrustSdpPanel />
+      )}
+
+      {/* TAB 30: BIOMEDICAL SOAR & INCIDENT RESPONSE AUTOMATION */}
+      {selectedTab === "biomedsoar" && (
+        <BiomedicalSoarPanel />
+      )}
+
+      {/* TAB 31: QUANTUM KEY DISTRIBUTION (QKD) & POST-QUANTUM MESH */}
+      {selectedTab === "qkd" && (
+        <QkdKeyDistributionPanel />
+      )}
+
+      {/* TAB 32: BIOMEDICAL AI WATERMARKING & C2PA PROVENANCE */}
+      {selectedTab === "watermark" && (
+        <BiomedicalAiWatermarkPanel />
       )}
 
       {/* 4. MODALS */}
