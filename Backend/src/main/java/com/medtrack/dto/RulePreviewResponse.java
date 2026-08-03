@@ -10,7 +10,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Result of previewing or running the generation engine for one rule.
+ * Dry-run result for one rule. {@code wouldCreate} and {@code skippedExisting} count exact
+ * equipment/deadline occurrences; {@code dueDates} is the sorted union across matched equipment.
  */
 @Data
 @Builder

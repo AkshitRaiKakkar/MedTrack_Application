@@ -58,6 +58,7 @@ public class PreventiveMaintenanceService {
 
     private static final Logger log = LoggerFactory.getLogger(PreventiveMaintenanceService.class);
     private static final List<String> SUGGESTION_PRIORITIES = List.of("Critical", "High");
+    private static final int MAX_OCCURRENCES_PER_EQUIPMENT = 500;
 
     private final MaintenancePolicyRuleRepository ruleRepository;
     private final MaintenanceGenerationRunRepository runRepository;
@@ -168,38 +169,29 @@ public class PreventiveMaintenanceService {
         LocalDate start = windowStart != null ? windowStart : LocalDate.now();
         LocalDate end = windowEnd != null ? windowEnd : start.plusDays(rule.getLeadTimeDays());
 
-        List<Equipment> matched = matchEquipment(rule, hospitalId);
-        List<LocalDate> dueDates = computeDueDates(rule, start, end);
-
-        int wouldCreate = 0;
-        int skippedExisting = 0;
-        for (Equipment equipment : matched) {
-            long existing = taskRepository.countByRuleAndEquipmentInWindow(
-                    hospitalId, rule.getId(), equipment.getId(), start, end);
-            if (existing > 0) {
-                skippedExisting++;
-            } else {
-                wouldCreate++;
-            }
-        }
+        validateWindow(start, end);
+        GenerationPlan plan = buildGenerationPlan(rule, hospitalId, start, end);
 
         return RulePreviewResponse.builder()
                 .ruleId(rule.getId())
                 .ruleName(rule.getName())
                 .windowStart(start)
                 .windowEnd(end)
-                .totalDueDates(dueDates.size())
-                .matchedEquipment(matched.size())
-                .wouldCreate(wouldCreate)
-                .skippedExisting(skippedExisting)
-                .dueDates(dueDates)
-                .matchedEquipmentCodes(matched.stream().map(Equipment::getEquipmentCode).toList())
+                .totalDueDates(plan.dueDates().size())
+                .matchedEquipment(plan.matchedEquipment().size())
+                .wouldCreate(plan.occurrences().size())
+                .skippedExisting(plan.skippedExisting())
+                .dueDates(plan.dueDates())
+                .matchedEquipmentCodes(plan.matchedEquipment().stream()
+                        .map(Equipment::getEquipmentCode)
+                        .toList())
                 .build();
     }
 
     /**
-     * Generates tasks for the rule's due dates inside the window. Idempotent per rule/equipment/window:
-     * re-running for the same window does not duplicate tasks.
+     * Generates every missing rule/equipment/deadline occurrence inside the window. Re-running or
+     * overlapping a window does not duplicate tasks because cadence is reconstructed from retained
+     * generated task history.
      */
     @Transactional
     public MaintenanceGenerationRun generateTasks(Long id, LocalDate windowStart, LocalDate windowEnd, Authentication authentication) {
@@ -220,7 +212,9 @@ public class PreventiveMaintenanceService {
     }
 
     private MaintenanceGenerationRun generateTasksForRule(Long id, Long hospitalId, LocalDate windowStart, LocalDate windowEnd) {
-        MaintenancePolicyRule rule = ruleRepository.findByIdAndHospitalId(id, hospitalId)
+        // Manual and scheduled generation share this row lock. It protects both the run ledger and
+        // the generated-task cadence from overlapping transactions for the same rule.
+        MaintenancePolicyRule rule = ruleRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance rule not found or access denied"));
         if (!Boolean.TRUE.equals(rule.getActive())) {
             throw new IllegalArgumentException("Inactive maintenance rules cannot generate tasks");
@@ -237,27 +231,11 @@ public class PreventiveMaintenanceService {
             return prior.get();
         }
 
-        List<Equipment> matched = matchEquipment(rule, hospitalId);
-        List<LocalDate> dueDates = computeDueDates(rule, start, end);
+        GenerationPlan plan = buildGenerationPlan(rule, hospitalId, start, end);
 
         List<MaintenanceTask> createdTasks = new ArrayList<>();
-        int skipped = 0;
-        for (Equipment equipment : matched) {
-            if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
-                continue;
-            }
-            long existing = taskRepository.countByRuleAndEquipmentInWindow(
-                    hospitalId, rule.getId(), equipment.getId(), start, end);
-            if (existing > 0) {
-                skipped++;
-                continue;
-            }
-
-            LocalDate deadline = pickDeadline(dueDates, end);
-            if (deadline == null) {
-                continue;
-            }
-
+        for (PlannedOccurrence occurrence : plan.occurrences()) {
+            Equipment equipment = occurrence.equipment();
             MaintenanceTask task = MaintenanceTask.builder()
                     .taskCode("MNT-" + UUID.randomUUID())
                     .equipmentId(equipment.getEquipmentCode())
@@ -266,7 +244,7 @@ public class PreventiveMaintenanceService {
                     .hospital(equipment.getHospital() != null ? equipment.getHospital().getName() : null)
                     .hospitalId(hospitalId)
                     .maintenanceType(rule.getMaintenanceType())
-                    .deadline(deadline)
+                    .deadline(occurrence.deadline())
                     .description("Automatically generated by rule '" + rule.getName() + "'")
                     .priority(resolveTaskPriority(rule))
                     .status(MaintenanceStatus.SCHEDULED)
@@ -283,7 +261,7 @@ public class PreventiveMaintenanceService {
                 .windowStart(start)
                 .windowEnd(end)
                 .tasksGenerated(createdTasks.size())
-                .skippedExisting(skipped)
+                .skippedExisting(plan.skippedExisting())
                 .detail("Generated for rule '" + rule.getName() + "'")
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -291,15 +269,17 @@ public class PreventiveMaintenanceService {
 
         for (MaintenanceTask task : createdTasks) {
             task.setGenerationRunId(savedRun.getId());
-            taskRepository.save(task);
         }
+        taskRepository.saveAll(createdTasks);
 
+        // This field records the latest successfully evaluated horizon for operators. Cadence is
+        // intentionally anchored to retained task deadlines instead of this mutable run metadata.
         rule.setLastGeneratedAt(end);
         rule.setUpdatedAt(LocalDateTime.now());
         ruleRepository.save(rule);
 
         log.info("Rule '{}' generated {} tasks (skipped {}) for hospital {} window {}..{}",
-                rule.getName(), createdTasks.size(), skipped, hospitalId, start, end);
+                rule.getName(), createdTasks.size(), plan.skippedExisting(), hospitalId, start, end);
         return savedRun;
     }
 
@@ -516,17 +496,99 @@ public class PreventiveMaintenanceService {
         }
     }
 
-    private List<LocalDate> computeDueDates(MaintenancePolicyRule rule, LocalDate start, LocalDate end) {
-        validateWindow(start, end);
+    private GenerationPlan buildGenerationPlan(
+            MaintenancePolicyRule rule,
+            Long hospitalId,
+            LocalDate start,
+            LocalDate end) {
+        List<Equipment> matchedEquipment = matchEquipment(rule, hospitalId).stream()
+                .filter(this::isEligibleForGeneratedMaintenance)
+                .toList();
+
+        Map<Long, LocalDate> latestDeadlineByEquipment = new HashMap<>();
+        for (MaintenanceTaskRepository.GeneratedOccurrence occurrence
+                : taskRepository.findLatestGeneratedDeadlines(hospitalId, rule.getId())) {
+            if (occurrence.getEquipmentRecordId() != null && occurrence.getDeadline() != null) {
+                latestDeadlineByEquipment.merge(
+                        occurrence.getEquipmentRecordId(),
+                        occurrence.getDeadline(),
+                        (left, right) -> left.isAfter(right) ? left : right);
+            }
+        }
+
+        Set<Long> matchedEquipmentIds = matchedEquipment.stream()
+                .map(Equipment::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<OccurrenceKey> existingInWindow = new LinkedHashSet<>();
+        for (MaintenanceTaskRepository.GeneratedOccurrence occurrence
+                : taskRepository.findGeneratedOccurrencesInWindow(
+                        hospitalId, rule.getId(), start, end)) {
+            if (occurrence.getEquipmentRecordId() != null
+                    && occurrence.getDeadline() != null
+                    && matchedEquipmentIds.contains(occurrence.getEquipmentRecordId())) {
+                existingInWindow.add(new OccurrenceKey(
+                        occurrence.getEquipmentRecordId(), occurrence.getDeadline()));
+            }
+        }
+
+        List<PlannedOccurrence> plannedOccurrences = new ArrayList<>();
         Set<LocalDate> dueDates = new LinkedHashSet<>();
-        LocalDate cursor = start;
+        for (Equipment equipment : matchedEquipment) {
+            LocalDate latestDeadline = latestDeadlineByEquipment.get(equipment.getId());
+            for (LocalDate deadline : computeDueDates(rule, start, end, latestDeadline)) {
+                plannedOccurrences.add(new PlannedOccurrence(equipment, deadline));
+                dueDates.add(deadline);
+            }
+        }
+
+        return new GenerationPlan(
+                matchedEquipment,
+                List.copyOf(plannedOccurrences),
+                dueDates.stream().sorted().toList(),
+                existingInWindow.size());
+    }
+
+    private boolean isEligibleForGeneratedMaintenance(Equipment equipment) {
+        return equipment != null
+                && equipment.getId() != null
+                && equipment.getStatus() != EquipmentStatus.RETIRED
+                && equipment.getStatus() != EquipmentStatus.DISPOSED;
+    }
+
+    private List<LocalDate> computeDueDates(
+            MaintenancePolicyRule rule,
+            LocalDate start,
+            LocalDate end,
+            LocalDate latestGeneratedDeadline) {
+        validateWindow(start, end);
+        List<LocalDate> dueDates = new ArrayList<>();
+        LocalDate cursor = latestGeneratedDeadline == null
+                ? start
+                : nextOccurrence(latestGeneratedDeadline, rule);
         int safety = 0;
-        while (!cursor.isAfter(end) && safety < 500) {
+
+        while (cursor.isBefore(start) && safety < MAX_OCCURRENCES_PER_EQUIPMENT) {
+            cursor = nextOccurrence(cursor, rule);
+            safety++;
+        }
+        if (cursor.isBefore(start)) {
+            throw new IllegalArgumentException(
+                    "Generation cadence requires more than "
+                            + MAX_OCCURRENCES_PER_EQUIPMENT
+                            + " occurrences to reach the requested window");
+        }
+        while (!cursor.isAfter(end) && safety < MAX_OCCURRENCES_PER_EQUIPMENT) {
             dueDates.add(cursor);
             cursor = nextOccurrence(cursor, rule);
             safety++;
         }
-        return dueDates.stream().sorted().toList();
+        if (!cursor.isAfter(end)) {
+            throw new IllegalArgumentException(
+                    "Generation window contains more than "
+                            + MAX_OCCURRENCES_PER_EQUIPMENT
+                            + " occurrences for one equipment record");
+        }
+        return List.copyOf(dueDates);
     }
 
     private LocalDate nextOccurrence(LocalDate current, MaintenancePolicyRule rule) {
@@ -544,13 +606,6 @@ public class PreventiveMaintenanceService {
                     .plusMonths(11);
             case CUSTOM -> current.plusDays(rule.getCustomIntervalDays() != null ? rule.getCustomIntervalDays() : 7);
         };
-    }
-
-    private LocalDate pickDeadline(List<LocalDate> dueDates, LocalDate windowEnd) {
-        return dueDates.stream()
-                .filter(date -> !date.isBefore(LocalDate.now()))
-                .min(Comparator.naturalOrder())
-                .orElse(null);
     }
 
     private String resolveTaskPriority(MaintenancePolicyRule rule) {
@@ -615,5 +670,18 @@ public class PreventiveMaintenanceService {
         }
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
+    }
+
+    private record OccurrenceKey(Long equipmentRecordId, LocalDate deadline) {
+    }
+
+    private record PlannedOccurrence(Equipment equipment, LocalDate deadline) {
+    }
+
+    private record GenerationPlan(
+            List<Equipment> matchedEquipment,
+            List<PlannedOccurrence> occurrences,
+            List<LocalDate> dueDates,
+            int skippedExisting) {
     }
 }

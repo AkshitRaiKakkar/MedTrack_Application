@@ -115,7 +115,8 @@ public class MaintenancePolicyRule {
     @Column(name = "active", nullable = false)
     private Boolean active = true;
 
-    // Set when the rule was last run by the generation service; used for idempotent previews.
+    // Latest generation window end successfully evaluated for operator visibility. Recurrence
+    // cadence is reconstructed from retained generated-task deadlines, not from this audit field.
     @Column(name = "last_generated_at")
     private LocalDate lastGeneratedAt;
 

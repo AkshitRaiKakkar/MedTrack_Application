@@ -111,8 +111,10 @@ Fix those, then recompile. The `cannot find symbol` wave will disappear on its o
 `spring.flyway.locations=classpath:db/migration/{vendor}`, with `h2` and `mysql` variants that must
 stay in step.
 
-**Flyway manages exactly two tables: `maintenance_tasks` and `equipment`.** Everything else in the
-schema — including all ~30 security-subsystem tables — is created by `hibernate.ddl-auto=update`.
+**Flyway manages exactly four tables: `maintenance_tasks`, `equipment`,
+`maintenance_policy_rules`, and `maintenance_generation_runs`.** The two policy-automation tables
+are created by the preventive-maintenance migration; everything else in the schema — including all
+~30 security-subsystem tables — is created by `hibernate.ddl-auto=update`.
 
 That split is load-bearing, and getting it wrong is not obvious from the file you are editing.
 Flyway runs *before* Hibernate, so a migration that does

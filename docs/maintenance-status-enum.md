@@ -157,6 +157,11 @@ only the future recurrence is skipped. Equipment archival does not itself hide r
 Maintenance history; Maintenance access queries continue to enforce hospital ownership against
 the archived equipment row and exclude only tasks whose own soft-delete flag is set.
 
+Policy-driven preventive automation is separate from completion-driven recurrence. It creates new
+tasks in `SCHEDULED` and then uses this same lifecycle. Its recurrence cadence is anchored to the
+latest retained generated deadline for each rule/equipment pair, including soft-deleted audit
+history, so daily scheduler execution cannot change a weekly or monthly rule into a daily task.
+
 The ownership rule also applies to Maintenance analytics. Status counts, completed-task SLA
 inputs, average work hours, and critical-pending counts exclude rows whose scalar hospital owner
 does not match the hospital that owns the linked equipment. Critical-pending analytics use the

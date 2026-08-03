@@ -16,8 +16,8 @@ import static com.medtrack.validation.MaintenanceValidationLimits.SHORT_TEXT_MAX
 /**
  * A single run of the preventive-maintenance generation job for one rule.
  *
- * <p>The run records the window that was generated, how many tasks were created, and an
- * idempotency key so re-running the job for the same rule/window cannot create duplicates.</p>
+ * <p>The run records the window that was evaluated, how many exact equipment/deadline occurrences
+ * were created or already present, and an idempotency key for an identical rule/window request.</p>
  */
 @Entity
 @Table(name = "maintenance_generation_runs",

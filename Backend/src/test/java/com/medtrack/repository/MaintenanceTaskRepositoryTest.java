@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.sql.DataSource;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -129,6 +130,51 @@ class MaintenanceTaskRepositoryTest {
         entityManager.flush();
         assertEquals(0, taskRepository.countSchedulableEquipment(
                 equipment.getId(), hospital.getId()));
+    }
+
+    @Test
+    void generatedOccurrenceHistoryIncludesSoftDeletedTasksAndEnforcesOwnership() {
+        Hospital equipmentHospital = persistHospital("Generation History Hospital");
+        Hospital inconsistentHospital = persistHospital("Inconsistent Generation Hospital");
+        Equipment equipment = persistEquipment(equipmentHospital);
+        User technician = persistTechnician("generation-history-tech");
+        LocalDate firstDeadline = LocalDate.now().plusDays(7);
+        LocalDate latestDeadline = LocalDate.now().plusDays(14);
+
+        MaintenanceTask archivedOccurrence = persistTask(
+                "MNT-GENERATED-ARCHIVED", equipment, equipmentHospital, technician);
+        archivedOccurrence.setPolicyRuleId(77L);
+        archivedOccurrence.setDeadline(firstDeadline);
+        archivedOccurrence.setDeleted(true);
+        archivedOccurrence.setDeletedAt(LocalDateTime.now());
+
+        MaintenanceTask latestOccurrence = persistTask(
+                "MNT-GENERATED-LATEST", equipment, equipmentHospital, technician);
+        latestOccurrence.setPolicyRuleId(77L);
+        latestOccurrence.setDeadline(latestDeadline);
+
+        MaintenanceTask inconsistentOccurrence = persistTask(
+                "MNT-GENERATED-INCONSISTENT", equipment, inconsistentHospital, technician);
+        inconsistentOccurrence.setPolicyRuleId(77L);
+        inconsistentOccurrence.setDeadline(LocalDate.now().plusDays(30));
+        entityManager.flush();
+        entityManager.clear();
+
+        List<MaintenanceTaskRepository.GeneratedOccurrence> anchors =
+                taskRepository.findLatestGeneratedDeadlines(equipmentHospital.getId(), 77L);
+        List<MaintenanceTaskRepository.GeneratedOccurrence> inWindow =
+                taskRepository.findGeneratedOccurrencesInWindow(
+                        equipmentHospital.getId(),
+                        77L,
+                        LocalDate.now(),
+                        LocalDate.now().plusDays(20));
+
+        assertEquals(1, anchors.size());
+        assertEquals(equipment.getId(), anchors.get(0).getEquipmentRecordId());
+        assertEquals(latestDeadline, anchors.get(0).getDeadline());
+        assertEquals(2, inWindow.size());
+        assertTrue(inWindow.stream().anyMatch(item -> firstDeadline.equals(item.getDeadline())));
+        assertTrue(inWindow.stream().anyMatch(item -> latestDeadline.equals(item.getDeadline())));
     }
 
     @Test
