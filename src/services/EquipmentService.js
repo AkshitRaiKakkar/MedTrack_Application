@@ -71,6 +71,13 @@ export const getEquipmentLifecycle = async (id) => {
   return response.data;
 };
 
+// Read-only lifecycle timeline (issue #704): purchase, assignments, transfers, maintenance,
+// retirements and system alerts aggregated from existing records into chronological order.
+export const getEquipmentTimeline = async (id) => {
+  const response = await API.get(`/api/equipment/${id}/timeline`);
+  return response.data;
+};
+
 export const createEquipmentLifecycleAction = async (id, data) => {
   const response = await API.post(`/api/equipment/${id}/lifecycle`, data);
   return response.data;

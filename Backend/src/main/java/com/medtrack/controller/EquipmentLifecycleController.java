@@ -5,7 +5,9 @@ import com.medtrack.dto.EquipmentLifecycleActionRequest;
 import com.medtrack.dto.EquipmentLifecycleActionResponse;
 import com.medtrack.dto.EquipmentLifecycleDecisionRequest;
 import com.medtrack.dto.EquipmentLocationResponse;
+import com.medtrack.dto.EquipmentTimelineEntry;
 import com.medtrack.service.EquipmentLifecycleService;
+import com.medtrack.service.EquipmentTimelineService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +28,24 @@ import java.util.List;
 public class EquipmentLifecycleController {
 
     private final EquipmentLifecycleService lifecycleService;
+    private final EquipmentTimelineService timelineService;
+
+    /**
+     * Read-only lifecycle timeline for one asset: purchase, assignments, transfers, maintenance,
+     * retirements and system alerts, aggregated from existing records into chronological order
+     * (issue #704). Accessible to every authenticated role and safe for printable asset records.
+     *
+     * @param id        the equipment id
+     * @param principal the authenticated user's security principal
+     * @return timeline entries, oldest first
+     */
+    @GetMapping("/{id}/timeline")
+    public ResponseEntity<List<EquipmentTimelineEntry>> getLifecycleTimeline(
+            @PathVariable Long id,
+            Principal principal) {
+        validateId(id);
+        return ResponseEntity.ok(timelineService.getTimeline(id, principal.getName()));
+    }
 
     @GetMapping("/{id}/lifecycle")
     public ResponseEntity<List<EquipmentLifecycleActionResponse>> getTimeline(
