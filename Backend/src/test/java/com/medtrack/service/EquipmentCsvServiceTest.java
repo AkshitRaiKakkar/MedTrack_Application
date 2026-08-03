@@ -5,8 +5,10 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.EquipmentImportSummary;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentCategory;
+import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.util.CsvSupport;
@@ -55,6 +57,9 @@ class EquipmentCsvServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
 
     @InjectMocks
     private EquipmentService equipmentService;
@@ -121,9 +126,12 @@ class EquipmentCsvServiceTest {
                         .hospital(hospital)
                         .build()));
 
-        List<String> row = CsvSupport.parseLine(recordsOf(exportAsText()).get(1));
+        List<String> records = recordsOf(exportAsText());
+        List<String> header = CsvSupport.parseLine(records.get(0));
+        List<String> row = CsvSupport.parseLine(records.get(1));
 
-        assertEquals("", row.get(row.size() - 1));
+        int warrantyIndex = header.indexOf("Warranty Expiry");
+        assertEquals("", row.get(warrantyIndex));
     }
 
     @Test

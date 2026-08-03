@@ -14,6 +14,11 @@ export default function AnalyticsDashboard({ onNavigate }) {
     criticalFailingAssetsCount: 0,
     downtimePercentage: 0,
     upcomingWarrantyExpirationsCount: 0,
+    fleetPurchaseCost: 0,
+    fleetBookValue: 0,
+    fleetReplacementCost: 0,
+    bookValueByCategory: {},
+    fullyDepreciatedCount: 0,
   });
 
   useEffect(() => {
@@ -43,6 +48,16 @@ export default function AnalyticsDashboard({ onNavigate }) {
         criticalFailingAssetsCount: 2,
         downtimePercentage: 4.8,
         upcomingWarrantyExpirationsCount: 3,
+        fleetPurchaseCost: 480000.00,
+        fleetBookValue: 342150.50,
+        fleetReplacementCost: 521900.00,
+        bookValueByCategory: {
+          "Imaging": 158000.00,
+          "Respiratory": 64150.50,
+          "Monitoring": 50000.00,
+          "Surgical": 70000.00,
+        },
+        fullyDepreciatedCount: 2,
       });
     } finally {
       setLoading(false);
@@ -63,6 +78,13 @@ export default function AnalyticsDashboard({ onNavigate }) {
     .sort((a, b) => b.value - a.value);
 
   const totalCategorySpend = spendArray.reduce((acc, curr) => acc + curr.value, 0);
+
+  // Convert bookValueByCategory object to sorted array for rendering
+  const bookValueArray = Object.entries(analytics.bookValueByCategory || {})
+    .map(([category, value]) => ({ category, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const totalBookValueByCategory = bookValueArray.reduce((acc, curr) => acc + curr.value, 0);
 
   // SVG Line Chart Coordinate Generator for SLA History
   const slaHistory = [90, 88, 94, 91, 95, analytics.slaComplianceRate];
@@ -167,6 +189,38 @@ export default function AnalyticsDashboard({ onNavigate }) {
 
         </div>
 
+        {/* Fleet Valuation KPI Row (issue #702) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Fleet Book Value</span>
+            <span className="block text-3xl font-black text-emerald-600 mt-3">{formatCurrency(analytics.fleetBookValue || 0)}</span>
+            <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-400">
+              <span>Net of depreciation, today</span>
+            </div>
+            <div className="absolute right-6 bottom-6 text-3xl opacity-20 group-hover:scale-110 transition-transform">📊</div>
+          </div>
+
+          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Replacement Cost</span>
+            <span className="block text-3xl font-black text-slate-900 mt-3">{formatCurrency(analytics.fleetReplacementCost || 0)}</span>
+            <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-400">
+              <span>Projected at 3% annual price inflation</span>
+            </div>
+            <div className="absolute right-6 bottom-6 text-3xl opacity-20 group-hover:scale-110 transition-transform">💹</div>
+          </div>
+
+          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Fully Depreciated Assets</span>
+            <span className={`block text-3xl font-black mt-3 ${analytics.fullyDepreciatedCount > 0 ? 'text-amber-500' : 'text-slate-900'}`}>
+              {analytics.fullyDepreciatedCount || 0}
+            </span>
+            <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-400">
+              <span>Book value written down to zero</span>
+            </div>
+            <div className="absolute right-6 bottom-6 text-3xl opacity-20 group-hover:scale-110 transition-transform">🕰️</div>
+          </div>
+        </div>
+
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           
@@ -202,6 +256,41 @@ export default function AnalyticsDashboard({ onNavigate }) {
             <div className="mt-8 pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
               <span>Reporting Unit: USD</span>
               <span>Based on fully delivered orders</span>
+            </div>
+          </div>
+
+          {/* Book Value by Category Chart (issue #702) */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 lg:p-8 shadow-sm flex flex-col justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Book Value by Category</h3>
+              <p className="text-xs text-slate-400 mb-6">Current fleet valuation after depreciation, per asset category.</p>
+
+              <div className="space-y-5">
+                {bookValueArray.length > 0 ? bookValueArray.map(item => {
+                  const percentage = totalBookValueByCategory > 0 ? Math.round((item.value / totalBookValueByCategory) * 100) : 0;
+                  return (
+                    <div key={item.category}>
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 mb-2">
+                        <span>{item.category}</span>
+                        <span className="text-slate-400 font-medium">{formatCurrency(item.value)} ({percentage}%)</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-700"
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                }) : (
+                  <p className="text-sm text-slate-400 text-center py-6">No purchase costs recorded yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-8 pt-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+              <span>Reporting Unit: USD</span>
+              <span>Straight line / declining balance</span>
             </div>
           </div>
 

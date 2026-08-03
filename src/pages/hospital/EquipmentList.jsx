@@ -104,6 +104,15 @@ const EQUIPMENT_IMAGES = {
 export default function EquipmentList({ onNavigate }) {
   const { user } = useAuth();
 
+  const formatMoney = (val) => {
+    if (val === null || val === undefined || val === "") return "N/A";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    }).format(Number(val));
+  };
+
   const [equipment, setEquipment] = useState([]);
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("All");
@@ -835,6 +844,69 @@ export default function EquipmentList({ onNavigate }) {
                     </p>
                   </div>
                 </div>
+
+                {/* Valuation Section (issue #702) */}
+                {equipmentDetails.purchaseCost !== null && equipmentDetails.purchaseCost !== undefined && (
+                  <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle">
+                    <h3 className="text-lg font-extrabold text-primary m-0 mb-4">Valuation</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Purchase Cost
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {formatMoney(equipmentDetails.purchaseCost)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Useful Life
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.usefulLifeYears ? `${equipmentDetails.usefulLifeYears} years` : "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Depreciation
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {(equipmentDetails.depreciationMethod || "STRAIGHT_LINE").replaceAll("_", " ")}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Book Value
+                        </span>
+                        <p className="text-[15px] text-emerald-600 font-black m-1">
+                          {formatMoney(equipmentDetails.bookValue)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Depreciated To Date
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {formatMoney(equipmentDetails.accumulatedDepreciation)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Replacement Cost
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {formatMoney(equipmentDetails.projectedReplacementCost)}
+                        </p>
+                      </div>
+                    </div>
+                    {equipmentDetails.bookValue !== null && equipmentDetails.bookValue !== undefined
+                      && Number(equipmentDetails.bookValue) === 0 && (
+                      <p className="text-xs text-secondary font-semibold mt-4 mb-0">
+                        This asset is fully depreciated.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* QR Code Section */}
                 <div className="mt-6 mb-6 p-4 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-subtle flex flex-col items-center justify-center gap-3">

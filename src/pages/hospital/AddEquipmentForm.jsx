@@ -10,7 +10,10 @@ export default function AddEquipmentForm({ onNavigate }) {
     status: 'Operational',
     purchaseDate: '',
     description: '',
-    category: 'Imaging'
+    category: 'Imaging',
+    purchaseCost: '',
+    usefulLifeYears: '',
+    depreciationMethod: 'STRAIGHT_LINE'
   });
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +27,9 @@ export default function AddEquipmentForm({ onNavigate }) {
     try {
       const equipmentData = {
         ...formData,
-        deviceCode: `EQ-${Date.now().toString().slice(-4)}`
+        deviceCode: `EQ-${Date.now().toString().slice(-4)}`,
+        purchaseCost: formData.purchaseCost === '' ? null : Number(formData.purchaseCost),
+        usefulLifeYears: formData.usefulLifeYears === '' ? null : Number(formData.usefulLifeYears)
       };
       
       await addEquipment(equipmentData);
@@ -122,6 +127,37 @@ export default function AddEquipmentForm({ onNavigate }) {
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Purchase Date</label>
               <input type="date" name="purchaseDate" value={formData.purchaseDate} onChange={onChange} className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold transition-all" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Purchase Cost ($)</label>
+              <input 
+                type="number" name="purchaseCost" min="0" step="0.01" 
+                value={formData.purchaseCost} onChange={onChange} 
+                className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold placeholder:text-slate-300 transition-all" 
+                placeholder="e.g., 250000.00"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Useful Life (Years)</label>
+              <input 
+                type="number" name="usefulLifeYears" min="1" step="1" 
+                value={formData.usefulLifeYears} onChange={onChange} 
+                className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold placeholder:text-slate-300 transition-all" 
+                placeholder="e.g., 10"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Depreciation</label>
+              <select 
+                name="depreciationMethod" value={formData.depreciationMethod} onChange={onChange}
+                className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold transition-all cursor-pointer"
+              >
+                <option value="STRAIGHT_LINE">Straight Line</option>
+                <option value="DECLINING_BALANCE">Declining Balance</option>
+              </select>
             </div>
           </div>
 
