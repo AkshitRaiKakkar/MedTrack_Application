@@ -4,6 +4,8 @@ import {
   deleteEquipment,
   getEquipmentById,
   importEquipmentCsv,
+  previewEquipmentImport,
+  getEquipmentImportHistory,
   getEquipmentQrCode,
   getEquipmentLifecycle,
   createEquipmentLifecycleAction,
@@ -11,6 +13,15 @@ import {
   rejectEquipmentLifecycleAction,
   completeEquipmentLifecycleAction,
 } from "../../services/EquipmentService";
+import {
+  IMPORT_HEADERS,
+  IMPORT_COLUMN_GUIDANCE,
+  parseImportFile,
+  rowsToCsv,
+  exportEquipmentCsv,
+  exportEquipmentXlsx,
+  buildImportTemplate,
+} from "../../utils/equipmentImportExport";
 import { useAuth } from "../../context/AuthContext";
 import Pagination from "../../components/common/Pagination";
 import QrScannerModal from "../../components/common/QrScannerModal";
@@ -122,13 +133,18 @@ export default function EquipmentList({ onNavigate }) {
     notes: "",
   });
 
-  // CSV Import States
+  // CSV/Excel Import States
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
+  const [parsedRows, setParsedRows] = useState([]);
+  const [importStep, setImportStep] = useState("select"); // select | preview | done
+  const [importPreview, setImportPreview] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
   const [importError, setImportError] = useState(null);
+  const [importHistory, setImportHistory] = useState([]);
   const [dragActive, setDragActive] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   // QR Code States
   const [qrCode, setQrCode] = useState(null);
@@ -142,17 +158,26 @@ export default function EquipmentList({ onNavigate }) {
     fetchEquipment();
   }, []);
 
-  const downloadCsvTemplate = () => {
-    const headers = "Name,Model,Serial Number,Department,Category,Status,Purchase Date\n";
-    const sampleRow = "MRI Scanner,GE Signa HDxt,SN-9281,Radiology,Imaging,Operational,2025-06-12\n";
-    const blob = new Blob([headers + sampleRow], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", "medtrack_equipment_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const openImportModal = () => {
+    setImportFile(null);
+    setParsedRows([]);
+    setImportStep("select");
+    setImportPreview(null);
+    setImportSummary(null);
+    setImportError(null);
+    setShowImportModal(true);
+    fetchImportHistory();
   };
+
+  const fetchImportHistory = async () => {
+    try {
+      setImportHistory(await getEquipmentImportHistory());
+    } catch (err) {
+      console.error("Failed to load import history", err);
+    }
+  };
+
+  const downloadTemplate = (format) => buildImportTemplate(format);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -164,53 +189,119 @@ export default function EquipmentList({ onNavigate }) {
     }
   };
 
+  const acceptFile = (file) => {
+    const extension = file.name.split(".").pop().toLowerCase();
+    if (["csv", "xlsx", "xls"].includes(extension)) {
+      setImportFile(file);
+      setImportError(null);
+      setImportStep("select");
+      setImportPreview(null);
+      setImportSummary(null);
+      parseImportFile(file).then((result) => {
+        if (result.error) {
+          setImportError(result.error);
+          setParsedRows([]);
+          return;
+        }
+        setParsedRows(result.rows);
+        if (result.unknownHeaders.length > 0) {
+          setImportError(
+            `Ignored unrecognised column(s): ${result.unknownHeaders.join(", ")}. ` +
+              "Make sure the required columns are named correctly (see template)."
+          );
+        } else {
+          setImportError(null);
+        }
+      });
+    } else {
+      setImportError("Please upload a valid .csv or .xlsx file.");
+    }
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.name.endsWith(".csv")) {
-        setImportFile(file);
-        setImportError(null);
-      } else {
-        setImportError("Please upload a valid .csv file.");
-      }
+      acceptFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.name.endsWith(".csv")) {
-        setImportFile(file);
-        setImportError(null);
-      } else {
-        setImportError("Please upload a valid .csv file.");
-      }
+      acceptFile(e.target.files[0]);
+    }
+  };
+
+  // The backend consumes one canonical CSV regardless of the uploaded format,
+  // so the client-side parse normalises .xlsx/.xls/.csv before upload.
+  const buildUploadFile = () => {
+    const originalName = importFile ? importFile.name.replace(/\.(csv|xlsx|xls)$/i, "") : "equipment";
+    return new File([rowsToCsv(parsedRows)], `${originalName}.csv`, {
+      type: "text/csv",
+    });
+  };
+
+  const handlePreviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!importFile) {
+      setImportError("Please select a file first.");
+      return;
+    }
+    if (parsedRows.length === 0) {
+      setImportError("No data rows were found in the file.");
+      return;
+    }
+    setImporting(true);
+    setImportError(null);
+    try {
+      const preview = await previewEquipmentImport(buildUploadFile());
+      setImportPreview(preview);
+      setImportStep("preview");
+    } catch (err) {
+      console.error("Preview failed:", err);
+      setImportError(err.response?.data?.message || "Failed to preview import. Please check template columns.");
+    } finally {
+      setImporting(false);
     }
   };
 
   const handleImportSubmit = async (e) => {
     e.preventDefault();
-    if (!importFile) {
-      setImportError("Please select a CSV file first.");
+    if (!importFile || parsedRows.length === 0) {
+      setImportError("Please select a valid file first.");
       return;
     }
     setImporting(true);
     setImportSummary(null);
     setImportError(null);
     try {
-      const summary = await importEquipmentCsv(importFile);
+      const summary = await importEquipmentCsv(buildUploadFile());
       setImportSummary(summary);
+      setImportStep("done");
       if (summary.successCount > 0) {
         fetchEquipment();
       }
+      fetchImportHistory();
     } catch (err) {
       console.error("Import failed:", err);
       setImportError(err.response?.data?.message || "Failed to process import. Please check template columns.");
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleExport = (format) => {
+    setExportMenuOpen(false);
+    if (filtered.length === 0) {
+      alert("No equipment matches the current filters to export.");
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (format === "xlsx") {
+      exportEquipmentXlsx(filtered, `equipment_inventory_${stamp}.xlsx`);
+    } else {
+      exportEquipmentCsv(filtered, `equipment_inventory_${stamp}.csv`);
     }
   };
 
@@ -487,15 +578,36 @@ export default function EquipmentList({ onNavigate }) {
           </select>
 
           {user?.role === "hospital" && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <div className="relative">
+                <button
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-subtle px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-sm transition-colors flex items-center gap-2"
+                  onClick={() => setExportMenuOpen((open) => !open)}
+                  title="Export the current filtered view"
+                >
+                  📤 Export
+                  <span className="text-xs">{exportMenuOpen ? "▲" : "▼"}</span>
+                </button>
+                {exportMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-44 rounded-xl border border-subtle bg-card shadow-xl z-40 overflow-hidden">
+                    <button
+                      className="w-full text-left px-5 py-3 text-sm font-semibold text-primary hover:bg-hover border-none bg-transparent cursor-pointer flex items-center gap-2"
+                      onClick={() => handleExport("csv")}
+                    >
+                      📄 CSV
+                    </button>
+                    <button
+                      className="w-full text-left px-5 py-3 text-sm font-semibold text-primary hover:bg-hover border-none bg-transparent cursor-pointer flex items-center gap-2"
+                      onClick={() => handleExport("xlsx")}
+                    >
+                      📊 Excel
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-subtle px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-sm transition-colors"
-                onClick={() => {
-                  setImportFile(null);
-                  setImportSummary(null);
-                  setImportError(null);
-                  setShowImportModal(true);
-                }}
+                onClick={openImportModal}
               >
                 📥 Bulk Import
               </button>
@@ -954,10 +1066,10 @@ export default function EquipmentList({ onNavigate }) {
         </div>
       )}
 
-      {/* CSV Import Modal */}
+      {/* Bulk Import Modal */}
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-card rounded-3xl p-8 max-w-2xl w-full shadow-2xl relative border border-subtle">
+          <div className="bg-card rounded-3xl p-8 max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative border border-subtle">
             <button
               onClick={() => setShowImportModal(false)}
               className="absolute top-5 right-5 w-9 h-9 rounded-full bg-hover text-secondary border-none flex items-center justify-center text-xl font-bold cursor-pointer transition-colors hover:bg-subtle"
@@ -965,123 +1077,348 @@ export default function EquipmentList({ onNavigate }) {
               &times;
             </button>
 
-            <div className="flex items-center gap-4 mb-6">
+            <div className="flex items-center gap-4 mb-4">
               <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-2xl">
                 📥
               </div>
               <div>
                 <h2 className="text-2xl font-extrabold text-primary m-0">
-                  Bulk CSV Import
+                  Bulk Import
                 </h2>
                 <p className="text-secondary text-sm mt-1">
-                  Onboard multiple medical assets in a single batch.
+                  Onboard hundreds of medical assets from a CSV or Excel file in one batch.
                 </p>
               </div>
             </div>
 
-            <form onSubmit={handleImportSubmit} className="space-y-6">
-              <div
-                className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-3 transition-colors cursor-pointer ${
-                  dragActive ? "border-blue-600 bg-blue-50/20" : "border-subtle hover:bg-hover"
-                }`}
-                onDragEnter={handleDrag}
-                onDragOver={handleDrag}
-                onDragLeave={handleDrag}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById("csv-file-input").click()}
-              >
-                <input
-                  id="csv-file-input"
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-                <span className="text-4xl">📊</span>
-                {importFile ? (
-                  <div className="text-center">
-                    <p className="text-primary font-bold text-base">{importFile.name}</p>
-                    <p className="text-secondary text-xs mt-1">{(importFile.size / 1024).toFixed(2)} KB</p>
+            {/* Step indicator */}
+            <div className="flex items-center gap-2 mb-6 text-xs font-bold">
+              {["Upload File", "Preview (Dry Run)", "Import Result"].map((label, index) => {
+                const stepNames = ["select", "preview", "done"];
+                const active = stepNames.indexOf(importStep) === index;
+                const reached = stepNames.indexOf(importStep) >= index;
+                return (
+                  <div key={label} className="flex items-center gap-2">
+                    <span
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] ${
+                        reached ? "bg-blue-600 text-white" : "bg-subtle text-secondary"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className={active ? "text-primary" : "text-secondary"}>{label}</span>
+                    {index < 2 && <span className="text-secondary mx-1">→</span>}
                   </div>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-primary font-bold text-sm">Drag and drop your CSV file here, or click to browse</p>
-                    <p className="text-secondary text-xs mt-1">Only .csv files are supported</p>
-                  </div>
-                )}
-              </div>
+                );
+              })}
+            </div>
 
-              <div className="flex justify-between items-center bg-hover p-4 rounded-xl text-sm">
-                <span className="text-secondary font-medium">Need the correct column structure?</span>
-                <button
-                  type="button"
-                  onClick={downloadCsvTemplate}
-                  className="text-blue-600 dark:text-blue-400 font-bold border-none bg-transparent hover:underline cursor-pointer flex items-center gap-1"
+            {importStep === "select" && (
+              <form onSubmit={handlePreviewSubmit} className="space-y-6">
+                <div
+                  className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-3 transition-colors cursor-pointer ${
+                    dragActive ? "border-blue-600 bg-blue-50/20" : "border-subtle hover:bg-hover"
+                  }`}
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById("csv-file-input").click()}
                 >
-                  📥 Download CSV Template
-                </button>
-              </div>
-
-              {importError && (
-                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-semibold">
-                  ⚠️ {importError}
-                </div>
-              )}
-
-              {importSummary && (
-                <div className="border border-subtle rounded-2xl p-5 bg-hover space-y-4 max-h-60 overflow-y-auto">
-                  <h4 className="text-base font-bold text-primary m-0 flex items-center gap-2">
-                    📊 Import Summary
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 p-3 rounded-xl text-center">
-                      <span className="text-emerald-600 dark:text-emerald-400 text-2xl font-extrabold">{importSummary.successCount}</span>
-                      <p className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mt-1 mb-0">Succeeded</p>
+                  <input
+                    id="csv-file-input"
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <span className="text-4xl">📊</span>
+                  {importFile ? (
+                    <div className="text-center">
+                      <p className="text-primary font-bold text-base">{importFile.name}</p>
+                      <p className="text-secondary text-xs mt-1">
+                        {(importFile.size / 1024).toFixed(2)} KB
+                        {parsedRows.length > 0 && ` · ${parsedRows.length} data row(s) parsed`}
+                      </p>
                     </div>
-                    <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-3 rounded-xl text-center">
-                      <span className="text-rose-600 dark:text-rose-400 text-2xl font-extrabold">{importSummary.failureCount}</span>
-                      <p className="text-[11px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold mt-1 mb-0">Failed</p>
-                    </div>
-                  </div>
-
-                  {importSummary.failures && importSummary.failures.length > 0 && (
-                    <div className="pt-2">
-                      <span className="text-xs text-secondary font-bold uppercase tracking-wider">Failed Row Log</span>
-                      <div className="mt-2 space-y-2">
-                        {importSummary.failures.map((f, i) => (
-                          <div key={i} className="text-xs border-b border-subtle pb-2 last:border-none">
-                            <div className="flex justify-between font-bold text-red-600">
-                              <span>Row {f.rowNumber}</span>
-                              <span>{f.reason}</span>
-                            </div>
-                            <code className="block mt-1 text-slate-500 bg-surface p-1 rounded font-mono overflow-x-auto truncate">
-                              {f.rowData}
-                            </code>
-                          </div>
-                        ))}
-                      </div>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-primary font-bold text-sm">
+                        Drag and drop your CSV or Excel file here, or click to browse
+                      </p>
+                      <p className="text-secondary text-xs mt-1">Supported: .csv, .xlsx, .xls</p>
                     </div>
                   )}
                 </div>
-              )}
 
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowImportModal(false)}
-                  className="px-6 py-3 text-secondary font-bold hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={importing || !importFile}
-                  className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors disabled:opacity-50"
-                >
-                  {importing ? "Processing..." : "Start Import"}
-                </button>
+                {/* Column guidance */}
+                <div className="bg-hover p-4 rounded-xl">
+                  <div className="flex flex-wrap justify-between items-center gap-2 text-sm mb-3">
+                    <span className="text-secondary font-medium">Need the correct column structure?</span>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => downloadTemplate("csv")}
+                        className="text-blue-600 dark:text-blue-400 font-bold border-none bg-transparent hover:underline cursor-pointer"
+                      >
+                        📥 CSV Template
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadTemplate("xlsx")}
+                        className="text-blue-600 dark:text-blue-400 font-bold border-none bg-transparent hover:underline cursor-pointer"
+                      >
+                        📥 Excel Template
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+                    {IMPORT_HEADERS.map((header) => (
+                      <p key={header} className="text-xs text-secondary m-0">
+                        <strong className="text-primary">{header}</strong> — {IMPORT_COLUMN_GUIDANCE[header]}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+
+                {importError && (
+                  <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-semibold">
+                    ⚠️ {importError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowImportModal(false)}
+                    className="px-6 py-3 text-secondary font-bold hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={importing || !importFile || parsedRows.length === 0}
+                    className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors disabled:opacity-50"
+                  >
+                    {importing ? "Validating..." : "Preview Import"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {importStep === "preview" && importPreview && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 p-3 rounded-xl text-center">
+                    <span className="text-blue-600 dark:text-blue-400 text-2xl font-extrabold">{importPreview.totalRows}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-blue-600 dark:text-blue-400 font-bold mt-1 mb-0">Total Rows</p>
+                  </div>
+                  <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 p-3 rounded-xl text-center">
+                    <span className="text-emerald-600 dark:text-emerald-400 text-2xl font-extrabold">{importPreview.validCount}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mt-1 mb-0">Will Import</p>
+                  </div>
+                  <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-3 rounded-xl text-center">
+                    <span className="text-rose-600 dark:text-rose-400 text-2xl font-extrabold">{importPreview.failureCount}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold mt-1 mb-0">Has Errors</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-subtle overflow-hidden">
+                  <div className="px-4 py-3 bg-hover border-b border-subtle flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-primary m-0">
+                      ✅ Rows that will be imported ({importPreview.validRows.length})
+                    </h4>
+                    <span className="text-[11px] text-secondary font-semibold">
+                      Nothing is saved until you confirm
+                    </span>
+                  </div>
+                  {importPreview.validRows.length === 0 ? (
+                    <p className="text-sm text-secondary p-4 m-0">
+                      No valid rows found. Fix the errors below or use a different file.
+                    </p>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-surface text-secondary text-[11px] uppercase tracking-wider">
+                          <tr>
+                            <th className="text-left px-4 py-2">Row</th>
+                            {["Equipment Code", "Name", "Model", "Department", "Category", "Status"].map((col) => (
+                              <th key={col} className="text-left px-3 py-2">{col}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importPreview.validRows.map((row) => (
+                            <tr key={row.rowNumber} className="border-t border-subtle">
+                              <td className="px-4 py-2 text-secondary">{row.rowNumber}</td>
+                              <td className="px-3 py-2 font-mono text-xs">{row.data["Equipment Code"] || "auto"}</td>
+                              <td className="px-3 py-2 font-semibold text-primary">{row.data.Name}</td>
+                              <td className="px-3 py-2 text-secondary">{row.data.Model}</td>
+                              <td className="px-3 py-2 text-secondary">{row.data.Department}</td>
+                              <td className="px-3 py-2 text-secondary">{row.data.Category}</td>
+                              <td className="px-3 py-2">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                                  {row.data.Status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {importPreview.failures.length > 0 && (
+                  <div className="rounded-xl border border-rose-200 dark:border-rose-900 overflow-hidden">
+                    <div className="px-4 py-3 bg-rose-50 dark:bg-rose-950/20 border-b border-rose-200 dark:border-rose-900 flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400 m-0">
+                        ⚠️ Rows with errors ({importPreview.failures.length})
+                      </h4>
+                      <span className="text-[11px] text-rose-500 font-semibold">
+                        These rows will be skipped
+                      </span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {importPreview.failures.map((f, i) => (
+                        <div key={i} className="px-4 py-2.5 text-xs border-t border-rose-100 dark:border-rose-900/40 first:border-t-0">
+                          <div className="flex justify-between gap-3 font-bold text-rose-600 dark:text-rose-400">
+                            <span>Row {f.rowNumber}</span>
+                            <span className="text-right">{f.reason}</span>
+                          </div>
+                          {f.rowData && (
+                            <code className="block mt-1 text-slate-500 bg-surface p-1 rounded font-mono overflow-x-auto truncate">
+                              {f.rowData}
+                            </code>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setImportStep("select")}
+                    className="px-6 py-3 text-secondary font-bold hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImportSubmit}
+                    disabled={importing || importPreview.validCount === 0}
+                    className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors disabled:opacity-50"
+                  >
+                    {importing ? "Importing..." : `Confirm & Import ${importPreview.validCount} row(s)`}
+                  </button>
+                </div>
               </div>
-            </form>
+            )}
+
+            {importStep === "done" && importSummary && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 p-3 rounded-xl text-center">
+                    <span className="text-emerald-600 dark:text-emerald-400 text-2xl font-extrabold">{importSummary.successCount}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mt-1 mb-0">Imported</p>
+                  </div>
+                  <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-3 rounded-xl text-center">
+                    <span className="text-rose-600 dark:text-rose-400 text-2xl font-extrabold">{importSummary.failureCount}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold mt-1 mb-0">Skipped</p>
+                  </div>
+                </div>
+
+                {importSummary.failures && importSummary.failures.length > 0 && (
+                  <div className="rounded-xl border border-rose-200 dark:border-rose-900 overflow-hidden">
+                    <div className="px-4 py-3 bg-rose-50 dark:bg-rose-950/20 border-b border-rose-200 dark:border-rose-900">
+                      <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400 m-0">
+                        ⚠️ Skipped rows ({importSummary.failures.length})
+                      </h4>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {importSummary.failures.map((f, i) => (
+                        <div key={i} className="px-4 py-2.5 text-xs border-t border-rose-100 dark:border-rose-900/40 first:border-t-0">
+                          <div className="flex justify-between gap-3 font-bold text-rose-600 dark:text-rose-400">
+                            <span>Row {f.rowNumber}</span>
+                            <span className="text-right">{f.reason}</span>
+                          </div>
+                          {f.rowData && (
+                            <code className="block mt-1 text-slate-500 bg-surface p-1 rounded font-mono overflow-x-auto truncate">
+                              {f.rowData}
+                            </code>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportFile(null);
+                      setParsedRows([]);
+                      setImportPreview(null);
+                      setImportSummary(null);
+                      setImportError(null);
+                      setImportStep("select");
+                    }}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors"
+                  >
+                    📥 Import Another File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowImportModal(false)}
+                    className="px-6 py-3 text-secondary font-bold hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {importStep === "select" && importHistory.length > 0 && (
+              <div className="mt-8 rounded-xl border border-subtle overflow-hidden">
+                <div className="px-4 py-3 bg-hover border-b border-subtle">
+                  <h4 className="text-sm font-bold text-primary m-0">
+                    🕓 Recent Import Batches
+                  </h4>
+                  <p className="text-[11px] text-secondary mt-0.5 mb-0">
+                    Every import is audit-logged (actor, file, row counts, failures).
+                  </p>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-surface text-secondary text-[11px] uppercase tracking-wider">
+                      <tr>
+                        <th className="text-left px-4 py-2">Date</th>
+                        <th className="text-left px-3 py-2">File</th>
+                        <th className="text-left px-3 py-2">By</th>
+                        <th className="text-left px-3 py-2">Imported</th>
+                        <th className="text-left px-3 py-2">Skipped</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importHistory.map((entry) => (
+                        <tr key={entry.id} className="border-t border-subtle">
+                          <td className="px-4 py-2 text-secondary text-xs">
+                            {entry.importedAt?.replace("T", " ").slice(0, 16)}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs">{entry.filename}</td>
+                          <td className="px-3 py-2 text-secondary text-xs">{entry.actor}</td>
+                          <td className="px-3 py-2 text-emerald-600 font-bold text-xs">{entry.successCount}</td>
+                          <td className="px-3 py-2 text-rose-600 font-bold text-xs">{entry.failureCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

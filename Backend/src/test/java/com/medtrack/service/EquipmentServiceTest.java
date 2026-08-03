@@ -4,10 +4,13 @@ package com.medtrack.service;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.dto.EquipmentImportPreviewResponse;
 import com.medtrack.dto.EquipmentImportSummary;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +42,9 @@ public class EquipmentServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
 
     @InjectMocks
     private EquipmentService equipmentService;
@@ -290,6 +296,91 @@ public class EquipmentServiceTest {
         assertThrows(IllegalArgumentException.class, () ->
                 equipmentService.importEquipmentFromCsv(file, username)
         );
+    }
+
+    @Test
+    void importEquipmentFromCsv_WritesAuditLogEntry() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+
+        String csvContent = "Name,Model,Serial Number,Department,Category,Status,Purchase Date\n" +
+                "Ventilator,V-200,SN-9988,ICU,Respiratory,Operational,2026-03-15\n" +
+                ",Model A,SN-1,Radiology,Imaging,Operational,2026-01-01\n";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "equipment.csv", "text/csv", csvContent.getBytes());
+
+        EquipmentImportSummary summary = equipmentService.importEquipmentFromCsv(file, username);
+
+        assertEquals(1, summary.getSuccessCount());
+        assertEquals(1, summary.getFailureCount());
+
+        ArgumentCaptor<EquipmentImportAuditLog> logCaptor = ArgumentCaptor.forClass(EquipmentImportAuditLog.class);
+        verify(equipmentImportAuditLogRepository).save(logCaptor.capture());
+        EquipmentImportAuditLog log = logCaptor.getValue();
+        assertEquals(mockHospital.getId(), log.getHospitalId());
+        assertEquals(username, log.getActor());
+        assertEquals("equipment.csv", log.getFilename());
+        assertEquals(2, log.getTotalRows());
+        assertEquals(1, log.getSuccessCount());
+        assertEquals(1, log.getFailureCount());
+        assertTrue(log.getFailures().contains("rowNumber"));
+        assertTrue(log.getFailures().contains("Asset Name is required"));
+    }
+
+    @Test
+    void previewEquipmentImport_ReturnsValidRowsAndFailures_WithoutSaving() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+
+        String csvContent = "Name,Model,Serial Number,Department,Category,Status,Purchase Date\n" +
+                "Ventilator,V-200,SN-9988,ICU,Respiratory,Operational,2026-03-15\n" +
+                ",Model A,SN-1,Radiology,Imaging,Operational,2026-01-01\n";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "equipment.csv", "text/csv", csvContent.getBytes());
+
+        EquipmentImportPreviewResponse preview =
+                equipmentService.previewEquipmentImport(file, username);
+
+        assertNotNull(preview);
+        assertEquals(2, preview.getTotalRows());
+        assertEquals(1, preview.getValidCount());
+        assertEquals(1, preview.getFailureCount());
+        assertEquals(1, preview.getValidRows().size());
+        assertEquals("Ventilator", preview.getValidRows().get(0).getData().get("Name"));
+        assertEquals("ICU", preview.getValidRows().get(0).getData().get("Department"));
+        assertEquals(3, preview.getFailures().get(0).getRowNumber());
+        assertTrue(preview.getFailures().get(0).getReason().contains("Asset Name is required"));
+
+        // A dry run must never touch the database: no saves, no audit entry.
+        verify(equipmentRepository, never()).saveAll(anyList());
+        verify(equipmentRepository, never()).save(any(Equipment.class));
+        verify(equipmentImportAuditLogRepository, never()).save(any());
+    }
+
+    @Test
+    void previewEquipmentImport_ValidRowsCarryRowNumbers() {
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+
+        String csvContent = "Name,Model,Serial Number,Department,Category,Status,Purchase Date\n" +
+                "Ventilator,V-200,SN-9988,ICU,Respiratory,Operational,2026-03-15\n" +
+                "Ultrasound,U-500,SN-7766,Cardiology,Imaging,Maintenance,2025-11-20\n";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "equipment.csv", "text/csv", csvContent.getBytes());
+
+        EquipmentImportPreviewResponse preview =
+                equipmentService.previewEquipmentImport(file, username);
+
+        assertEquals(2, preview.getValidRows().size());
+        assertEquals(2, preview.getValidRows().get(0).getRowNumber());
+        assertEquals(3, preview.getValidRows().get(1).getRowNumber());
+        assertEquals("RESPIRATORY", preview.getValidRows().get(0).getData().get("Category"));
+        assertEquals("IMAGING", preview.getValidRows().get(1).getData().get("Category"));
+        assertEquals("Operational", preview.getValidRows().get(0).getData().get("Status"));
+        assertEquals("Maintenance", preview.getValidRows().get(1).getData().get("Status"));
     }
 
     @Test

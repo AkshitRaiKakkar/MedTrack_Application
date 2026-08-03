@@ -36,6 +36,24 @@ export const importEquipmentCsv = async (file) => {
   return response.data;
 };
 
+// Dry-run preview: validate a bulk import without committing anything
+export const previewEquipmentImport = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await API.post("/api/equipment/import/preview", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return response.data;
+};
+
+// Recent bulk import batches for the authenticated hospital (audit trail)
+export const getEquipmentImportHistory = async () => {
+  const response = await API.get("/api/equipment/imports/audit");
+  return response.data;
+};
+
 // Fetch QR Code for a specific equipment by ID
 export const getEquipmentQrCode = async (id) => {
   const response = await API.get(`/api/equipment/${id}/qr-code`);

@@ -3,14 +3,17 @@ package com.medtrack.service;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.EquipmentDashboardResponse;
+import com.medtrack.dto.EquipmentImportPreviewResponse;
 import com.medtrack.dto.EquipmentImportSummary;
 import com.medtrack.dto.EquipmentStatisticsResponse;
 import com.medtrack.dto.LowStockSummaryResponse;
 import com.medtrack.dto.StockAdjustmentRequest;
 import com.medtrack.dto.WarrantySummaryResponse;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.specifications.EquipmentSpecifications;
@@ -59,6 +62,7 @@ public class EquipmentService {
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
@@ -763,6 +767,10 @@ public class EquipmentService {
     /**
      * Imports multiple equipment items from a CSV upload.
      * Performs row-by-row validation and commits all valid rows in a batch transaction.
+     *
+     * <p>Every batch is recorded in {@code equipment_import_audit_logs} - who imported, from which
+     * file, and how many rows succeeded or failed - so an import can always be traced back to its
+     * actor and contents.</p>
      */
     @Transactional
     public EquipmentImportSummary importEquipmentFromCsv(MultipartFile file, String username) {
@@ -771,9 +779,93 @@ public class EquipmentService {
         }
 
         Hospital hospital = getHospitalForUser(username);
+        ParsedImport parsed = parseAndValidateImport(file, hospital);
 
+        if (!parsed.equipmentToSave.isEmpty()) {
+            equipmentRepository.saveAll(parsed.equipmentToSave);
+        }
+
+        int totalRows = parsed.successCount + parsed.failureCount;
+        equipmentImportAuditLogRepository.save(EquipmentImportAuditLog.builder()
+                .hospitalId(hospital.getId())
+                .actor(username)
+                .filename(file.getOriginalFilename() != null ? file.getOriginalFilename() : "equipment.csv")
+                .totalRows(totalRows)
+                .successCount(parsed.successCount)
+                .failureCount(parsed.failureCount)
+                .failures(failuresToJson(parsed.failures))
+                .importedAt(LocalDateTime.now())
+                .build());
+
+        logger.info("Equipment bulk import | User: {} | File: {} | Total: {} | Success: {} | Failed: {}",
+                username,
+                file.getOriginalFilename(),
+                totalRows,
+                parsed.successCount,
+                parsed.failureCount);
+
+        return EquipmentImportSummary.builder()
+                .successCount(parsed.successCount)
+                .failureCount(parsed.failureCount)
+                .failures(parsed.failures)
+                .build();
+    }
+
+    /**
+     * Dry-runs a bulk import: parses and validates every row exactly as
+     * {@link #importEquipmentFromCsv} would, but writes nothing.
+     *
+     * <p>Backs the two-step UI flow ("preview, then confirm") so staff can see which rows will
+     * import and which carry errors before anything is committed. The validation is the same code
+     * path the real import uses, so the preview cannot diverge from the outcome.</p>
+     *
+     * @param file     the CSV file to validate
+     * @param username authenticated user's username
+     * @return the rows that would be imported plus per-row failures
+     */
+    public EquipmentImportPreviewResponse previewEquipmentImport(MultipartFile file, String username) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("CSV file is empty or missing");
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+        ParsedImport parsed = parseAndValidateImport(file, hospital);
+
+        return EquipmentImportPreviewResponse.builder()
+                .totalRows(parsed.successCount + parsed.failureCount)
+                .validCount(parsed.successCount)
+                .failureCount(parsed.failureCount)
+                .validRows(parsed.validRows)
+                .failures(parsed.failures)
+                .build();
+    }
+
+    /**
+     * Recent import batches for the caller's hospital, newest first.
+     *
+     * <p>The audit trail itself is append-only; this surfaces the latest batches so the UI can
+     * show what was uploaded and when.</p>
+     *
+     * @param username authenticated user's username
+     * @return up to the 20 most recent import audit entries
+     */
+    public List<EquipmentImportAuditLog> getImportAuditLogs(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentImportAuditLogRepository
+                .findTop20ByHospitalIdOrderByImportedAtDesc(hospital.getId());
+    }
+
+    /**
+     * Shared parse-and-validate pass used by both the real import and the dry-run preview.
+     *
+     * <p>Returns everything the two callers need - the entities to persist, per-row failures, and
+     * a human-readable preview of the valid rows - so the validation rules cannot drift between
+     * the preview and the commit.</p>
+     */
+    private ParsedImport parseAndValidateImport(MultipartFile file, Hospital hospital) {
         List<Equipment> equipmentToSave = new ArrayList<>();
         List<EquipmentImportSummary.RowFailure> failures = new ArrayList<>();
+        List<EquipmentImportPreviewResponse.PreviewRow> validRows = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
         // Serial numbers already claimed by an earlier row in this same file, so a
@@ -1034,11 +1126,10 @@ public class EquipmentService {
                 }
 
                 equipmentToSave.add(equipment);
+                validRows.add(new EquipmentImportPreviewResponse.PreviewRow(
+                        rowNum, toPreviewRowData(equipment, name, model, serialNumber,
+                        department, equipmentCategory, status, purchaseDate, warrantyExpiry)));
                 successCount++;
-            }
-
-            if (!equipmentToSave.isEmpty()) {
-                equipmentRepository.saveAll(equipmentToSave);
             }
 
         } catch (java.io.IOException e) {
@@ -1049,11 +1140,93 @@ public class EquipmentService {
             throw new RuntimeException("Error reading CSV file", e);
         }
 
-        return EquipmentImportSummary.builder()
-                .successCount(successCount)
-                .failureCount(failureCount)
-                .failures(failures)
-                .build();
+        return new ParsedImport(equipmentToSave, failures, validRows, successCount, failureCount);
+    }
+
+    /**
+     * Human-readable form of one validated row, keyed by the canonical CSV header, for the
+     * dry-run preview table.
+     */
+    private Map<String, String> toPreviewRowData(
+            Equipment equipment,
+            String name,
+            String model,
+            String serialNumber,
+            String department,
+            EquipmentCategory equipmentCategory,
+            String status,
+            LocalDate purchaseDate,
+            LocalDate warrantyExpiry) {
+
+        Map<String, String> data = new LinkedHashMap<>();
+        data.put("Equipment Code", equipment.getEquipmentCode());
+        data.put("Name", name);
+        data.put("Model", model);
+        data.put("Serial Number", serialNumber);
+        data.put("Department", department);
+        data.put("Category", equipmentCategory.name());
+        data.put("Status", status);
+        data.put("Purchase Date", purchaseDate != null ? purchaseDate.toString() : "");
+        data.put("Warranty Expiry", warrantyExpiry != null ? warrantyExpiry.toString() : "");
+        return data;
+    }
+
+    /**
+     * Serialises the per-row failures as a JSON array string for the audit log. Hand-rolled
+     * instead of a full ObjectMapper so the audit trail has no Jackson dependency.
+     */
+    private String failuresToJson(List<EquipmentImportSummary.RowFailure> failures) {
+        if (failures == null || failures.isEmpty()) {
+            return null;
+        }
+        StringBuilder json = new StringBuilder("[");
+        for (int index = 0; index < failures.size(); index++) {
+            EquipmentImportSummary.RowFailure failure = failures.get(index);
+            if (index > 0) {
+                json.append(',');
+            }
+            json.append('{')
+                    .append("\"rowNumber\":").append(failure.getRowNumber())
+                    .append(",\"reason\":\"").append(escapeJson(failure.getReason())).append('"')
+                    .append(",\"rowData\":\"").append(escapeJson(failure.getRowData())).append('"')
+                    .append('}');
+        }
+        return json.append(']').toString();
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+    }
+
+    /**
+     * Output of the shared parse-and-validate pass: what the import would persist, what it would
+     * reject, and a preview of the valid rows for the dry-run screen.
+     */
+    private static class ParsedImport {
+        final List<Equipment> equipmentToSave;
+        final List<EquipmentImportSummary.RowFailure> failures;
+        final List<EquipmentImportPreviewResponse.PreviewRow> validRows;
+        final int successCount;
+        final int failureCount;
+
+        ParsedImport(
+                List<Equipment> equipmentToSave,
+                List<EquipmentImportSummary.RowFailure> failures,
+                List<EquipmentImportPreviewResponse.PreviewRow> validRows,
+                int successCount,
+                int failureCount) {
+            this.equipmentToSave = equipmentToSave;
+            this.failures = failures;
+            this.validRows = validRows;
+            this.successCount = successCount;
+            this.failureCount = failureCount;
+        }
     }
 
     /**

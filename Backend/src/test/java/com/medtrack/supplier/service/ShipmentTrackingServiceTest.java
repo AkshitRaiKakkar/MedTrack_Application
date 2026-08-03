@@ -149,7 +149,7 @@ public class ShipmentTrackingServiceTest {
         when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
         when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request, authentication));
         verify(shipmentTrackingRepository, never()).save(any());
     }
 
@@ -252,7 +252,7 @@ public class ShipmentTrackingServiceTest {
 
         when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
 
-        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request));
+        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request, authentication));
         verify(shipmentTrackingRepository, never()).save(any());
     }
 

@@ -265,6 +265,37 @@ public class EquipmentController {
     }
 
     /**
+     * Dry-runs an equipment import: validates every row of the uploaded CSV without writing
+     * anything, so the UI can show what would be imported and which rows carry errors before
+     * the user confirms. Accessible only to users with the HOSPITAL role.
+     *
+     * @param file the CSV file to preview
+     * @param principal the authenticated user's security principal
+     * @return the rows that would be imported plus per-row failures
+     */
+    @PostMapping("/import/preview")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<com.medtrack.dto.EquipmentImportPreviewResponse> previewImport(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            Principal principal) {
+        return ResponseEntity.ok(equipmentService.previewEquipmentImport(file, principal.getName()));
+    }
+
+    /**
+     * Recent bulk import batches for the authenticated hospital, newest first.
+     * Accessible only to users with the HOSPITAL role.
+     *
+     * @param principal the authenticated user's security principal
+     * @return the most recent import audit entries
+     */
+    @GetMapping("/imports/audit")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<List<com.medtrack.model.EquipmentImportAuditLog>> getImportAuditLogs(
+            Principal principal) {
+        return ResponseEntity.ok(equipmentService.getImportAuditLogs(principal.getName()));
+    }
+
+    /**
      * Generates a QR Code for a specific equipment record.
      * Accessible to any authenticated user.
      *
