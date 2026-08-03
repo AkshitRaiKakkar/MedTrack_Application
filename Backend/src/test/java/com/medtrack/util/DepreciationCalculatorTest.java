@@ -1,4 +1,4 @@
-package com.medtrack.util;
+git push -u origin feature/equipment-depreciation-valuationpackage com.medtrack.util;
 
 import com.medtrack.model.DepreciationMethod;
 import org.junit.jupiter.api.Test;

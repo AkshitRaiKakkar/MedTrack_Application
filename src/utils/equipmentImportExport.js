@@ -24,6 +24,11 @@ export const IMPORT_HEADERS = [
   "Purchase Cost",
   "Useful Life (Years)",
   "Depreciation Method",
+  "Warranty Provider",
+  "Warranty Contract Number",
+  "Warranty Start Date",
+  "Warranty Coverage Type",
+  "Warranty Terms",
 ];
 
 export const IMPORT_COLUMN_GUIDANCE = {
@@ -35,10 +40,15 @@ export const IMPORT_COLUMN_GUIDANCE = {
   Category: "Optional. IMAGING, SURGICAL, MONITORING, LABORATORY, RESPIRATORY or OTHER",
   Status: "Optional. Operational, Maintenance or Retired (default: Operational)",
   "Purchase Date": "Optional. YYYY-MM-DD, e.g. 2025-06-12",
-  "Warranty Expiry": "Optional. YYYY-MM-DD, e.g. 2027-06-12",
+  "Warranty Expiry": "Optional. Coverage end date, YYYY-MM-DD, e.g. 2027-06-12",
   "Purchase Cost": "Optional. Non-negative number, e.g. 250000.00",
   "Useful Life (Years)": "Optional. Positive whole years, e.g. 10",
   "Depreciation Method": "Optional. STRAIGHT_LINE or DECLINING_BALANCE (default: STRAIGHT_LINE)",
+  "Warranty Provider": "Optional. Vendor backing the coverage, e.g. Siemens Healthineers",
+  "Warranty Contract Number": "Optional. Contract or registration number",
+  "Warranty Start Date": "Optional. Coverage start, YYYY-MM-DD",
+  "Warranty Coverage Type": "Optional. FULL_PARTS_AND_LABOR, PARTS_ONLY or LABOR_ONLY",
+  "Warranty Terms": "Optional. Exclusions and service notes",
 };
 
 const canonicalKey = (header) =>
@@ -59,6 +69,11 @@ const canonicalHeader = (header) => {
   if (key === "purchasecost" || key === "cost" || key === "price") return "Purchase Cost";
   if (key === "usefullife" || key === "usefullifeyears" || key === "life") return "Useful Life (Years)";
   if (key === "depreciationmethod" || key === "method") return "Depreciation Method";
+  if (key === "warrantyprovider" || key === "provider") return "Warranty Provider";
+  if (key === "warrantycontractnumber" || key === "contractnumber") return "Warranty Contract Number";
+  if (key === "warrantystartdate" || key === "coverage start") return "Warranty Start Date";
+  if (key === "warrantycoveragetype" || key === "coveragetype") return "Warranty Coverage Type";
+  if (key === "warrantyterms" || key === "terms") return "Warranty Terms";
   return null;
 };
 
@@ -252,6 +267,11 @@ const equipmentToRow = (item) => ({
   "Purchase Cost": item.purchaseCost !== undefined && item.purchaseCost !== null ? String(item.purchaseCost) : "",
   "Useful Life (Years)": item.usefulLifeYears !== undefined && item.usefulLifeYears !== null ? String(item.usefulLifeYears) : "",
   "Depreciation Method": item.depreciationMethod || "",
+  "Warranty Provider": item.warrantyProvider || "",
+  "Warranty Contract Number": item.warrantyContractNumber || "",
+  "Warranty Start Date": item.warrantyStartDate || "",
+  "Warranty Coverage Type": item.warrantyCoverageType || "",
+  "Warranty Terms": item.warrantyTerms || "",
 });
 
 /**
@@ -299,6 +319,11 @@ export const buildImportTemplate = (format) => {
     "Purchase Cost": "250000.00",
     "Useful Life (Years)": "10",
     "Depreciation Method": "STRAIGHT_LINE",
+    "Warranty Provider": "GE Healthcare",
+    "Warranty Contract Number": "WC-2027-001",
+    "Warranty Start Date": "2025-06-12",
+    "Warranty Coverage Type": "FULL_PARTS_AND_LABOR",
+    "Warranty Terms": "Covers parts and labor for 2 years; travel excluded.",
   };
 
   if (format === "xlsx") {
