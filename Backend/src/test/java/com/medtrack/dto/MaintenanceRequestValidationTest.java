@@ -75,4 +75,50 @@ class MaintenanceRequestValidationTest {
                         && violation.getMessage().equals(
                         "Assigned technician must not exceed 255 characters")));
     }
+
+    @Test
+    void scheduleAmendmentRequiresReasonAndRejectsPastDeadline() {
+        MaintenanceScheduleAmendmentRequest request =
+                MaintenanceScheduleAmendmentRequest.builder()
+                        .deadline(LocalDate.now().minusDays(1))
+                        .reason(" ")
+                        .build();
+
+        var violations = validator.validate(request);
+
+        assertEquals(2, violations.size());
+        assertTrue(violations.stream().anyMatch(violation ->
+                violation.getPropertyPath().toString().equals("deadline")
+                        && violation.getMessage().equals(
+                        "Amended deadline cannot be in the past")));
+        assertTrue(violations.stream().anyMatch(violation ->
+                violation.getPropertyPath().toString().equals("reason")
+                        && violation.getMessage().equals("Amendment reason is required")));
+    }
+
+    @Test
+    void scheduleAmendmentEnforcesEveryPersistenceBound() {
+        MaintenanceScheduleAmendmentRequest request =
+                MaintenanceScheduleAmendmentRequest.builder()
+                        .maintenanceType("M".repeat(256))
+                        .description("D".repeat(256))
+                        .priority("P".repeat(256))
+                        .recurrencePeriodDays(-1)
+                        .reason("R".repeat(1_001))
+                        .build();
+
+        var violations = validator.validate(request);
+
+        assertEquals(5, violations.size());
+        assertTrue(violations.stream().anyMatch(violation ->
+                violation.getPropertyPath().toString().equals("maintenanceType")));
+        assertTrue(violations.stream().anyMatch(violation ->
+                violation.getPropertyPath().toString().equals("description")));
+        assertTrue(violations.stream().anyMatch(violation ->
+                violation.getPropertyPath().toString().equals("priority")));
+        assertTrue(violations.stream().anyMatch(violation ->
+                violation.getPropertyPath().toString().equals("recurrencePeriodDays")));
+        assertTrue(violations.stream().anyMatch(violation ->
+                violation.getPropertyPath().toString().equals("reason")));
+    }
 }

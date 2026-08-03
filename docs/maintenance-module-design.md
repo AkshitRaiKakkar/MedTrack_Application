@@ -738,6 +738,17 @@ Endpoint paths, request and response field names, roles, task lifecycle, and suc
 codes remain unchanged. Focused service and repository coverage verifies cadence, overlapping
 windows, exact reruns, soft-deleted history, and ownership isolation.
 
+### Maintenance activity history
+
+Maintenance task mutations now append immutable `MaintenanceTaskActivity` evidence. Manual,
+recurring, and rule-generated creation; assignment and reassignment; technician status/work-detail
+updates; and archival are recorded with per-task ordering and actor snapshots. The new additive
+`GET /api/maintenance/{id}/history` endpoint returns a filtered, bounded page without changing any
+existing Maintenance API contract. Hospital history access includes archived owned tasks and
+rechecks the linked equipment ownership key; technician access remains restricted to the stable
+assigned user identity. The complete contract and migration behavior are documented in
+`maintenance-activity-history.md`.
+
 ### Recommended future work
 
 - [ ] Decide whether to add a `CANCELLED` status.

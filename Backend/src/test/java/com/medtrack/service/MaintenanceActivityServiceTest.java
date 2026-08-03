@@ -142,8 +142,8 @@ class MaintenanceActivityServiceTest {
 
     @Test
     void technicianHistoryUsesStableAssignmentIdentity() {
-        when(authentication.getAuthorities()).thenReturn(
-                List.of(new SimpleGrantedAuthority("ROLE_TECHNICIAN")));
+        doReturn(List.of(new SimpleGrantedAuthority("ROLE_TECHNICIAN")))
+                .when(authentication).getAuthorities();
         when(authentication.getName()).thenReturn("tech@medtrack.com");
         when(userRepository.findByEmail("tech@medtrack.com")).thenReturn(Optional.of(technician));
         when(taskRepository.findByIdAndAssignedTechnicianId(42L, 2L)).thenReturn(Optional.of(task));
@@ -164,8 +164,8 @@ class MaintenanceActivityServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.getHistory(42L, null, 0, 101, authentication));
 
-        when(authentication.getAuthorities()).thenReturn(
-                List.of(new SimpleGrantedAuthority("ROLE_HOSPITAL")));
+        doReturn(List.of(new SimpleGrantedAuthority("ROLE_HOSPITAL")))
+                .when(authentication).getAuthorities();
         when(authentication.getName()).thenReturn("hospital@medtrack.com");
         hospitalUser.setAccountStatus(AccountStatus.DISABLED);
         when(userRepository.findByEmail("hospital@medtrack.com")).thenReturn(Optional.of(hospitalUser));
@@ -174,8 +174,8 @@ class MaintenanceActivityServiceTest {
     }
 
     private void authorizeHospital() {
-        when(authentication.getAuthorities()).thenReturn(
-                List.of(new SimpleGrantedAuthority("ROLE_HOSPITAL")));
+        doReturn(List.of(new SimpleGrantedAuthority("ROLE_HOSPITAL")))
+                .when(authentication).getAuthorities();
         when(authentication.getName()).thenReturn("hospital@medtrack.com");
         when(userRepository.findByEmail("hospital@medtrack.com")).thenReturn(Optional.of(hospitalUser));
         when(hospitalRepository.findByUserId(1L)).thenReturn(Optional.of(
