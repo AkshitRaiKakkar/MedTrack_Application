@@ -6,9 +6,11 @@ import com.medtrack.dto.EquipmentDashboardResponse;
 import com.medtrack.dto.EquipmentImportPreviewResponse;
 import com.medtrack.dto.EquipmentImportSummary;
 import com.medtrack.dto.EquipmentStatisticsResponse;
+import com.medtrack.dto.EquipmentValuationResponse;
 import com.medtrack.dto.LowStockSummaryResponse;
 import com.medtrack.dto.StockAdjustmentRequest;
 import com.medtrack.dto.WarrantySummaryResponse;
+import com.medtrack.model.DepreciationMethod;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
@@ -41,10 +43,13 @@ import com.medtrack.model.EquipmentCategory;
 import com.medtrack.dto.EquipmentUtilizationResponse;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -75,7 +80,8 @@ public class EquipmentService {
      */
     static final String[] EQUIPMENT_CSV_HEADERS = {
             "Equipment Code", "Name", "Model", "Serial Number", "Department",
-            "Category", "Status", "Purchase Date", "Warranty Expiry"
+            "Category", "Status", "Purchase Date", "Warranty Expiry",
+            "Purchase Cost", "Useful Life (Years)", "Depreciation Method"
     };
 
     private Hospital getHospitalForUser(String username) {
@@ -615,6 +621,91 @@ public class EquipmentService {
     }
 
     /**
+     * Fleet valuation for the analytics dashboard: what the inventory is worth on the books, what
+     * it originally cost, what replacing it would cost today, and per-category / per-asset
+     * breakdowns (issue #702).
+     *
+     * <p>Assets without a purchase cost are excluded from the money totals but still counted in
+     * {@code assetCount}, so finance can see how much of the fleet is still untracked.</p>
+     *
+     * @param username authenticated user's username
+     * @return the valuation summary
+     */
+    public EquipmentValuationResponse getEquipmentValuation(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        List<Equipment> inventory = equipmentRepository.findByHospitalId(hospital.getId());
+
+        BigDecimal totalPurchaseCost = BigDecimal.ZERO;
+        BigDecimal totalBookValue = BigDecimal.ZERO;
+        BigDecimal totalReplacementCost = BigDecimal.ZERO;
+        long assetsWithCost = 0;
+        long fullyDepreciatedCount = 0;
+
+        Map<String, BigDecimal> purchaseCostByCategory = new LinkedHashMap<>();
+        Map<String, BigDecimal> bookValueByCategory = new LinkedHashMap<>();
+        List<EquipmentValuationResponse.AssetValuation> topAssets = new ArrayList<>();
+
+        for (Equipment item : inventory) {
+            BigDecimal cost = item.getPurchaseCost();
+            BigDecimal bookValue = item.getBookValue();
+            BigDecimal replacement = item.getProjectedReplacementCost();
+
+            if (cost != null) {
+                assetsWithCost++;
+                totalPurchaseCost = totalPurchaseCost.add(cost);
+            }
+            if (bookValue != null) {
+                totalBookValue = totalBookValue.add(bookValue);
+                if (bookValue.signum() == 0) {
+                    fullyDepreciatedCount++;
+                }
+            }
+            if (replacement != null) {
+                totalReplacementCost = totalReplacementCost.add(replacement);
+            }
+
+            String category = item.getCategory() != null
+                    ? item.getCategory().name()
+                    : "UNCATEGORISED";
+            if (cost != null) {
+                purchaseCostByCategory.merge(category, cost, BigDecimal::add);
+            }
+            if (bookValue != null) {
+                bookValueByCategory.merge(category, bookValue, BigDecimal::add);
+            }
+
+            if (bookValue != null) {
+                topAssets.add(new EquipmentValuationResponse.AssetValuation(
+                        item.getId(),
+                        item.getName(),
+                        item.getDepartment(),
+                        item.getEquipmentCode(),
+                        cost,
+                        bookValue,
+                        replacement));
+            }
+        }
+
+        // Most valuable assets first, capped at five for the dashboard table.
+        topAssets.sort(Comparator.comparing(EquipmentValuationResponse.AssetValuation::getBookValue)
+                .reversed());
+        List<EquipmentValuationResponse.AssetValuation> topFive =
+                topAssets.size() > 5 ? topAssets.subList(0, 5) : topAssets;
+
+        return EquipmentValuationResponse.builder()
+                .assetCount(inventory.size())
+                .assetsWithCost(assetsWithCost)
+                .fullyDepreciatedCount(fullyDepreciatedCount)
+                .totalPurchaseCost(totalPurchaseCost.setScale(2, RoundingMode.HALF_UP))
+                .totalBookValue(totalBookValue.setScale(2, RoundingMode.HALF_UP))
+                .totalReplacementCost(totalReplacementCost.setScale(2, RoundingMode.HALF_UP))
+                .purchaseCostByCategory(purchaseCostByCategory)
+                .bookValueByCategory(bookValueByCategory)
+                .topAssetsByBookValue(topFive)
+                .build();
+    }
+
+    /**
      * Adds a new equipment record.
      * If no equipmentCode is provided by the caller, auto-generates one
      * using a unique UUID.
@@ -633,6 +724,13 @@ public class EquipmentService {
 
         if (equipment.getMinimumStock() == null) {
             equipment.setMinimumStock(10);
+        }
+
+        // Straight-line depreciation is the documented default. Jackson + Lombok builds the
+        // entity from the request body field by field, so @Builder.Default does not apply on
+        // deserialisation - the default must be applied here.
+        if (equipment.getDepreciationMethod() == null) {
+            equipment.setDepreciationMethod(DepreciationMethod.STRAIGHT_LINE);
         }
 
         if (equipment.getEquipmentCode() != null &&
@@ -716,6 +814,17 @@ public class EquipmentService {
         }
         equipment.setStatus(equipmentDetails.getStatus());
         equipment.setPurchaseDate(equipmentDetails.getPurchaseDate());
+        // Finance fields follow the same "omitted means leave alone" rule as stock levels, so an
+        // update that does not restate them cannot wipe the cost or useful life.
+        if (equipmentDetails.getPurchaseCost() != null) {
+            equipment.setPurchaseCost(equipmentDetails.getPurchaseCost());
+        }
+        if (equipmentDetails.getUsefulLifeYears() != null) {
+            equipment.setUsefulLifeYears(equipmentDetails.getUsefulLifeYears());
+        }
+        if (equipmentDetails.getDepreciationMethod() != null) {
+            equipment.setDepreciationMethod(equipmentDetails.getDepreciationMethod());
+        }
 
         Equipment updatedEquipment = equipmentRepository.save(equipment);
 
@@ -931,6 +1040,12 @@ public class EquipmentService {
                 // dropped the warranty date - the two columns were write-only.
                 String equipmentCode = getFieldValue(fields, headers, "Equipment Code");
                 String warrantyExpiryStr = getFieldValue(fields, headers, "Warranty Expiry");
+                // Depreciation & valuation columns (issue #702). Same write-only risk: the export
+                // wrote them, so the import must read them back or a round trip would silently
+                // drop the finance data.
+                String purchaseCostStr = getFieldValue(fields, headers, "Purchase Cost");
+                String usefulLifeStr = getFieldValue(fields, headers, "Useful Life (Years)");
+                String depreciationMethodStr = getFieldValue(fields, headers, "Depreciation Method");
 
                 if (name == null || name.trim().isEmpty()) {
                     failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Asset Name is required"));
@@ -1028,6 +1143,57 @@ public class EquipmentService {
                     }
                 }
 
+                // Purchase cost: optional, but must be a non-negative number when supplied.
+                BigDecimal purchaseCost = null;
+                if (purchaseCostStr != null && !purchaseCostStr.trim().isEmpty()) {
+                    try {
+                        purchaseCost = new BigDecimal(purchaseCostStr.trim());
+                        if (purchaseCost.signum() < 0) {
+                            throw new NumberFormatException("negative");
+                        }
+                    } catch (NumberFormatException e) {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Purchase Cost. Expected a non-negative number, e.g. 250000.00"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                // Useful life: optional, but must be a whole number of years when supplied.
+                Integer usefulLifeYears = null;
+                if (usefulLifeStr != null && !usefulLifeStr.trim().isEmpty()) {
+                    try {
+                        usefulLifeYears = Integer.parseInt(usefulLifeStr.trim());
+                        if (usefulLifeYears <= 0) {
+                            throw new NumberFormatException("non-positive");
+                        }
+                    } catch (NumberFormatException e) {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Useful Life. Expected a positive whole number of years, e.g. 10"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                // Depreciation method: optional, defaults to straight line.
+                DepreciationMethod depreciationMethod = DepreciationMethod.STRAIGHT_LINE;
+                if (depreciationMethodStr != null && !depreciationMethodStr.trim().isEmpty()) {
+                    String method = depreciationMethodStr.trim();
+                    if (method.equalsIgnoreCase("DECLINING_BALANCE")
+                            || method.equalsIgnoreCase("declining balance")
+                            || method.equalsIgnoreCase("double declining")) {
+                        depreciationMethod = DepreciationMethod.DECLINING_BALANCE;
+                    } else if (method.equalsIgnoreCase("STRAIGHT_LINE")
+                            || method.equalsIgnoreCase("straight line")) {
+                        depreciationMethod = DepreciationMethod.STRAIGHT_LINE;
+                    } else {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Depreciation Method. Allowed: STRAIGHT_LINE, DECLINING_BALANCE"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
                 EquipmentStatus parsedStatus = EquipmentStatus.ACTIVE;
                 if ("Maintenance".equalsIgnoreCase(status) || "UNDER_MAINTENANCE".equalsIgnoreCase(status)) {
                     parsedStatus = EquipmentStatus.UNDER_MAINTENANCE;
@@ -1108,6 +1274,9 @@ public class EquipmentService {
                     equipment.setStatus(parsedStatus);
                     equipment.setPurchaseDate(purchaseDate);
                     equipment.setWarrantyExpiry(warrantyExpiry);
+                    equipment.setPurchaseCost(purchaseCost);
+                    equipment.setUsefulLifeYears(usefulLifeYears);
+                    equipment.setDepreciationMethod(depreciationMethod);
                 } else {
                     equipment = Equipment.builder()
                             .name(name)
@@ -1122,13 +1291,17 @@ public class EquipmentService {
                             .warrantyExpiry(warrantyExpiry)
                             .equipmentCode(trimmedCode != null ? trimmedCode : "EQ-" + UUID.randomUUID())
                             .hospital(hospital)
+                            .purchaseCost(purchaseCost)
+                            .usefulLifeYears(usefulLifeYears)
+                            .depreciationMethod(depreciationMethod)
                             .build();
                 }
 
                 equipmentToSave.add(equipment);
                 validRows.add(new EquipmentImportPreviewResponse.PreviewRow(
                         rowNum, toPreviewRowData(equipment, name, model, serialNumber,
-                        department, equipmentCategory, status, purchaseDate, warrantyExpiry)));
+                        department, equipmentCategory, status, purchaseDate, warrantyExpiry,
+                        purchaseCost, usefulLifeYears, depreciationMethod)));
                 successCount++;
             }
 
@@ -1156,7 +1329,10 @@ public class EquipmentService {
             EquipmentCategory equipmentCategory,
             String status,
             LocalDate purchaseDate,
-            LocalDate warrantyExpiry) {
+            LocalDate warrantyExpiry,
+            BigDecimal purchaseCost,
+            Integer usefulLifeYears,
+            DepreciationMethod depreciationMethod) {
 
         Map<String, String> data = new LinkedHashMap<>();
         data.put("Equipment Code", equipment.getEquipmentCode());
@@ -1168,6 +1344,9 @@ public class EquipmentService {
         data.put("Status", status);
         data.put("Purchase Date", purchaseDate != null ? purchaseDate.toString() : "");
         data.put("Warranty Expiry", warrantyExpiry != null ? warrantyExpiry.toString() : "");
+        data.put("Purchase Cost", purchaseCost != null ? purchaseCost.toString() : "");
+        data.put("Useful Life (Years)", usefulLifeYears != null ? usefulLifeYears.toString() : "");
+        data.put("Depreciation Method", depreciationMethod != null ? depreciationMethod.name() : "");
         return data;
     }
 
@@ -1286,7 +1465,12 @@ public class EquipmentService {
                     equipment.getCategory(),
                     equipment.getStatus(),
                     equipment.getPurchaseDate(),
-                    equipment.getWarrantyExpiry()));
+                    equipment.getWarrantyExpiry(),
+                    // Depreciation & valuation columns, so an export can feed an accounting
+                    // package or round-trip through the import without losing the finance data.
+                    equipment.getPurchaseCost(),
+                    equipment.getUsefulLifeYears(),
+                    equipment.getDepreciationMethod()));
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);

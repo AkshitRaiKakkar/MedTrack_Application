@@ -65,6 +65,38 @@ describe("parseImportFile", () => {
     expect(result.rows).toHaveLength(0);
   });
 
+  it("parses the depreciation and valuation columns", async () => {
+    const financeCsv = `Equipment Code,Name,Model,Serial Number,Department,Category,Status,Purchase Date,Warranty Expiry,Purchase Cost,Useful Life (Years),Depreciation Method
+EQ-001,MRI Scanner,GE Signa,SN-9281,Radiology,IMAGING,Operational,2025-06-12,2027-06-12,250000.00,10,DECLINING_BALANCE
+`;
+    const result = await parseImportFile(makeFile("finance.csv", financeCsv, "text/csv"));
+
+    expect(result.rows[0]["Purchase Cost"]).toBe("250000");
+    expect(result.rows[0]["Useful Life (Years)"]).toBe("10");
+    expect(result.rows[0]["Depreciation Method"]).toBe("DECLINING_BALANCE");
+  });
+
+  it("strips currency decoration from money cells", async () => {
+    const financeCsv = `Name,Purchase Cost,Department
+MRI Scanner,"$250,000.00",Radiology
+`;
+    const result = await parseImportFile(makeFile("money.csv", financeCsv, "text/csv"));
+
+    expect(result.rows[0]["Purchase Cost"]).toBe("250000");
+  });
+
+  it("normalises the finance column names case-insensitively", async () => {
+    const loose = `Name,Cost,Useful Life,Method,Department
+MRI Scanner,"$250,000.00",10,straight line,Radiology
+`;
+    const result = await parseImportFile(makeFile("loose.csv", loose, "text/csv"));
+
+    expect(result.rows[0]["Purchase Cost"]).toBe("250000");
+    expect(result.rows[0]["Useful Life (Years)"]).toBe("10");
+    expect(result.rows[0]["Depreciation Method"]).toBe("straight line");
+    expect(result.unknownHeaders).toHaveLength(0);
+  });
+
   it("parses an Excel workbook", async () => {
     const XLSX = await import("xlsx");
     const worksheet = XLSX.utils.aoa_to_sheet([

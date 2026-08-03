@@ -103,6 +103,26 @@ public class EquipmentController {
         );
     }
 
+    /**
+     * Fleet valuation: total purchase cost, current book value and projected replacement cost,
+     * with per-category and per-asset breakdowns. Backs the finance widgets on the analytics
+     * dashboard. Accessible only to users with the HOSPITAL role.
+     *
+     * @param principal the authenticated user's security principal
+     * @return the valuation summary
+     */
+    @GetMapping("/valuation")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<com.medtrack.dto.EquipmentValuationResponse> getEquipmentValuation(
+            Principal principal) {
+
+        return ResponseEntity.ok(
+                equipmentService.getEquipmentValuation(
+                        principal.getName()
+                )
+        );
+    }
+
     @GetMapping("/dashboard")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<EquipmentDashboardResponse> getDashboard(

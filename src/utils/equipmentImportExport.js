@@ -21,6 +21,9 @@ export const IMPORT_HEADERS = [
   "Status",
   "Purchase Date",
   "Warranty Expiry",
+  "Purchase Cost",
+  "Useful Life (Years)",
+  "Depreciation Method",
 ];
 
 export const IMPORT_COLUMN_GUIDANCE = {
@@ -33,6 +36,9 @@ export const IMPORT_COLUMN_GUIDANCE = {
   Status: "Optional. Operational, Maintenance or Retired (default: Operational)",
   "Purchase Date": "Optional. YYYY-MM-DD, e.g. 2025-06-12",
   "Warranty Expiry": "Optional. YYYY-MM-DD, e.g. 2027-06-12",
+  "Purchase Cost": "Optional. Non-negative number, e.g. 250000.00",
+  "Useful Life (Years)": "Optional. Positive whole years, e.g. 10",
+  "Depreciation Method": "Optional. STRAIGHT_LINE or DECLINING_BALANCE (default: STRAIGHT_LINE)",
 };
 
 const canonicalKey = (header) =>
@@ -50,6 +56,9 @@ const canonicalHeader = (header) => {
   if (key === "warrantyexpiry" || key === "warrantyexpiration" || key === "warranty") {
     return "Warranty Expiry";
   }
+  if (key === "purchasecost" || key === "cost" || key === "price") return "Purchase Cost";
+  if (key === "usefullife" || key === "usefullifeyears" || key === "life") return "Useful Life (Years)";
+  if (key === "depreciationmethod" || key === "method") return "Depreciation Method";
   return null;
 };
 
@@ -127,6 +136,8 @@ export const parseImportFile = (file) => {
           let value = raw[index] !== undefined && raw[index] !== null ? raw[index] : "";
           if (dateColumns.has(canonical)) {
             value = normalizeDateValue(value);
+          } else if (canonical === "Purchase Cost") {
+            value = normalizeMoneyValue(value);
           } else {
             value = String(value).trim();
           }
@@ -143,6 +154,24 @@ export const parseImportFile = (file) => {
       unknownHeaders: [],
       error: "Failed to read the file. Make sure it is a valid CSV or Excel file.",
     }));
+};
+
+/**
+ * Normalises a money cell to a plain decimal string the backend's BigDecimal accepts.
+ *
+ * <p>Excel frequently formats costs as "$250,000.00". SheetJS hands formatted cells back as
+ * locale strings and unformatted cells as numbers; both are converted to a bare number string
+ * (e.g. "250000.00") so the import never trips over the currency decoration.</p>
+ */
+const normalizeMoneyValue = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "";
+    return String(value);
+  }
+  const text = String(value).trim().replace(/[$,\s]/g, "");
+  if (text === "" || text === "-" || text === "−") return "";
+  return text;
 };
 
 /**
@@ -220,6 +249,9 @@ const equipmentToRow = (item) => ({
   Status: item.status || "",
   "Purchase Date": item.purchaseDate || "",
   "Warranty Expiry": item.warrantyExpiry || "",
+  "Purchase Cost": item.purchaseCost !== undefined && item.purchaseCost !== null ? String(item.purchaseCost) : "",
+  "Useful Life (Years)": item.usefulLifeYears !== undefined && item.usefulLifeYears !== null ? String(item.usefulLifeYears) : "",
+  "Depreciation Method": item.depreciationMethod || "",
 });
 
 /**
@@ -264,6 +296,9 @@ export const buildImportTemplate = (format) => {
     Status: "Operational",
     "Purchase Date": "2025-06-12",
     "Warranty Expiry": "2027-06-12",
+    "Purchase Cost": "250000.00",
+    "Useful Life (Years)": "10",
+    "Depreciation Method": "STRAIGHT_LINE",
   };
 
   if (format === "xlsx") {
