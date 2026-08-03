@@ -3,10 +3,13 @@ package com.medtrack.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtrack.auth.service.KafkaEventPublisher;
 import com.medtrack.dto.MaintenanceAssignmentRequest;
+import com.medtrack.dto.MaintenanceActivityPageResponse;
+import com.medtrack.dto.MaintenanceActivityResponse;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.model.MaintenanceStatus;
+import com.medtrack.model.MaintenanceActivityType;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.service.MaintenanceService;
 import org.junit.jupiter.api.Test;
@@ -20,6 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 
@@ -75,6 +79,46 @@ class MaintenanceControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
+    void hospitalCanFilterPaginatedTaskActivity() throws Exception {
+        MaintenanceActivityResponse activity = MaintenanceActivityResponse.builder()
+                .id(8L)
+                .taskId(42L)
+                .sequenceNumber(2L)
+                .eventType(MaintenanceActivityType.STATUS_CHANGED)
+                .actorEmail("tech@medtrack.com")
+                .actorRole("TECHNICIAN")
+                .previousStatus(MaintenanceStatus.IN_PROGRESS)
+                .newStatus(MaintenanceStatus.COMPLETED)
+                .changedFields(List.of("status"))
+                .occurredAt(LocalDateTime.of(2026, 8, 3, 10, 30))
+                .build();
+        MaintenanceActivityPageResponse response = MaintenanceActivityPageResponse.builder()
+                .content(List.of(activity))
+                .page(0)
+                .size(10)
+                .totalElements(1)
+                .totalPages(1)
+                .first(true)
+                .last(true)
+                .build();
+        when(maintenanceService.getTaskActivity(
+                eq(42L), eq("status-changed"), eq(0), eq(10), any()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/maintenance/42/history")
+                        .param("type", "status-changed")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].eventType").value("STATUS_CHANGED"))
+                .andExpect(jsonPath("$.content[0].previousStatus").value("In Progress"))
+                .andExpect(jsonPath("$.content[0].newStatus").value("Completed"))
+                .andExpect(jsonPath("$.content[0].changedFields[0]").value("status"))
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     @Test

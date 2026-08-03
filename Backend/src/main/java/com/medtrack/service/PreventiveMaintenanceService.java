@@ -66,6 +66,7 @@ public class PreventiveMaintenanceService {
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final MaintenanceActivityService activityService;
 
     // ------------------------------------------------------------------
     // Rule CRUD
@@ -271,6 +272,10 @@ public class PreventiveMaintenanceService {
             task.setGenerationRunId(savedRun.getId());
         }
         taskRepository.saveAll(createdTasks);
+        for (MaintenanceTask task : createdTasks) {
+            activityService.recordSystemCreated(
+                    task, "by preventive-maintenance rule " + rule.getId());
+        }
 
         // This field records the latest successfully evaluated horizon for operators. Cadence is
         // intentionally anchored to retained task deadlines instead of this mutable run metadata.
