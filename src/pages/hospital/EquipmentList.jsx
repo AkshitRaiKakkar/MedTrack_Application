@@ -13,6 +13,7 @@ import {
 } from "../../services/EquipmentService";
 import { useAuth } from "../../context/AuthContext";
 import Pagination from "../../components/common/Pagination";
+import QrScannerModal from "../../components/common/QrScannerModal";
 
 /* ===========================
    DEFAULT PUBLIC EQUIPMENT
@@ -133,6 +134,9 @@ export default function EquipmentList({ onNavigate }) {
   const [qrCode, setQrCode] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState(null);
+
+  // Scanner States
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     fetchEquipment();
@@ -292,6 +296,19 @@ export default function EquipmentList({ onNavigate }) {
     }
   };
 
+  const handleScanResult = (parsed) => {
+    setScannerOpen(false);
+    if (!parsed?.id) return;
+
+    const match = equipment.find(
+      (item) => String(item.id).toLowerCase() === String(parsed.id).toLowerCase()
+    );
+
+    // Open details for a local match, otherwise let the details fetch attempt
+    // resolve it via the API (covers items on other pages).
+    handleViewDetails(match ? match.id : parsed.id);
+  };
+
   const refreshLifecycle = async (id = selectedEquipmentId) => {
     if (!id || String(id).startsWith("EQ-00")) return;
     setLifecycleLoading(true);
@@ -429,6 +446,14 @@ export default function EquipmentList({ onNavigate }) {
         </h1>
 
         <div className="flex gap-4 items-center flex-wrap">
+          <button
+            onClick={() => setScannerOpen(true)}
+            className="px-5 py-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-base font-semibold cursor-pointer shadow-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"
+            title="Scan an equipment QR tag"
+          >
+            📷 Scan QR
+          </button>
+
           <input
             type="text"
             placeholder="Search by name, ID, model..."
@@ -1060,6 +1085,14 @@ export default function EquipmentList({ onNavigate }) {
           </div>
         </div>
       )}
+
+      {/* QR Scanner Modal */}
+      <QrScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleScanResult}
+        title="Scan Equipment Tag"
+      />
     </div>
   );
 }
