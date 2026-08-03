@@ -25,6 +25,28 @@ The frontend also already has Maintenance-related pages and API helpers:
 The current backend can create, fetch, assign, update, and delete maintenance tasks through
 `/api/maintenance` endpoints.
 
+The backend also contains a hospital-owned preventive-maintenance automation subsystem using:
+
+- `model/MaintenancePolicyRule.java`
+- `model/MaintenanceGenerationRun.java`
+- `model/MaintenanceRuleScope.java`
+- `model/RecurrenceFrequency.java`
+- `model/SlaState.java`
+- `dto/MaintenanceRuleRequest.java`
+- `dto/MaintenanceRuleResponse.java`
+- `dto/RulePreviewResponse.java`
+- `dto/SlaSummaryResponse.java`
+- `dto/TechnicianWorkloadResponse.java`
+- `repository/MaintenancePolicyRuleRepository.java`
+- `repository/MaintenanceGenerationRunRepository.java`
+- `service/PreventiveMaintenanceService.java`
+- `service/PreventiveMaintenanceScheduler.java`
+- `controller/PreventiveMaintenanceController.java`
+
+This subsystem manages recurrence policies, previews exact equipment/deadline occurrences,
+generates scheduled tasks, refreshes SLA state, and provides workload suggestions under
+`/api/maintenance/automation`.
+
 ## What The Existing Files Do
 
 ### MaintenanceTask.java
@@ -403,6 +425,42 @@ The current frontend field names should be preserved unless frontend changes are
 - `signature`
 - `completedAt` (response field controlled by the server)
 
+## Preventive-Maintenance Automation
+
+Preventive rules are owned by a hospital and select eligible equipment by category, individual
+equipment record, manufacturer text, or hospital-wide priority. Every generated task starts in
+`SCHEDULED`, receives the same task/equipment hospital ownership values as a manually scheduled
+task, and enters the existing Maintenance lifecycle without introducing a separate task API.
+
+Generation uses an inclusive `windowStart..windowEnd` horizon. For equipment without generated
+history under the rule, the first occurrence is the window start. For equipment with history, the
+latest retained generated-task deadline is the cadence anchor and the rule frequency calculates the
+next occurrence. Every missing occurrence inside the window is generated; weekly, monthly,
+quarterly, yearly, and custom schedules therefore do not reset merely because the daily scheduler's
+window advances.
+
+Generated history queries intentionally include soft-deleted Maintenance tasks. An archived task
+remains audit evidence for its rule/equipment/deadline occurrence and cannot be recreated by a
+later run. Those queries use native ownership checks so archived equipment does not erase the
+cadence history, while archived, retired, and disposed equipment is excluded from new generation.
+
+Manual generation and scheduled generation lock the same hospital-owned policy row before reading
+the generation ledger or task history. This serializes overlapping runs for one rule. An exact
+repeat of a recorded rule/window returns the existing `MaintenanceGenerationRun`; an overlapping
+new window starts after each equipment's latest generated deadline and creates only the missing
+occurrences.
+
+Preview and generation share the same occurrence planner. Preview fields have these meanings:
+
+- `matchedEquipment`: eligible equipment selected by the rule
+- `totalDueDates`: distinct due dates across all selected equipment
+- `wouldCreate`: missing equipment/deadline occurrences
+- `skippedExisting`: retained equipment/deadline occurrences already present in the window
+- `dueDates`: sorted union of the missing dates
+
+The complete endpoint, cadence, idempotency, SLA, and workload contract is documented in
+`docs/maintenance-preventive-automation.md`.
+
 ## Next Implementation Steps
 
 ### Verified completed
@@ -664,6 +722,21 @@ compilation on unrelated rate-limiting and equipment test-source errors.
 
 The endpoint paths, request and response JSON, roles, status lifecycle, and successful HTTP status
 codes remain unchanged. Repository and service regression tests cover both rules.
+
+### Completed on 2026-08-03
+
+1. [x] **Made preventive generation cadence-correct.** Rule evaluation now anchors each equipment
+   to its latest retained generated deadline and creates every missing recurrence occurrence in the
+   inclusive generation window. Advancing the daily scheduler window no longer resets weekly,
+   monthly, quarterly, yearly, or custom recurrence cadence.
+2. [x] **Serialized and aligned preview/generation.** Scheduled and manual generation take the same
+   ownership-scoped policy write lock, and preview uses the same occurrence planner as execution.
+   Soft-deleted task history remains part of idempotency, while task APIs continue to hide archived
+   records. Preview and run counters now describe exact equipment/deadline occurrences.
+
+Endpoint paths, request and response field names, roles, task lifecycle, and successful HTTP status
+codes remain unchanged. Focused service and repository coverage verifies cadence, overlapping
+windows, exact reruns, soft-deleted history, and ownership isolation.
 
 ### Recommended future work
 

@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -231,20 +232,48 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
     // Preventive-maintenance automation queries
     // ---------------------------------------------------------------------
 
-    // Idempotency: a rule must not generate a second task for the same equipment in the same window.
-    @Query("SELECT COUNT(task) FROM MaintenanceTask task "
-            + "WHERE task.hospitalId = :hospitalId "
-            + "AND task.equipmentRecord.hospital.id = :hospitalId "
-            + "AND task.policyRuleId = :ruleId "
-            + "AND task.equipmentRecord.id = :equipmentRecordId "
-            + "AND task.deadline >= :windowStart "
-            + "AND task.deadline <= :windowEnd")
-    long countByRuleAndEquipmentInWindow(
+    /**
+     * Minimal projection used to reconstruct the generated cadence without loading task entities.
+     */
+    interface GeneratedOccurrence {
+        Long getEquipmentRecordId();
+
+        LocalDate getDeadline();
+    }
+
+    /*
+     * Generated task history is intentionally read with native SQL and without a deleted predicate.
+     * A soft-deleted occurrence remains audit evidence and must continue to anchor the cadence; it
+     * must never be silently regenerated. The equipment join retains the dual-hospital invariant
+     * without inheriting Equipment's active-only Hibernate restriction.
+     */
+    @Query(value = "SELECT mt.equipment_record_id AS equipmentRecordId, "
+            + "MAX(mt.deadline) AS deadline FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId "
+            + "AND mt.policy_rule_id = :ruleId "
+            + "GROUP BY mt.equipment_record_id",
+            nativeQuery = true)
+    List<GeneratedOccurrence> findLatestGeneratedDeadlines(
+            @Param("hospitalId") Long hospitalId,
+            @Param("ruleId") Long ruleId);
+
+    @Query(value = "SELECT mt.equipment_record_id AS equipmentRecordId, "
+            + "mt.deadline AS deadline FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId "
+            + "AND mt.policy_rule_id = :ruleId "
+            + "AND mt.deadline >= :windowStart "
+            + "AND mt.deadline <= :windowEnd",
+            nativeQuery = true)
+    List<GeneratedOccurrence> findGeneratedOccurrencesInWindow(
             @Param("hospitalId") Long hospitalId,
             @Param("ruleId") Long ruleId,
-            @Param("equipmentRecordId") Long equipmentRecordId,
-            @Param("windowStart") java.time.LocalDate windowStart,
-            @Param("windowEnd") java.time.LocalDate windowEnd);
+            @Param("windowStart") LocalDate windowStart,
+            @Param("windowEnd") LocalDate windowEnd);
+
     @Query("SELECT task FROM MaintenanceTask task "
             + "WHERE task.hospitalId = :hospitalId "
             + "AND task.equipmentRecord.hospital.id = :hospitalId "

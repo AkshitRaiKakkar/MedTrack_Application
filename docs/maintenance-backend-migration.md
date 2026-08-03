@@ -30,6 +30,8 @@ It includes:
 - `Backend/src/main/resources/db/migration/mysql/V5__enforce_maintenance_status_values.sql`
 - `Backend/src/main/resources/db/migration/h2/V7__add_soft_delete_columns.sql`
 - `Backend/src/main/resources/db/migration/mysql/V7__add_soft_delete_columns.sql`
+- `Backend/src/main/resources/db/migration/h2/V8__add_preventive_maintenance_automation.sql`
+- `Backend/src/main/resources/db/migration/mysql/V8__add_preventive_maintenance_automation.sql`
 
 The scripts:
 
@@ -46,6 +48,8 @@ The scripts:
 11. Reject unsupported legacy status values and constrain future status writes to the
     `MaintenanceStatus` enum names.
 12. Add Maintenance soft-delete audit columns and an index on the active/archive flag.
+13. Create hospital-owned preventive policy rules and the generation-run idempotency ledger.
+14. Add policy/run linkage and SLA/escalation evidence to generated maintenance tasks.
 
 The final constraint is also a safety check. If any maintenance row cannot be matched to equipment, the migration fails instead of leaving a partially upgraded database.
 
@@ -72,6 +76,12 @@ Application deletion sets those values rather than physically removing the task.
 entity-level SQL restriction excludes archived rows from normal repository queries, while the row
 remains available for database-level audit and retention processes. The public DELETE endpoint
 continues to return HTTP 204 for a successful archive.
+
+The preventive-maintenance automation migration creates `maintenance_policy_rules` and
+`maintenance_generation_runs`, then adds `policy_rule_id`, `generation_run_id`, SLA timestamps,
+SLA state, and escalation evidence to `maintenance_tasks`. Generated cadence is reconstructed from
+retained task deadlines rather than from a mutable policy timestamp, so no additional cadence
+column or data backfill is required by the cadence-correct generation implementation.
 
 Equipment archival is independent from Maintenance archival. Maintenance repository queries use
 the retained `equipment` row for the dual-hospital ownership check without applying the Equipment
