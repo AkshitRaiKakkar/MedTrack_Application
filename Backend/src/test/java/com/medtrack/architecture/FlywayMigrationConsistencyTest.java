@@ -58,6 +58,8 @@ class FlywayMigrationConsistencyTest {
      */
     private static final Set<String> FLYWAY_MANAGED_TABLES = Set.of(
             "maintenance_tasks",
+            "maintenance_task_activities",
+            "maintenance_schedule_revisions",
             "equipment",
             "maintenance_policy_rules",
             "maintenance_generation_runs",

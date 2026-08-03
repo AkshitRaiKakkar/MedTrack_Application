@@ -85,6 +85,18 @@ public class MaintenanceActivityService {
                 .changedFields("deleted,deletedAt,deletedBy").summary("Maintenance task archived").build());
     }
 
+    public void recordScheduleAmendment(
+            MaintenanceTask task, User actor, List<String> changedFields) {
+        append(ActivityRecord.builder().task(task)
+                .eventType(MaintenanceActivityType.SCHEDULE_AMENDED)
+                .actor(actor).previousStatus(task.getStatus()).newStatus(task.getStatus())
+                .previousAssignee(task.getAssignedTechnician())
+                .newAssignee(task.getAssignedTechnician())
+                .changedFields(String.join(",", changedFields))
+                .summary("Maintenance schedule amended to revision "
+                        + task.getScheduleRevision()).build());
+    }
+
     @Transactional(readOnly = true)
     public MaintenanceActivityPageResponse getHistory(Long taskId, String typeValue,
                                                        Integer page, Integer size,

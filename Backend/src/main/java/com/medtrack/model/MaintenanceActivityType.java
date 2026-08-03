@@ -12,6 +12,7 @@ public enum MaintenanceActivityType {
     TECHNICIAN_REASSIGNED,
     STATUS_CHANGED,
     WORK_DETAILS_UPDATED,
+    SCHEDULE_AMENDED,
     TASK_ARCHIVED;
 
     public static MaintenanceActivityType fromFilter(String value) {

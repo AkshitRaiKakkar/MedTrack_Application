@@ -127,6 +127,12 @@ public class MaintenanceTask {
     @PositiveOrZero(message = "Recurrence period cannot be negative")
     private Integer recurrencePeriodDays;
 
+    // Incremented for every hospital-approved schedule amendment.
+    @Builder.Default
+    @Column(name = "schedule_revision", nullable = false)
+    @JsonIgnore
+    private Integer scheduleRevision = 0;
+
     // Preventive-maintenance automation linkage: which rule generated this task, and from which run.
     // A null ruleId means the task was scheduled manually and is outside the automation engine.
     @Column(name = "policy_rule_id")

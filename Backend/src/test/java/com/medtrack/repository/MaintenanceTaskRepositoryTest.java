@@ -9,6 +9,7 @@ import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTaskActivity;
 import com.medtrack.model.MaintenanceActivityType;
 import com.medtrack.model.MaintenanceTask;
+import com.medtrack.model.MaintenanceScheduleRevision;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
@@ -55,6 +56,81 @@ class MaintenanceTaskRepositoryTest {
 
     @Autowired
     private MaintenanceTaskActivityRepository activityRepository;
+
+    @Autowired
+    private MaintenanceScheduleRevisionRepository scheduleRevisionRepository;
+
+    @Test
+    void scheduleRevisionsAreOwnershipScopedNewestFirstAndSurviveTaskArchival() {
+        Hospital hospital = persistHospital("revision-owner");
+        User technician = persistTechnician("revision-tech");
+        Equipment equipment = persistEquipment(hospital);
+        MaintenanceTask task = persistTask("MNT-REVISIONS", equipment, hospital, technician);
+        LocalDate initialDeadline = LocalDate.now().plusDays(2);
+
+        MaintenanceScheduleRevision first = persistScheduleRevision(
+                task, hospital, 1, initialDeadline, initialDeadline.plusDays(1),
+                "deadline", "Parts delivery delayed");
+        MaintenanceScheduleRevision second = persistScheduleRevision(
+                task, hospital, 2, initialDeadline.plusDays(1), initialDeadline.plusDays(3),
+                "deadline,priority", "Critical inspection window");
+        task.setDeleted(true);
+        task.setDeletedAt(LocalDateTime.now());
+        entityManager.flush();
+        entityManager.clear();
+
+        Page<MaintenanceScheduleRevision> owned =
+                scheduleRevisionRepository.findOwnedRevisions(
+                        task.getId(), hospital.getId(), PageRequest.of(0, 10));
+
+        assertEquals(List.of(second.getId(), first.getId()),
+                owned.getContent().stream().map(MaintenanceScheduleRevision::getId).toList());
+        assertTrue(scheduleRevisionRepository.findOwnedRevisions(
+                task.getId(), hospital.getId() + 100, PageRequest.of(0, 10)).isEmpty());
+    }
+
+    @Test
+    void scheduleRevisionQueryRejectsMismatchedTaskAndEquipmentOwnership() {
+        Hospital equipmentHospital = persistHospital("revision-equipment-owner");
+        Hospital inconsistentHospital = persistHospital("revision-false-owner");
+        User technician = persistTechnician("revision-isolation-tech");
+        Equipment equipment = persistEquipment(equipmentHospital);
+        MaintenanceTask inconsistentTask = persistTask(
+                "MNT-INCONSISTENT-REVISION", equipment, inconsistentHospital, technician);
+        persistScheduleRevision(inconsistentTask, inconsistentHospital, 1,
+                LocalDate.now().plusDays(2), LocalDate.now().plusDays(3),
+                "deadline", "Attempted change");
+        entityManager.flush();
+        entityManager.clear();
+
+        assertTrue(scheduleRevisionRepository.findOwnedRevisions(
+                inconsistentTask.getId(), inconsistentHospital.getId(),
+                PageRequest.of(0, 10)).isEmpty());
+        assertTrue(scheduleRevisionRepository.findOwnedRevisions(
+                inconsistentTask.getId(), equipmentHospital.getId(),
+                PageRequest.of(0, 10)).isEmpty());
+    }
+
+    private MaintenanceScheduleRevision persistScheduleRevision(
+            MaintenanceTask task,
+            Hospital hospital,
+            int revisionNumber,
+            LocalDate previousDeadline,
+            LocalDate newDeadline,
+            String changedFields,
+            String reason) {
+        return scheduleRevisionRepository.save(MaintenanceScheduleRevision.builder()
+                .task(task).hospitalId(hospital.getId()).revisionNumber(revisionNumber)
+                .actorEmail("hospital@medtrack.com")
+                .reason(reason).changedFields(changedFields)
+                .previousDeadline(previousDeadline).newDeadline(newDeadline)
+                .previousMaintenanceType("Inspection").newMaintenanceType("Inspection")
+                .previousDescription("Original").newDescription("Updated")
+                .previousPriority("Normal").newPriority(
+                        changedFields.contains("priority") ? "Critical" : "Normal")
+                .previousRecurrencePeriodDays(30).newRecurrencePeriodDays(30)
+                .amendedAt(LocalDateTime.now()).build());
+    }
 
     @Test
     void softDeletedTasksAreExcludedFromNormalRepositoryAccess() {
