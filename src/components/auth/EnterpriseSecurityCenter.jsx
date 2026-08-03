@@ -80,6 +80,7 @@ import ApiGatewaySecurityPanel from "./ApiGatewaySecurityPanel";
 import GenomicDataVaultPanel from "./GenomicDataVaultPanel";
 import ClinicalAiDefensePanel from "./ClinicalAiDefensePanel";
 import BiomedicalBlockchainPanel from "./BiomedicalBlockchainPanel";
+import ZeroTrustSdpPanel from "./ZeroTrustSdpPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -429,7 +430,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "apigateway", label: "API Gateway & OAuth 2.1", icon: Route },
           { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna },
           { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain },
-          { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes }
+          { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes },
+          { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -930,6 +932,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 28: BIOMEDICAL BLOCKCHAIN AUDIT & CRYPTOGRAPHIC PROVENANCE */}
       {selectedTab === "blockchain" && (
         <BiomedicalBlockchainPanel />
+      )}
+
+      {/* TAB 29: ZERO TRUST SOFTWARE-DEFINED PERIMETER (SDP) */}
+      {selectedTab === "sdp" && (
+        <ZeroTrustSdpPanel />
       )}
 
       {/* 4. MODALS */}
