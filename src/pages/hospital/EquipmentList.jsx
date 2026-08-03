@@ -8,6 +8,7 @@ import {
   getEquipmentImportHistory,
   getEquipmentQrCode,
   getEquipmentLifecycle,
+  getEquipmentTimeline,
   createEquipmentLifecycleAction,
   approveEquipmentLifecycleAction,
   rejectEquipmentLifecycleAction,
@@ -140,6 +141,39 @@ export default function EquipmentList({ onNavigate }) {
     return "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
   };
 
+  // Visual timeline styling (issue #704): per-event-type icon + dot colour.
+  const timelineMeta = (type) => {
+    const meta = {
+      PURCHASED: { icon: "🛒", dot: "bg-blue-500" },
+      REGISTERED: { icon: "📋", dot: "bg-sky-400" },
+      ASSIGNED: { icon: "👤", dot: "bg-emerald-500" },
+      MOVED: { icon: "🚚", dot: "bg-amber-500" },
+      RETIRED: { icon: "🏁", dot: "bg-slate-500" },
+      DISPOSED: { icon: "🗑️", dot: "bg-red-500" },
+      REPLACED: { icon: "🔄", dot: "bg-indigo-500" },
+      DEPRECIATION_SNAPSHOT: { icon: "💹", dot: "bg-teal-500" },
+      MAINTENANCE_SCHEDULED: { icon: "🛠️", dot: "bg-orange-500" },
+      MAINTENANCE_COMPLETED: { icon: "✅", dot: "bg-green-500" },
+      MAINTENANCE_OVERDUE: { icon: "⚠️", dot: "bg-red-600" },
+      WARRANTY_ALERT: { icon: "🛡️", dot: "bg-amber-400" },
+      STATUS_CHANGED: { icon: "🔁", dot: "bg-violet-500" },
+    };
+    return meta[type] || { icon: "📌", dot: "bg-slate-400" };
+  };
+
+  const formatTimelineDate = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const [equipment, setEquipment] = useState([]);
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("All");
@@ -157,6 +191,10 @@ export default function EquipmentList({ onNavigate }) {
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
   const [lifecycleError, setLifecycleError] = useState(null);
   const [lifecycleSaving, setLifecycleSaving] = useState(false);
+  // Issue #704: aggregated visual timeline (purchase, maintenance, lifecycle, system events).
+  const [timelineEntries, setTimelineEntries] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState(null);
   const [lifecycleForm, setLifecycleForm] = useState({
     actionType: "TRANSFER",
     newDepartment: "",
@@ -402,6 +440,7 @@ export default function EquipmentList({ onNavigate }) {
       // Fetch QR Code if it's a database item
       if (!isFallbackItem) {
         refreshLifecycle(id);
+        refreshTimeline(id);
         setQrLoading(true);
         try {
           const qrData = await getEquipmentQrCode(id);
@@ -450,6 +489,22 @@ export default function EquipmentList({ onNavigate }) {
     }
   };
 
+  // Issue #704: aggregated read-only timeline. Loaded with the details so the modal opens with
+  // the full history; Refresh on the panel re-fetches both views.
+  const refreshTimeline = async (id = selectedEquipmentId) => {
+    if (!id || String(id).startsWith("EQ-00")) return;
+    setTimelineLoading(true);
+    setTimelineError(null);
+    try {
+      setTimelineEntries(await getEquipmentTimeline(id));
+    } catch (error) {
+      console.error("Failed to fetch equipment timeline", error);
+      setTimelineError(error.response?.data?.message || "Failed to load asset timeline.");
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
   const handleLifecycleChange = (field, value) => {
     setLifecycleForm((current) => ({ ...current, [field]: value }));
   };
@@ -482,6 +537,7 @@ export default function EquipmentList({ onNavigate }) {
         notes: "",
       });
       await refreshLifecycle(selectedEquipmentId);
+      await refreshTimeline(selectedEquipmentId);
     } catch (error) {
       console.error("Failed to save lifecycle action", error);
       setLifecycleError(error.response?.data?.message || "Failed to save lifecycle action.");
@@ -498,6 +554,7 @@ export default function EquipmentList({ onNavigate }) {
       if (action === "reject") await rejectEquipmentLifecycleAction(actionId, "Rejected from lifecycle panel");
       if (action === "complete") await completeEquipmentLifecycleAction(actionId);
       await refreshLifecycle(selectedEquipmentId);
+      await refreshTimeline(selectedEquipmentId);
       if (selectedEquipmentId) {
         const data = await getEquipmentById(selectedEquipmentId);
         setEquipmentDetails(data);
@@ -1070,19 +1127,31 @@ export default function EquipmentList({ onNavigate }) {
                   <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle space-y-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h3 className="text-lg font-extrabold text-primary m-0">Asset Lifecycle</h3>
+                        <h3 className="text-lg font-extrabold text-primary m-0">Lifecycle Timeline</h3>
                         <p className="text-xs text-secondary mt-1 mb-0">
-                          Track transfers, assignments, retirement, disposal, replacements, and depreciation snapshots.
+                          Full asset history — purchase, maintenance, lifecycle actions, and system events in chronological order.
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => refreshLifecycle(equipmentDetails.id)}
-                        disabled={lifecycleLoading}
-                        className="px-3 py-2 rounded-lg border border-subtle bg-surface text-secondary text-xs font-bold hover:bg-subtle disabled:opacity-60"
-                      >
-                        Refresh
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            refreshLifecycle(equipmentDetails.id);
+                            refreshTimeline(equipmentDetails.id);
+                          }}
+                          disabled={lifecycleLoading || timelineLoading}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-secondary text-xs font-bold hover:bg-subtle disabled:opacity-60"
+                        >
+                          Refresh
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-secondary text-xs font-bold hover:bg-subtle"
+                        >
+                          Print
+                        </button>
+                      </div>
                     </div>
 
                     {user?.role === "hospital" && (
@@ -1172,70 +1241,114 @@ export default function EquipmentList({ onNavigate }) {
                       </div>
                     )}
 
-                    {lifecycleLoading ? (
-                      <p className="text-sm text-secondary font-semibold">Loading lifecycle history...</p>
-                    ) : lifecycleActions.length === 0 ? (
-                      <p className="text-sm text-secondary font-semibold">No lifecycle actions recorded yet.</p>
+                    {timelineLoading ? (
+                      <p className="text-sm text-secondary font-semibold">Loading asset history...</p>
+                    ) : timelineEntries.length === 0 ? (
+                      <p className="text-sm text-secondary font-semibold">No lifecycle events recorded yet.</p>
                     ) : (
-                      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                        {lifecycleActions.map((action) => (
-                          <div key={action.id} className="rounded-xl border border-subtle bg-surface p-4">
-                            <div className="flex justify-between items-start gap-3">
-                              <div>
-                                <p className="m-0 text-sm font-extrabold text-primary">
-                                  {action.actionType?.replaceAll("_", " ")}
-                                </p>
-                                <p className="m-0 mt-1 text-xs text-secondary">
-                                  Requested by {action.requestedBy} on {action.requestedAt?.slice(0, 10)}
-                                </p>
-                              </div>
-                              <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                {action.status}
-                              </span>
-                            </div>
-                            <div className="mt-3 text-xs text-secondary space-y-1">
-                              {action.newDepartment && <p className="m-0"><strong>Department:</strong> {action.previousDepartment || "N/A"} → {action.newDepartment}</p>}
-                              {action.roomLocation && <p className="m-0"><strong>Room:</strong> {action.roomLocation}</p>}
-                              {action.wardLocation && <p className="m-0"><strong>Ward:</strong> {action.wardLocation}</p>}
-                              {action.custodian && <p className="m-0"><strong>Custodian:</strong> {action.custodian}</p>}
-                              {action.replacementEquipmentName && <p className="m-0"><strong>Replacement:</strong> {action.replacementEquipmentName}</p>}
-                              {action.depreciationAmount != null && <p className="m-0"><strong>Depreciation:</strong> {action.depreciationAmount}</p>}
-                              {action.notes && <p className="m-0"><strong>Notes:</strong> {action.notes}</p>}
-                            </div>
-                            {user?.role === "hospital" && action.status === "PENDING_APPROVAL" && (
-                              <div className="flex gap-2 mt-3">
-                                <button
-                                  type="button"
-                                  onClick={() => handleLifecycleWorkflow(action.id, "approve")}
-                                  disabled={lifecycleSaving}
-                                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-60"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleLifecycleWorkflow(action.id, "reject")}
-                                  disabled={lifecycleSaving}
-                                  className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-60"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            )}
-                            {user?.role === "hospital" && action.status === "APPROVED" && (
-                              <button
-                                type="button"
-                                onClick={() => handleLifecycleWorkflow(action.id, "complete")}
-                                disabled={lifecycleSaving}
-                                className="mt-3 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-60"
-                              >
-                                Complete and Apply
-                              </button>
-                            )}
-                          </div>
-                        ))}
+                      <div className="max-h-80 overflow-y-auto pr-2">
+                        <ol className="relative pl-6 space-y-5 border-l-2 border-slate-300 dark:border-slate-700">
+                          {timelineEntries.map((entry, index) => {
+                            const meta = timelineMeta(entry.type);
+                            return (
+                              <li key={`${entry.source}-${entry.sourceId ?? index}-${index}`} className="relative">
+                                <span className={`absolute -left-[31px] top-1.5 h-4 w-4 rounded-full ${meta.dot} ring-4 ring-hover`} />
+                                <div className="rounded-xl border border-subtle bg-surface p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-2 min-w-0">
+                                      <span className="text-base leading-5">{meta.icon}</span>
+                                      <div className="min-w-0">
+                                        <p className="m-0 text-sm font-extrabold text-primary">{entry.title}</p>
+                                        <p className="m-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide text-secondary">
+                                          {entry.source} · {entry.type?.replaceAll("_", " ")}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <span className="shrink-0 text-[10px] text-secondary font-semibold whitespace-nowrap">
+                                      {formatTimelineDate(entry.date)}
+                                    </span>
+                                  </div>
+                                  {entry.description && (
+                                    <p className="m-0 mt-2 text-xs text-secondary">{entry.description}</p>
+                                  )}
+                                  {(entry.actor || entry.statusChange) && (
+                                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold">
+                                      {entry.actor && (
+                                        <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                          By {entry.actor}
+                                        </span>
+                                      )}
+                                      {entry.statusChange && (
+                                        <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                          {entry.statusChange}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
                       </div>
                     )}
+
+                    {user?.role === "hospital" &&
+                      (() => {
+                        const pending = lifecycleActions.filter(
+                          (a) => a.status === "PENDING_APPROVAL" || a.status === "APPROVED"
+                        );
+                        if (pending.length === 0) return null;
+                        return (
+                          <div className="pt-2 border-t border-subtle space-y-2">
+                            <p className="m-0 text-xs font-extrabold text-primary">Pending Approvals</p>
+                            {pending.map((action) => (
+                              <div key={action.id} className="flex items-center justify-between gap-3 rounded-xl border border-subtle bg-surface p-3">
+                                <div className="min-w-0">
+                                  <p className="m-0 text-xs font-extrabold text-primary">
+                                    {action.actionType?.replaceAll("_", " ")}
+                                  </p>
+                                  <p className="m-0 text-[10px] text-secondary">
+                                    {action.notes || `${action.newDepartment || action.custodian || "No details"} · ${action.status}`}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                  {action.status === "PENDING_APPROVAL" && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleLifecycleWorkflow(action.id, "approve")}
+                                        disabled={lifecycleSaving}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-60"
+                                      >
+                                        Approve
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleLifecycleWorkflow(action.id, "reject")}
+                                        disabled={lifecycleSaving}
+                                        className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-60"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+                                  {action.status === "APPROVED" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLifecycleWorkflow(action.id, "complete")}
+                                      disabled={lifecycleSaving}
+                                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-60"
+                                    >
+                                      Complete
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                   </div>
                 )}
 
