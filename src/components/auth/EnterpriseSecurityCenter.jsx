@@ -49,7 +49,8 @@ import {
   Dna,
   Brain,
   Boxes,
-  Siren
+  Siren,
+  Atom
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -83,6 +84,7 @@ import ClinicalAiDefensePanel from "./ClinicalAiDefensePanel";
 import BiomedicalBlockchainPanel from "./BiomedicalBlockchainPanel";
 import ZeroTrustSdpPanel from "./ZeroTrustSdpPanel";
 import BiomedicalSoarPanel from "./BiomedicalSoarPanel";
+import QkdKeyDistributionPanel from "./QkdKeyDistributionPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -434,7 +436,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain },
           { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes },
           { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network },
-          { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren }
+          { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren },
+          { id: "qkd", label: "Quantum Key Distribution (QKD)", icon: Atom }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -945,6 +948,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 30: BIOMEDICAL SOAR & INCIDENT RESPONSE AUTOMATION */}
       {selectedTab === "biomedsoar" && (
         <BiomedicalSoarPanel />
+      )}
+
+      {/* TAB 31: QUANTUM KEY DISTRIBUTION (QKD) & POST-QUANTUM MESH */}
+      {selectedTab === "qkd" && (
+        <QkdKeyDistributionPanel />
       )}
 
       {/* 4. MODALS */}
