@@ -97,6 +97,76 @@ public class Equipment {
     private LocalDate warrantyExpiry;
 
     // ---------------------------------------------------------------------
+    // Warranty & service contract fields (issue #703)
+    //
+    // warrantyExpiry above is the coverage end date; the fields below carry the contract details
+    // so staff never have to ask the vendor or dig through emails. The lifecycle state is derived
+    // on read by the @Transient getters below and serialised with every JSON response.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Vendor or service provider backing the warranty, e.g. "Siemens Healthineers".
+     */
+    @Column(name = "warranty_provider", length = 255)
+    private String warrantyProvider;
+
+    /**
+     * The contract or warranty registration number issued by the provider.
+     */
+    @Column(name = "warranty_contract_number", length = 100)
+    private String warrantyContractNumber;
+
+    /**
+     * Start of the coverage period. {@code null} means only the expiry is known.
+     */
+    @Column(name = "warranty_start_date")
+    private LocalDate warrantyStartDate;
+
+    /**
+     * What the coverage includes: full parts and labor, parts only, or labor only.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "warranty_coverage_type", length = 30)
+    private WarrantyCoverageType warrantyCoverageType;
+
+    /**
+     * Free-text terms, exclusions, or service-level notes from the contract.
+     */
+    @Column(name = "warranty_terms", length = 2000)
+    private String warrantyTerms;
+
+    /**
+     * Lifecycle state of the warranty as of today, for the status badge on the inventory list and
+     * detail page. Never persisted; serialised with the entity.
+     */
+    @Transient
+    public WarrantyStatus getWarrantyStatus() {
+        if (warrantyExpiry == null) {
+            return WarrantyStatus.NO_COVERAGE;
+        }
+        long daysUntil = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), warrantyExpiry);
+        if (daysUntil < 0) {
+            return WarrantyStatus.EXPIRED;
+        }
+        if (daysUntil <= 90) {
+            return WarrantyStatus.EXPIRING_SOON;
+        }
+        return WarrantyStatus.ACTIVE;
+    }
+
+    /**
+     * Days remaining until the warranty expires, negative once expired, {@code null} when no
+     * expiry is recorded. Never persisted; serialised with the entity.
+     */
+    @Transient
+    public Long getWarrantyDaysRemaining() {
+        if (warrantyExpiry == null) {
+            return null;
+        }
+        return java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), warrantyExpiry);
+    }
+
+    // ---------------------------------------------------------------------
     // Depreciation & valuation fields
     //
     // The three stored fields are entered at registration; the value the finance team cares

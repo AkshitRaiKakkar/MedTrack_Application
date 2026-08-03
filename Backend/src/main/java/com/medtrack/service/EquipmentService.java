@@ -15,6 +15,7 @@ import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.WarrantyCoverageType;
 import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
@@ -81,7 +82,9 @@ public class EquipmentService {
     static final String[] EQUIPMENT_CSV_HEADERS = {
             "Equipment Code", "Name", "Model", "Serial Number", "Department",
             "Category", "Status", "Purchase Date", "Warranty Expiry",
-            "Purchase Cost", "Useful Life (Years)", "Depreciation Method"
+            "Purchase Cost", "Useful Life (Years)", "Depreciation Method",
+            "Warranty Provider", "Warranty Contract Number", "Warranty Start Date",
+            "Warranty Coverage Type", "Warranty Terms"
     };
 
     private Hospital getHospitalForUser(String username) {
@@ -1046,6 +1049,14 @@ public class EquipmentService {
                 String purchaseCostStr = getFieldValue(fields, headers, "Purchase Cost");
                 String usefulLifeStr = getFieldValue(fields, headers, "Useful Life (Years)");
                 String depreciationMethodStr = getFieldValue(fields, headers, "Depreciation Method");
+                // Warranty & service contract columns (issue #703). Same write-only risk as the
+                // finance columns: the export writes them, so the import must read them back or a
+                // round trip would silently drop the contract details.
+                String warrantyProviderStr = getFieldValue(fields, headers, "Warranty Provider");
+                String warrantyContractNumberStr = getFieldValue(fields, headers, "Warranty Contract Number");
+                String warrantyStartDateStr = getFieldValue(fields, headers, "Warranty Start Date");
+                String warrantyCoverageTypeStr = getFieldValue(fields, headers, "Warranty Coverage Type");
+                String warrantyTermsStr = getFieldValue(fields, headers, "Warranty Terms");
 
                 if (name == null || name.trim().isEmpty()) {
                     failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Asset Name is required"));
@@ -1201,6 +1212,45 @@ public class EquipmentService {
                     parsedStatus = EquipmentStatus.RETIRED;
                 }
 
+                // Warranty contract details (issue #703). Coverage type is a closed vocabulary;
+                // everything else is free text or an ISO date.
+                WarrantyCoverageType warrantyCoverageType = null;
+                if (warrantyCoverageTypeStr != null && !warrantyCoverageTypeStr.trim().isEmpty()) {
+                    String coverage = warrantyCoverageTypeStr.trim();
+                    if (coverage.equalsIgnoreCase("FULL_PARTS_AND_LABOR")
+                            || coverage.equalsIgnoreCase("full parts and labor")
+                            || coverage.equalsIgnoreCase("full parts/labor")) {
+                        warrantyCoverageType = WarrantyCoverageType.FULL_PARTS_AND_LABOR;
+                    } else if (coverage.equalsIgnoreCase("PARTS_ONLY")
+                            || coverage.equalsIgnoreCase("parts only")) {
+                        warrantyCoverageType = WarrantyCoverageType.PARTS_ONLY;
+                    } else if (coverage.equalsIgnoreCase("LABOR_ONLY")
+                            || coverage.equalsIgnoreCase("labor only")) {
+                        warrantyCoverageType = WarrantyCoverageType.LABOR_ONLY;
+                    } else {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Warranty Coverage Type. Allowed: FULL_PARTS_AND_LABOR, PARTS_ONLY, LABOR_ONLY"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                LocalDate warrantyStartDate = null;
+                if (warrantyStartDateStr != null && !warrantyStartDateStr.trim().isEmpty()) {
+                    try {
+                        warrantyStartDate = LocalDate.parse(warrantyStartDateStr.trim());
+                    } catch (DateTimeParseException e) {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Warranty Start Date format. Expected YYYY-MM-DD"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                String warrantyProvider = blankToNull(warrantyProviderStr);
+                String warrantyContractNumber = blankToNull(warrantyContractNumberStr);
+                String warrantyTerms = blankToNull(warrantyTermsStr);
+
                 if (serialNumber != null && !serialNumber.trim().isEmpty()) {
                     String normalizedSerial = serialNumber.trim();
                     if (!serialNumbersInFile.add(normalizedSerial)) {
@@ -1277,6 +1327,11 @@ public class EquipmentService {
                     equipment.setPurchaseCost(purchaseCost);
                     equipment.setUsefulLifeYears(usefulLifeYears);
                     equipment.setDepreciationMethod(depreciationMethod);
+                    equipment.setWarrantyProvider(warrantyProvider);
+                    equipment.setWarrantyContractNumber(warrantyContractNumber);
+                    equipment.setWarrantyStartDate(warrantyStartDate);
+                    equipment.setWarrantyCoverageType(warrantyCoverageType);
+                    equipment.setWarrantyTerms(warrantyTerms);
                 } else {
                     equipment = Equipment.builder()
                             .name(name)
@@ -1294,6 +1349,11 @@ public class EquipmentService {
                             .purchaseCost(purchaseCost)
                             .usefulLifeYears(usefulLifeYears)
                             .depreciationMethod(depreciationMethod)
+                            .warrantyProvider(warrantyProvider)
+                            .warrantyContractNumber(warrantyContractNumber)
+                            .warrantyStartDate(warrantyStartDate)
+                            .warrantyCoverageType(warrantyCoverageType)
+                            .warrantyTerms(warrantyTerms)
                             .build();
                 }
 
@@ -1301,7 +1361,9 @@ public class EquipmentService {
                 validRows.add(new EquipmentImportPreviewResponse.PreviewRow(
                         rowNum, toPreviewRowData(equipment, name, model, serialNumber,
                         department, equipmentCategory, status, purchaseDate, warrantyExpiry,
-                        purchaseCost, usefulLifeYears, depreciationMethod)));
+                        purchaseCost, usefulLifeYears, depreciationMethod,
+                        warrantyProvider, warrantyContractNumber, warrantyStartDate,
+                        warrantyCoverageType, warrantyTerms)));
                 successCount++;
             }
 
@@ -1332,7 +1394,12 @@ public class EquipmentService {
             LocalDate warrantyExpiry,
             BigDecimal purchaseCost,
             Integer usefulLifeYears,
-            DepreciationMethod depreciationMethod) {
+            DepreciationMethod depreciationMethod,
+            String warrantyProvider,
+            String warrantyContractNumber,
+            LocalDate warrantyStartDate,
+            WarrantyCoverageType warrantyCoverageType,
+            String warrantyTerms) {
 
         Map<String, String> data = new LinkedHashMap<>();
         data.put("Equipment Code", equipment.getEquipmentCode());
@@ -1347,6 +1414,11 @@ public class EquipmentService {
         data.put("Purchase Cost", purchaseCost != null ? purchaseCost.toString() : "");
         data.put("Useful Life (Years)", usefulLifeYears != null ? usefulLifeYears.toString() : "");
         data.put("Depreciation Method", depreciationMethod != null ? depreciationMethod.name() : "");
+        data.put("Warranty Provider", warrantyProvider != null ? warrantyProvider : "");
+        data.put("Warranty Contract Number", warrantyContractNumber != null ? warrantyContractNumber : "");
+        data.put("Warranty Start Date", warrantyStartDate != null ? warrantyStartDate.toString() : "");
+        data.put("Warranty Coverage Type", warrantyCoverageType != null ? warrantyCoverageType.name() : "");
+        data.put("Warranty Terms", warrantyTerms != null ? warrantyTerms : "");
         return data;
     }
 
@@ -1420,6 +1492,10 @@ public class EquipmentService {
         return CsvSupport.parseLine(line);
     }
 
+    private String blankToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
     private String getFieldValue(List<String> fields, List<String> headers, String columnName) {
         for (int i = 0; i < headers.size(); i++) {
             if (headers.get(i).equalsIgnoreCase(columnName)) {
@@ -1470,7 +1546,14 @@ public class EquipmentService {
                     // package or round-trip through the import without losing the finance data.
                     equipment.getPurchaseCost(),
                     equipment.getUsefulLifeYears(),
-                    equipment.getDepreciationMethod()));
+                    equipment.getDepreciationMethod(),
+                    // Warranty & service contract columns (issue #703), so the report export
+                    // carries the full coverage picture and round-trips through the import.
+                    equipment.getWarrantyProvider(),
+                    equipment.getWarrantyContractNumber(),
+                    equipment.getWarrantyStartDate(),
+                    equipment.getWarrantyCoverageType(),
+                    equipment.getWarrantyTerms()));
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);

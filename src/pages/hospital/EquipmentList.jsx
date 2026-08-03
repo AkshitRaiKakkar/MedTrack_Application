@@ -113,6 +113,33 @@ export default function EquipmentList({ onNavigate }) {
     }).format(Number(val));
   };
 
+  // Warranty status badge (issue #703). The backend serialises warrantyStatus with each item;
+  // the local fallback keeps demo/default items rendering correctly when the field is absent.
+  const resolveWarrantyStatus = (item) => {
+    if (item.warrantyStatus) return item.warrantyStatus;
+    if (!item.warrantyExpiry) return "NO_COVERAGE";
+    const days = Math.floor((new Date(item.warrantyExpiry) - new Date()) / 86400000);
+    if (days < 0) return "EXPIRED";
+    if (days <= 90) return "EXPIRING_SOON";
+    return "ACTIVE";
+  };
+
+  const warrantyBadgeLabel = (item) => {
+    const status = resolveWarrantyStatus(item);
+    if (status === "ACTIVE") return "Warranty Active";
+    if (status === "EXPIRING_SOON") return "Warranty Expiring Soon";
+    if (status === "EXPIRED") return "Warranty Expired";
+    return "No Coverage";
+  };
+
+  const warrantyBadgeClass = (item) => {
+    const status = resolveWarrantyStatus(item);
+    if (status === "ACTIVE") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+    if (status === "EXPIRING_SOON") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+    if (status === "EXPIRED") return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+    return "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
+  };
+
   const [equipment, setEquipment] = useState([]);
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("All");
@@ -676,16 +703,21 @@ export default function EquipmentList({ onNavigate }) {
               />
 
               <div className="p-5 flex-grow flex flex-col">
-                <div
-                  className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block mb-3 w-fit ${
-                    item.status === "Operational" || item.status === "ACTIVE"
-                      ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
-                      : item.status === "Maintenance" || item.status === "NEEDS_MAINTENANCE" || item.status === "UNDER_MAINTENANCE"
-                      ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                      : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                  }`}
-                >
-                  {item.status || "Unknown"}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block w-fit ${
+                      item.status === "Operational" || item.status === "ACTIVE"
+                        ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
+                        : item.status === "Maintenance" || item.status === "NEEDS_MAINTENANCE" || item.status === "UNDER_MAINTENANCE"
+                        ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                    }`}
+                  >
+                    {item.status || "Unknown"}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block w-fit ${warrantyBadgeClass(item)}`}>
+                    {warrantyBadgeLabel(item)}
+                  </span>
                 </div>
 
                 <h3 className="text-xl font-semibold mb-2 text-primary">
@@ -907,6 +939,89 @@ export default function EquipmentList({ onNavigate }) {
                     )}
                   </div>
                 )}
+
+                {/* Warranty & Contract Section (issue #703) */}
+                <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle">
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <h3 className="text-lg font-extrabold text-primary m-0">Warranty &amp; Service Contract</h3>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase inline-block ${warrantyBadgeClass(equipmentDetails)}`}>
+                      {warrantyBadgeLabel(equipmentDetails)}
+                    </span>
+                  </div>
+                  {equipmentDetails.warrantyExpiry ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Provider
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.warrantyProvider || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Contract Number
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1 font-mono">
+                          {equipmentDetails.warrantyContractNumber || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Coverage Type
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {(equipmentDetails.warrantyCoverageType || "").replaceAll("_", " ").toLowerCase() || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Coverage Start
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.warrantyStartDate || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Expires
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.warrantyExpiry}
+                          {equipmentDetails.warrantyDaysRemaining !== null
+                            && equipmentDetails.warrantyDaysRemaining !== undefined && (
+                            <span className={`ml-2 text-xs font-bold ${
+                              equipmentDetails.warrantyDaysRemaining < 0
+                                ? "text-red-500"
+                                : equipmentDetails.warrantyDaysRemaining <= 90
+                                ? "text-amber-500"
+                                : "text-emerald-600"
+                            }`}>
+                              ({equipmentDetails.warrantyDaysRemaining < 0
+                                ? `${Math.abs(equipmentDetails.warrantyDaysRemaining)} days ago`
+                                : equipmentDetails.warrantyDaysRemaining === 0
+                                ? "expires today"
+                                : `${equipmentDetails.warrantyDaysRemaining} days left`})
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Terms / Exclusions
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.warrantyTerms || "None recorded"}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-secondary font-semibold m-0">
+                      No warranty or service contract recorded for this asset. Add one to receive
+                      expiry alerts and coverage details.
+                    </p>
+                  )}
+                </div>
 
                 {/* QR Code Section */}
                 <div className="mt-6 mb-6 p-4 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-subtle flex flex-col items-center justify-center gap-3">
