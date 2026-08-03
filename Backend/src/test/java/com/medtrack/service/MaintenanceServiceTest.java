@@ -6,6 +6,8 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.MaintenanceAssignmentRequest;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
+import com.medtrack.dto.MaintenanceActivityPageResponse;
+import com.medtrack.model.MaintenanceActivityType;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.MaintenanceStatus;
@@ -52,6 +54,9 @@ public class MaintenanceServiceTest {
 
     @Mock
     private EquipmentRepository equipmentRepository;
+
+    @Mock
+    private MaintenanceActivityService activityService;
 
     @Mock
     private Authentication authentication;
@@ -774,5 +779,34 @@ public class MaintenanceServiceTest {
 
         verify(taskRepository, never()).save(any());
         verify(taskRepository, never()).delete(any());
+    }
+
+    @Test
+    void getTaskActivity_AllowsOwningHospitalToReadArchivedTaskEvidence() {
+        MaintenanceActivityPageResponse expected = MaintenanceActivityPageResponse.builder()
+                .content(List.of())
+                .page(0)
+                .size(50)
+                .totalElements(0)
+                .totalPages(0)
+                .first(true)
+                .last(true)
+                .build();
+        when(activityService.getHistory(50L, "task-archived", 0, 50, authentication))
+                .thenReturn(expected);
+
+        MaintenanceActivityPageResponse result = maintenanceService.getTaskActivity(
+                50L, "task-archived", 0, 50, authentication);
+
+        assertSame(expected, result);
+    }
+
+    @Test
+    void getTaskActivity_DoesNotRevealAnotherHospitalsArchivedEvidence() {
+        when(activityService.getHistory(99L, null, null, null, authentication))
+                .thenThrow(new ResourceNotFoundException("Maintenance task not found or access denied"));
+
+        assertThrows(ResourceNotFoundException.class, () -> maintenanceService.getTaskActivity(
+                99L, null, null, null, authentication));
     }
 }

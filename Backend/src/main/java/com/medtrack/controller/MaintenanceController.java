@@ -1,6 +1,7 @@
 package com.medtrack.controller;
 
 import com.medtrack.dto.MaintenanceAssignmentRequest;
+import com.medtrack.dto.MaintenanceActivityPageResponse;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.model.MaintenanceTask;
@@ -57,6 +58,24 @@ public class MaintenanceController {
                                                        Authentication authentication) {
         validateId(id);
         return ResponseEntity.ok(maintenanceService.getTaskById(id, authentication));
+    }
+
+    /**
+     * Retrieves the immutable activity timeline for a task. Hospital users can retain access to
+     * archived evidence; technicians can read activity only while the task remains assigned to
+     * their stable user identity.
+     */
+    @GetMapping("/{id}/history")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<MaintenanceActivityPageResponse> getTaskActivity(
+            @PathVariable Long id,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceService.getTaskActivity(
+                id, type, page, size, authentication));
     }
 
     /**

@@ -65,6 +65,9 @@ class PreventiveMaintenanceServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private MaintenanceActivityService activityService;
+
+    @Mock
     private Authentication authentication;
 
     @InjectMocks

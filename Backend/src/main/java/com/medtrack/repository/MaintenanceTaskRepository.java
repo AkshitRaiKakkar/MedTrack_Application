@@ -220,6 +220,16 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             @Param("taskId") Long taskId,
             @Param("hospitalId") Long hospitalId);
 
+    // Audit access includes soft-deleted tasks but still enforces both ownership keys.
+    @Query(value = "SELECT COUNT(*) FROM maintenance_tasks mt "
+            + "JOIN equipment e ON e.id = mt.equipment_record_id "
+            + "WHERE mt.id = :taskId AND mt.hospital_id = :hospitalId "
+            + "AND e.hospital_id = :hospitalId",
+            nativeQuery = true)
+    long countOwnedTaskIncludingArchived(
+            @Param("taskId") Long taskId,
+            @Param("hospitalId") Long hospitalId);
+
     @Query(value = "SELECT COUNT(*) FROM equipment e "
             + "WHERE e.id = :equipmentId AND e.hospital_id = :hospitalId "
             + "AND e.deleted = FALSE AND e.status NOT IN ('RETIRED', 'DISPOSED')",

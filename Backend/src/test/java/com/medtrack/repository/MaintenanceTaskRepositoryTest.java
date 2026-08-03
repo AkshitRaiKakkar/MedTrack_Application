@@ -6,6 +6,8 @@ import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
+import com.medtrack.model.MaintenanceTaskActivity;
+import com.medtrack.model.MaintenanceActivityType;
 import com.medtrack.model.MaintenanceTask;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -17,6 +19,8 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
@@ -48,6 +52,9 @@ class MaintenanceTaskRepositoryTest {
 
     @Autowired
     private MaintenanceTaskRepository taskRepository;
+
+    @Autowired
+    private MaintenanceTaskActivityRepository activityRepository;
 
     @Test
     void softDeletedTasksAreExcludedFromNormalRepositoryAccess() {
@@ -104,6 +111,58 @@ class MaintenanceTaskRepositoryTest {
                 hospital.getId(), MaintenanceStatus.COMPLETED, "Critical"));
         assertEquals(0, taskRepository.countSchedulableEquipment(
                 equipmentId, hospital.getId()));
+    }
+
+    @Test
+    void activityTimelineIsHospitalScopedFilteredAndNewestFirst() {
+        Hospital hospital = persistHospital("timeline-owner");
+        User technician = persistTechnician("timeline-tech");
+        Equipment equipment = persistEquipment(hospital);
+        equipment.setEquipmentCode("EQ-TIMELINE");
+        MaintenanceTask task = persistTask("MNT-TIMELINE", equipment, hospital, technician);
+
+        MaintenanceTaskActivity scheduled = persistActivity(
+                task, hospital, 1L, MaintenanceActivityType.TASK_CREATED,
+                LocalDateTime.of(2026, 8, 1, 9, 0));
+        MaintenanceTaskActivity completed = persistActivity(
+                task, hospital, 2L, MaintenanceActivityType.STATUS_CHANGED,
+                LocalDateTime.of(2026, 8, 2, 9, 0));
+        entityManager.flush();
+
+        Page<MaintenanceTaskActivity> all = activityRepository.findOwnedHistory(
+                task.getId(), hospital.getId(), null, PageRequest.of(0, 10));
+        Page<MaintenanceTaskActivity> filtered = activityRepository.findOwnedHistory(
+                task.getId(), hospital.getId(), "STATUS_CHANGED", PageRequest.of(0, 10));
+
+        assertEquals(List.of(completed.getId(), scheduled.getId()),
+                all.getContent().stream().map(MaintenanceTaskActivity::getId).toList());
+        assertEquals(List.of(completed.getId()),
+                filtered.getContent().stream().map(MaintenanceTaskActivity::getId).toList());
+        assertTrue(activityRepository.findOwnedHistory(
+                task.getId(), hospital.getId() + 999, null,
+                PageRequest.of(0, 10)).isEmpty());
+        assertEquals(2L, activityRepository.findLastSequenceNumber(task.getId()));
+    }
+
+    private MaintenanceTaskActivity persistActivity(
+            MaintenanceTask task,
+            Hospital hospital,
+            long sequence,
+            MaintenanceActivityType type,
+            LocalDateTime occurredAt) {
+        MaintenanceTaskActivity activity = MaintenanceTaskActivity.builder()
+                .task(task)
+                .hospitalId(hospital.getId())
+                .sequenceNumber(sequence)
+                .eventType(type)
+                .actorEmail("system@medtrack.local")
+                .actorRole("SYSTEM")
+                .newStatus(MaintenanceStatus.SCHEDULED)
+                .changedFields("task,status")
+                .summary("Maintenance activity recorded")
+                .occurredAt(occurredAt)
+                .build();
+        return activityRepository.save(activity);
     }
 
     @Test
