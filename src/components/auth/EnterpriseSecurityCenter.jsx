@@ -48,7 +48,8 @@ import {
   Route,
   Dna,
   Brain,
-  Boxes
+  Boxes,
+  Siren
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -81,6 +82,7 @@ import GenomicDataVaultPanel from "./GenomicDataVaultPanel";
 import ClinicalAiDefensePanel from "./ClinicalAiDefensePanel";
 import BiomedicalBlockchainPanel from "./BiomedicalBlockchainPanel";
 import ZeroTrustSdpPanel from "./ZeroTrustSdpPanel";
+import BiomedicalSoarPanel from "./BiomedicalSoarPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -431,7 +433,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "genomics", label: "Genomic EHR & DNA Vault", icon: Dna },
           { id: "clinicalai", label: "Clinical AI Model Security", icon: Brain },
           { id: "blockchain", label: "Biomedical Blockchain Audit", icon: Boxes },
-          { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network }
+          { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network },
+          { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -937,6 +940,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 29: ZERO TRUST SOFTWARE-DEFINED PERIMETER (SDP) */}
       {selectedTab === "sdp" && (
         <ZeroTrustSdpPanel />
+      )}
+
+      {/* TAB 30: BIOMEDICAL SOAR & INCIDENT RESPONSE AUTOMATION */}
+      {selectedTab === "biomedsoar" && (
+        <BiomedicalSoarPanel />
       )}
 
       {/* 4. MODALS */}
