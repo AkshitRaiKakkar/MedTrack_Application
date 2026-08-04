@@ -87,6 +87,7 @@ import ZeroTrustSdpPanel from "./ZeroTrustSdpPanel";
 import BiomedicalSoarPanel from "./BiomedicalSoarPanel";
 import QkdKeyDistributionPanel from "./QkdKeyDistributionPanel";
 import BiomedicalAiWatermarkPanel from "./BiomedicalAiWatermarkPanel";
+import HomomorphicEncryptionPanel from "./HomomorphicEncryptionPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -440,7 +441,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network },
           { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren },
           { id: "qkd", label: "Quantum Key Distribution (QKD)", icon: Atom },
-          { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp }
+          { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp },
+          { id: "fhe", label: "Homomorphic FHE & Confidential Compute", icon: Lock }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -961,6 +963,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 32: BIOMEDICAL AI WATERMARKING & C2PA PROVENANCE */}
       {selectedTab === "watermark" && (
         <BiomedicalAiWatermarkPanel />
+      )}
+
+      {/* TAB 33: HOMOMORPHIC ENCRYPTION & CONFIDENTIAL COMPUTE */}
+      {selectedTab === "fhe" && (
+        <HomomorphicEncryptionPanel />
       )}
 
       {/* 4. MODALS */}
