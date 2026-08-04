@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.Collections;
+import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -75,7 +76,8 @@ public class SupplierControllerTest {
 
                 when(supplierOrderService.getSupplierOrders(
                                 eq(0), eq(10), eq("orderDate"), eq("desc"),
-                                eq("PENDING"), eq("Processing"), eq(100L), eq("Ventilator"))).thenReturn(page);
+                                eq("PENDING"), eq("Processing"), eq(100L), eq("Ventilator"),
+                                eq(null), eq(null), eq(null), eq(null), eq(null))).thenReturn(page);
 
                 mockMvc.perform(get("/api/supplier/orders")
                                 .param("page", "0")
@@ -102,7 +104,8 @@ public class SupplierControllerTest {
                 Page<EquipmentOrder> emptyPage = new PageImpl<>(Collections.emptyList());
                 when(supplierOrderService.getSupplierOrders(
                                 eq(0), eq(10), eq("orderDate"), eq("desc"),
-                                eq(null), eq(null), eq(100L), eq(null))).thenReturn(emptyPage);
+                                eq(null), eq(null), eq(100L), eq(null),
+                                eq(null), eq(null), eq(null), eq(null), eq(null))).thenReturn(emptyPage);
 
                 mockMvc.perform(get("/api/supplier/orders").param("supplierId", "999"))
                                 .andExpect(status().isNoContent());
@@ -115,7 +118,8 @@ public class SupplierControllerTest {
                 Page<EquipmentOrder> emptyPage = new PageImpl<>(Collections.emptyList());
                 when(supplierOrderService.getSupplierOrders(
                                 eq(0), eq(10), eq("orderDate"), eq("desc"),
-                                eq(null), eq(null), eq(999L), eq(null))).thenReturn(emptyPage);
+                                eq(null), eq(null), eq(999L), eq(null),
+                                eq(null), eq(null), eq(null), eq(null), eq(null))).thenReturn(emptyPage);
 
                 mockMvc.perform(get("/api/supplier/orders").param("supplierId", "999"))
                                 .andExpect(status().isNoContent());
@@ -127,13 +131,35 @@ public class SupplierControllerTest {
                 // null, so that's what resolveCallerId() yields here since it isn't stubbed.
                 when(supplierOrderService.getSupplierOrders(
                                 eq(-1), eq(10), eq("orderDate"), eq("desc"),
-                                eq(null), eq(null), eq(0L), eq(null)))
+                                eq(null), eq(null), eq(0L), eq(null),
+                                eq(null), eq(null), eq(null), eq(null), eq(null)))
                                 .thenThrow(new IllegalArgumentException("Page index must not be less than zero"));
 
                 mockMvc.perform(get("/api/supplier/orders")
                                 .param("page", "-1"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.message").value("Page index must not be less than zero"));
+        }
+
+        @Test
+        void getSupplierOrders_ForwardsAdvancedFiltersAndProtectsSupplierScope() throws Exception {
+                LocalDateTime start = LocalDateTime.of(2026, 8, 1, 8, 30);
+                LocalDateTime end = LocalDateTime.of(2026, 8, 3, 18, 0);
+                when(supplierAccessGuard.resolveCallerId(any())).thenReturn(42L);
+                when(supplierOrderService.getSupplierOrders(
+                                eq(0), eq(10), eq("orderDate"), eq("desc"),
+                                eq(null), eq(null), eq(42L), eq(null),
+                                eq("SHIPPED"), eq(true), eq("TRK-42"), eq(start), eq(end)))
+                                .thenReturn(Page.empty());
+
+                mockMvc.perform(get("/api/supplier/orders")
+                                .param("supplierId", "999")
+                                .param("deliveryStatus", "SHIPPED")
+                                .param("isDelayed", "true")
+                                .param("trackingNumber", "TRK-42")
+                                .param("startDate", "2026-08-01T08:30:00")
+                                .param("endDate", "2026-08-03T18:00:00"))
+                                .andExpect(status().isNoContent());
         }
 
         @Test

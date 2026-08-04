@@ -78,24 +78,46 @@ public final class DepreciationCalculator {
             DepreciationMethod method,
             double elapsedYears) {
 
-        if (purchaseCost == null || usefulLifeYears <= 0 || elapsedYears <= 0) {
+        if (purchaseCost == null
+                || purchaseCost.signum() <= 0
+                || usefulLifeYears <= 0
+                || elapsedYears <= 0
+                || !Double.isFinite(elapsedYears)) {
             return BigDecimal.ZERO;
         }
 
+        double boundedElapsedYears = Math.min(elapsedYears, usefulLifeYears);
         double depreciation;
         if (method == DepreciationMethod.DECLINING_BALANCE) {
-            // Double-declining: value decays at 2/life per year, so accumulated is cost * (1 - (1-2/life)^years).
-            double decay = 1.0 - (2.0 / usefulLifeYears);
-            depreciation = purchaseCost.doubleValue() * (1.0 - Math.pow(decay, elapsedYears));
+            depreciation = decliningBalanceDepreciation(
+                    purchaseCost.doubleValue(), usefulLifeYears, boundedElapsedYears);
         } else {
             double annual = purchaseCost.doubleValue() / usefulLifeYears;
-            depreciation = annual * elapsedYears;
+            depreciation = annual * boundedElapsedYears;
         }
 
         return BigDecimal.valueOf(depreciation)
                 .min(purchaseCost)
                 .max(BigDecimal.ZERO)
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Double-declining depreciation with partial years prorated against the opening value of the
+     * current year. The annual rate is capped at 100%; without that cap a one-year useful life
+     * produces a decay factor of {@code -1}, and raising it to a fractional year produces NaN.
+     */
+    private static double decliningBalanceDepreciation(
+            double purchaseCost,
+            int usefulLifeYears,
+            double elapsedYears) {
+
+        double annualRate = Math.min(2.0 / usefulLifeYears, 1.0);
+        int completeYears = (int) Math.floor(elapsedYears);
+        double partialYear = elapsedYears - completeYears;
+        double openingFactor = Math.pow(1.0 - annualRate, completeYears);
+        double closingFactor = openingFactor * (1.0 - (annualRate * partialYear));
+        return purchaseCost * (1.0 - closingFactor);
     }
 
     /**
