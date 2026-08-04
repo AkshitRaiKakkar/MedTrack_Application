@@ -2,6 +2,7 @@ package com.medtrack.model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -179,12 +180,14 @@ public class Equipment {
      * in which case no depreciation accrues and the book value equals the cost (or zero).
      */
     @Column(name = "purchase_cost", precision = 14, scale = 2)
+    @PositiveOrZero(message = "Purchase cost cannot be negative")
     private BigDecimal purchaseCost;
 
     /**
      * Depreciable life of the asset in years. {@code null} (or &le; 0) means no depreciation.
      */
     @Column(name = "useful_life_years")
+    @Positive(message = "Useful life must be a positive number of years")
     private Integer usefulLifeYears;
 
     /**

@@ -172,6 +172,27 @@ public class SupplierControllerTest {
         }
 
         @Test
+        void getSupplierOrders_ForwardsAdvancedFiltersAndProtectsSupplierScope() throws Exception {
+                LocalDateTime start = LocalDateTime.of(2026, 8, 1, 8, 30);
+                LocalDateTime end = LocalDateTime.of(2026, 8, 3, 18, 0);
+                when(supplierAccessGuard.resolveCallerId(any())).thenReturn(42L);
+                when(supplierOrderService.getSupplierOrders(
+                                eq(0), eq(10), eq("orderDate"), eq("desc"),
+                                eq(null), eq(null), eq(42L), eq(null),
+                                eq("SHIPPED"), eq(true), eq("TRK-42"), eq(start), eq(end)))
+                                .thenReturn(Page.empty());
+
+                mockMvc.perform(get("/api/supplier/orders")
+                                .param("supplierId", "999")
+                                .param("deliveryStatus", "SHIPPED")
+                                .param("isDelayed", "true")
+                                .param("trackingNumber", "TRK-42")
+                                .param("startDate", "2026-08-01T08:30:00")
+                                .param("endDate", "2026-08-03T18:00:00"))
+                                .andExpect(status().isNoContent());
+        }
+
+        @Test
         void updateOrderStatus_Success() throws Exception {
                 EquipmentOrder updatedOrder = EquipmentOrder.builder()
                                 .id(1L)

@@ -54,6 +54,12 @@ public class SupplierOrderService {
     private static final List<String> VALID_SHIPPING_STATUSES = Arrays.asList(
             "Processing", "Shipped", "Delivered", "Cancelled");
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "orderCode", "equipmentName", "quantity", "status", "shippingStatus",
+            "hospital", "orderDate", "updatedAt", "estimatedDelivery", "deliveredAt");
+
+    private static final int MAX_PAGE_SIZE = 100;
+
     @Transactional(readOnly = true)
     public Page<EquipmentOrder> getSupplierOrders(
             int page, int size, String sortBy, String sortDir,
@@ -64,15 +70,20 @@ public class SupplierOrderService {
         if (page < 0) {
             throw new IllegalArgumentException("Page index must not be less than zero");
         }
-        if (size <= 0) {
-            throw new IllegalArgumentException("Page size must not be less than or equal to zero");
+        if (size <= 0 || size > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("Page size must be between 1 and " + MAX_PAGE_SIZE);
         }
 
-        if (status != null && !status.isEmpty() && !VALID_STATUSES.contains(status)) {
+        status = normalize(status);
+        shippingStatus = normalize(shippingStatus);
+        deliveryStatus = normalize(deliveryStatus);
+        trackingNumber = normalize(trackingNumber);
+
+        if (status != null && !VALID_STATUSES.contains(status)) {
             throw new IllegalArgumentException("Invalid order status: " + status);
         }
 
-        if (shippingStatus != null && !shippingStatus.isEmpty() && !VALID_SHIPPING_STATUSES.contains(shippingStatus)) {
+        if (shippingStatus != null && !VALID_SHIPPING_STATUSES.contains(shippingStatus)) {
             throw new IllegalArgumentException("Invalid shipping status: " + shippingStatus);
         }
 
@@ -84,11 +95,11 @@ public class SupplierOrderService {
             throw new IllegalArgumentException("Start date must not be after end date");
         }
 
-        // Handle empty or null search
-        String searchQuery = (search == null || search.trim().isEmpty()) ? null : search.trim();
-        String trackingQuery = (trackingNumber == null || trackingNumber.trim().isEmpty())
-                ? null
-                : trackingNumber.trim();
+        if (sortBy == null || !ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            throw new IllegalArgumentException("Invalid sort field: " + sortBy);
+        }
+
+        String searchQuery = normalize(search);
 
         Sort.Direction direction;
         try {
@@ -101,7 +112,7 @@ public class SupplierOrderService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         ShipmentStatus shipmentStatusEnum = null;
-        if (deliveryStatus != null && !deliveryStatus.isEmpty()) {
+        if (deliveryStatus != null) {
             try {
                 shipmentStatusEnum = ShipmentStatus.valueOf(deliveryStatus.toUpperCase());
             } catch (IllegalArgumentException e) {
@@ -109,11 +120,15 @@ public class SupplierOrderService {
             }
         }
 
-        boolean hasShipmentParams = (supplierId != null || shipmentStatusEnum != null || isDelayed != null);
+        boolean hasShipmentFilters = supplierId != null || shipmentStatusEnum != null || isDelayed != null;
 
         return orderRepository.findAdvancedSupplierOrders(
-                status, shippingStatus, shipmentStatusEnum, isDelayed, trackingQuery,
-                startDate, endDate, supplierId, searchQuery, hasShipmentParams, pageable);
+                status, shippingStatus, shipmentStatusEnum, isDelayed, trackingNumber,
+                startDate, endDate, supplierId, searchQuery, hasShipmentFilters, pageable);
+    }
+
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     @Transactional

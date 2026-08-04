@@ -116,35 +116,60 @@ public class SupplierOrderServiceTest {
         }
 
         @Test
+        void getSupplierOrders_InvalidDeliveryStatus_ThrowsIllegalArgumentException() {
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                () -> supplierOrderService.getSupplierOrders(
+                                                0, 10, "orderDate", "desc", null, null, 5L, null,
+                                                "LOST", null, null, null, null));
+
+                assertEquals("Invalid delivery status: LOST", exception.getMessage());
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
         void getSupplierOrders_ReversedDateRange_ThrowsIllegalArgumentException() {
-                LocalDateTime startDate = LocalDateTime.of(2026, 8, 2, 0, 0);
-                LocalDateTime endDate = LocalDateTime.of(2026, 8, 1, 0, 0);
+                LocalDateTime start = LocalDateTime.of(2026, 8, 2, 12, 0);
+                LocalDateTime end = start.minusDays(1);
 
                 IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                                 () -> supplierOrderService.getSupplierOrders(
                                                 0, 10, "orderDate", "desc", null, null, 5L, null,
-                                                null, null, null, startDate, endDate));
+                                                null, null, null, start, end));
 
                 assertEquals("Start date must not be after end date", exception.getMessage());
                 verifyNoInteractions(orderRepository);
         }
 
         @Test
-        void getSupplierOrders_BlankTrackingNumber_IsNormalizedToNull() {
-                Page<EquipmentOrder> emptyPage = new PageImpl<>(Collections.emptyList());
+        void getSupplierOrders_UnsupportedSortField_ThrowsIllegalArgumentException() {
+                assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
+                                0, 10, "supplierNotes.password", "desc", null, null, 5L, null,
+                                null, null, null, null, null));
+
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        void getSupplierOrders_OversizedPage_ThrowsIllegalArgumentException() {
+                assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
+                                0, 101, "orderDate", "desc", null, null, 5L, null,
+                                null, null, null, null, null));
+        }
+
+        @Test
+        void getSupplierOrders_NormalizesOptionalTextFilters() {
                 when(orderRepository.findAdvancedSupplierOrders(
-                                isNull(), isNull(), isNull(), isNull(), isNull(),
-                                isNull(), isNull(), eq(5L), isNull(), eq(true), any(Pageable.class)))
-                                .thenReturn(emptyPage);
+                                isNull(), isNull(), eq(ShipmentStatus.SHIPPED), eq(true), eq("TRK-9"),
+                                isNull(), isNull(), eq(9L), isNull(), eq(true), any(Pageable.class)))
+                                .thenReturn(Page.empty());
 
-                Page<EquipmentOrder> result = supplierOrderService.getSupplierOrders(
-                                0, 10, "orderDate", "desc", null, null, 5L, " ",
-                                null, null, "   ", null, null);
+                supplierOrderService.getSupplierOrders(
+                                0, 20, "orderDate", "asc", " ", "  ", 9L, " ",
+                                " shipped ", true, " TRK-9 ", null, null);
 
-                assertTrue(result.isEmpty());
                 verify(orderRepository).findAdvancedSupplierOrders(
-                                isNull(), isNull(), isNull(), isNull(), isNull(),
-                                isNull(), isNull(), eq(5L), isNull(), eq(true), any(Pageable.class));
+                                isNull(), isNull(), eq(ShipmentStatus.SHIPPED), eq(true), eq("TRK-9"),
+                                isNull(), isNull(), eq(9L), isNull(), eq(true), any(Pageable.class));
         }
 
         @Test

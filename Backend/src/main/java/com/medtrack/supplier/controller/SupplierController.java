@@ -52,8 +52,10 @@ public class SupplierController {
             @RequestParam(required = false) String deliveryStatus,
             @RequestParam(required = false) Boolean isDelayed,
             @RequestParam(required = false) String trackingNumber,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime endDate,
             Authentication authentication) {
 
         // A supplier can only ever see their own orders: the caller-supplied supplierId is
