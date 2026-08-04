@@ -49,6 +49,7 @@ const ScheduleMaintenancePage = lazy(() => import("../pages/hospital/ScheduleMai
 const RequestEquipmentPage = lazy(() => import("../pages/hospital/RequestEquipmentPage"));
 const PreventiveMaintenanceRules = lazy(() => import("../pages/hospital/PreventiveMaintenanceRules"));
 const MaintenanceSlaDashboard = lazy(() => import("../pages/hospital/MaintenanceSlaDashboard"));
+const EquipmentCalibrationHub = lazy(() => import("../pages/hospital/EquipmentCalibrationHub"));
 
 const TaskList = lazy(() => import("../pages/technician/TaskList"));
 const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
@@ -161,6 +162,7 @@ export const ROUTES = [
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
   { page: "maintenance-rules", slugs: ["maintenance-rules"], component: PreventiveMaintenanceRules, access: HOSPITAL_ONLY },
   { page: "sla-dashboard", slugs: ["sla-dashboard"], component: MaintenanceSlaDashboard, access: HOSPITAL_ONLY },
+  { page: "calibration", slugs: ["calibration", "equipment-calibration"], component: EquipmentCalibrationHub, access: HOSPITAL_ONLY },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },
