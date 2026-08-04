@@ -126,6 +126,36 @@ public class SupplierControllerTest {
         }
 
         @Test
+        void getSupplierOrders_ForwardsAdvancedFiltersWithAuthenticatedSupplierId() throws Exception {
+                when(supplierAccessGuard.resolveCallerId(any())).thenReturn(100L);
+                Page<EquipmentOrder> emptyPage = new PageImpl<>(Collections.emptyList());
+                LocalDateTime startDate = LocalDateTime.of(2026, 7, 1, 0, 0);
+                LocalDateTime endDate = LocalDateTime.of(2026, 7, 31, 23, 59);
+
+                when(supplierOrderService.getSupplierOrders(
+                                eq(1), eq(25), eq("equipmentName"), eq("asc"),
+                                eq("DELIVERED"), eq("Delivered"), eq(100L), eq("ventilator"),
+                                eq("DELIVERED"), eq(true), eq("TRK-42"), eq(startDate), eq(endDate)))
+                                .thenReturn(emptyPage);
+
+                mockMvc.perform(get("/api/supplier/orders")
+                                .param("page", "1")
+                                .param("size", "25")
+                                .param("sortBy", "equipmentName")
+                                .param("sortDir", "asc")
+                                .param("status", "DELIVERED")
+                                .param("shippingStatus", "Delivered")
+                                .param("supplierId", "999")
+                                .param("search", "ventilator")
+                                .param("deliveryStatus", "DELIVERED")
+                                .param("isDelayed", "true")
+                                .param("trackingNumber", "TRK-42")
+                                .param("startDate", "2026-07-01T00:00:00")
+                                .param("endDate", "2026-07-31T23:59:00"))
+                                .andExpect(status().isNoContent());
+        }
+
+        @Test
         void getSupplierOrders_InvalidParams_Returns400() throws Exception {
                 // Mockito's default answer for an unstubbed Long-returning method is 0L, not
                 // null, so that's what resolveCallerId() yields here since it isn't stubbed.
