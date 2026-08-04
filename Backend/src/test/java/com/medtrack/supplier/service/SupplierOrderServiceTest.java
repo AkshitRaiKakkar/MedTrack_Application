@@ -57,7 +57,7 @@ public class SupplierOrderServiceTest {
         @BeforeEach
         void setUp() {
                 supplierOrderService = new SupplierOrderService(orderRepository, shipmentTrackingRepository,
-                                supplierAccessGuard);
+                                supplierAccessGuard, supplierPerformanceService);
                 ReflectionTestUtils.setField(supplierOrderService, "kafkaTemplate", kafkaTemplate);
                 ReflectionTestUtils.setField(supplierOrderService, "orderEventsTopic", "order-events");
         }
@@ -113,6 +113,38 @@ public class SupplierOrderServiceTest {
         void getSupplierOrders_InvalidSupplierId_ThrowsIllegalArgumentException() {
                 assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
                                 0, 10, "orderDate", "desc", null, null, -5L, null, null, null, null, null, null));
+        }
+
+        @Test
+        void getSupplierOrders_ReversedDateRange_ThrowsIllegalArgumentException() {
+                LocalDateTime startDate = LocalDateTime.of(2026, 8, 2, 0, 0);
+                LocalDateTime endDate = LocalDateTime.of(2026, 8, 1, 0, 0);
+
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                () -> supplierOrderService.getSupplierOrders(
+                                                0, 10, "orderDate", "desc", null, null, 5L, null,
+                                                null, null, null, startDate, endDate));
+
+                assertEquals("Start date must not be after end date", exception.getMessage());
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        void getSupplierOrders_BlankTrackingNumber_IsNormalizedToNull() {
+                Page<EquipmentOrder> emptyPage = new PageImpl<>(Collections.emptyList());
+                when(orderRepository.findAdvancedSupplierOrders(
+                                isNull(), isNull(), isNull(), isNull(), isNull(),
+                                isNull(), isNull(), eq(5L), isNull(), eq(true), any(Pageable.class)))
+                                .thenReturn(emptyPage);
+
+                Page<EquipmentOrder> result = supplierOrderService.getSupplierOrders(
+                                0, 10, "orderDate", "desc", null, null, 5L, " ",
+                                null, null, "   ", null, null);
+
+                assertTrue(result.isEmpty());
+                verify(orderRepository).findAdvancedSupplierOrders(
+                                isNull(), isNull(), isNull(), isNull(), isNull(),
+                                isNull(), isNull(), eq(5L), isNull(), eq(true), any(Pageable.class));
         }
 
         @Test
@@ -219,6 +251,7 @@ public class SupplierOrderServiceTest {
                 verify(shipmentTrackingRepository).save(shipment);
                 verify(orderRepository).save(order);
                 verify(kafkaTemplate).send(eq("order-events"), eq("1"), any());
+                verify(supplierPerformanceService).publishPerformanceUpdate(1L);
         }
 
         @Test

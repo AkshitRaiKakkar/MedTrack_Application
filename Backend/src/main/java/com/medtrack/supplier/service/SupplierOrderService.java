@@ -40,6 +40,7 @@ public class SupplierOrderService {
     private final EquipmentOrderRepository orderRepository;
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final SupplierAccessGuard supplierAccessGuard;
+    private final SupplierPerformanceService supplierPerformanceService;
 
     @Autowired(required = false)
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -79,8 +80,15 @@ public class SupplierOrderService {
             throw new IllegalArgumentException("Supplier ID must be positive");
         }
 
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("Start date must not be after end date");
+        }
+
         // Handle empty or null search
         String searchQuery = (search == null || search.trim().isEmpty()) ? null : search.trim();
+        String trackingQuery = (trackingNumber == null || trackingNumber.trim().isEmpty())
+                ? null
+                : trackingNumber.trim();
 
         Sort.Direction direction;
         try {
@@ -104,7 +112,7 @@ public class SupplierOrderService {
         boolean hasShipmentParams = (supplierId != null || shipmentStatusEnum != null || isDelayed != null);
 
         return orderRepository.findAdvancedSupplierOrders(
-                status, shippingStatus, shipmentStatusEnum, isDelayed, trackingNumber,
+                status, shippingStatus, shipmentStatusEnum, isDelayed, trackingQuery,
                 startDate, endDate, supplierId, searchQuery, hasShipmentParams, pageable);
     }
 
