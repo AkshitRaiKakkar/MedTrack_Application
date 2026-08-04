@@ -59,12 +59,12 @@ public class SupplierController {
         Page<EquipmentOrder> orders = supplierOrderService.getSupplierOrders(
                 page, size, sortBy, sortDir, status, shippingStatus, effectiveSupplierId, search);
 
-        if (orders.isEmpty()) {
-            return ResponseEntity.noContent().build();
-        }
+                if (orders.isEmpty()) {
+                        return ResponseEntity.noContent().build();
+                }
 
-        return ResponseEntity.ok(orders);
-    }
+                return ResponseEntity.ok(orders);
+        }
 
     @PutMapping("/order/update/{orderId}")
     @PreAuthorize("hasRole('SUPPLIER')")
@@ -83,9 +83,9 @@ public class SupplierController {
         return ResponseEntity.ok(updatedOrder);
     }
 
-    // -----------------------------------------------------------------------
-    // Phase 7 – Supplier Performance Scoring
-    // -----------------------------------------------------------------------
+        // -----------------------------------------------------------------------
+        // Phase 7 – Supplier Performance Scoring
+        // -----------------------------------------------------------------------
 
     @GetMapping("/suppliers/{supplierId}/performance")
     @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")

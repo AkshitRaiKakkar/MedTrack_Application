@@ -56,7 +56,9 @@ public class SupplierOrderService {
     @Transactional(readOnly = true)
     public Page<EquipmentOrder> getSupplierOrders(
             int page, int size, String sortBy, String sortDir,
-            String status, String shippingStatus, Long supplierId, String search) {
+            String status, String shippingStatus, Long supplierId, String search,
+            String deliveryStatus, Boolean isDelayed, String trackingNumber,
+            LocalDateTime startDate, LocalDateTime endDate) {
 
         if (page < 0) {
             throw new IllegalArgumentException("Page index must not be less than zero");
@@ -90,7 +92,20 @@ public class SupplierOrderService {
         Sort sort = Sort.by(direction, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        return orderRepository.findSupplierOrders(status, shippingStatus, supplierId, searchQuery, pageable);
+        ShipmentStatus shipmentStatusEnum = null;
+        if (deliveryStatus != null && !deliveryStatus.isEmpty()) {
+            try {
+                shipmentStatusEnum = ShipmentStatus.valueOf(deliveryStatus.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid delivery status: " + deliveryStatus);
+            }
+        }
+
+        boolean hasShipmentParams = (supplierId != null || shipmentStatusEnum != null || isDelayed != null);
+
+        return orderRepository.findAdvancedSupplierOrders(
+                status, shippingStatus, shipmentStatusEnum, isDelayed, trackingNumber,
+                startDate, endDate, supplierId, searchQuery, hasShipmentParams, pageable);
     }
 
     @Transactional
@@ -182,7 +197,7 @@ public class SupplierOrderService {
             order.setDispatchedAt(LocalDateTime.now());
             order.setEstimatedDelivery(shipment.getEstimatedDeliveryDate().toString());
 
-            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents);
+            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
 
         } else if (requestedStatus == ShipmentStatus.DELIVERED) {
             ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
@@ -204,7 +219,7 @@ public class SupplierOrderService {
             order.setShippingStatus("Delivered");
             order.setDeliveredAt(LocalDateTime.now());
 
-            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents);
+            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
         }
 
         order.setStatus(requestedStatus.name());
@@ -222,7 +237,7 @@ public class SupplierOrderService {
     }
 
     private void scheduleEventPublish(Long orderId, ShipmentStatus status, ShipmentTracking shipment,
-            Set<String> publishedEvents) {
+            Set<String> publishedEvents, EquipmentOrder order) {
         String eventKey = orderId + ":" + status;
         if (publishedEvents.contains(eventKey)) {
             return;
@@ -233,15 +248,16 @@ public class SupplierOrderService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    publishKafkaEvent(orderId, status, shipment);
+                    publishKafkaEvent(orderId, status, shipment, order);
                 }
             });
         } else {
-            publishKafkaEvent(orderId, status, shipment);
+            publishKafkaEvent(orderId, status, shipment, order);
         }
     }
 
-    private void publishKafkaEvent(Long orderId, ShipmentStatus status, ShipmentTracking shipment) {
+    private void publishKafkaEvent(Long orderId, ShipmentStatus status, ShipmentTracking shipment,
+            EquipmentOrder order) {
         if (kafkaTemplate == null) {
             log.warn("KafkaTemplate is not available. Skipping event publication for order ID: [{}]", orderId);
             return;
@@ -255,6 +271,9 @@ public class SupplierOrderService {
                         .estimatedDeliveryDate(shipment.getEstimatedDeliveryDate())
                         .shippedAt(LocalDateTime.now())
                         .supplierId(shipment.getSupplierId())
+                        .hospital(order.getHospital())
+                        .equipmentName(order.getEquipmentName())
+                        .quantity(order.getQuantity())
                         .build();
                 log.info("Publishing OrderShippedEvent for order ID: [{}]", orderId);
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
@@ -266,9 +285,13 @@ public class SupplierOrderService {
                         .actualDeliveryDate(shipment.getActualDeliveryDate() != null ? shipment.getActualDeliveryDate()
                                 : LocalDateTime.now())
                         .supplierId(shipment.getSupplierId())
+                        .hospital(order.getHospital())
+                        .equipmentName(order.getEquipmentName())
+                        .quantity(order.getQuantity())
                         .build();
                 log.info("Publishing OrderDeliveredEvent for order ID: [{}]", orderId);
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
+                supplierPerformanceService.publishPerformanceUpdate(shipment.getSupplierId());
             }
         } catch (Exception e) {
             log.error("Failed to publish Kafka event for order ID: [{}], status: [{}] due to error: {}",
