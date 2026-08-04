@@ -96,6 +96,7 @@ import BiomedicalMpcHsmPanel from "./BiomedicalMpcHsmPanel";
 import HealthcareCtemPanel from "./HealthcareCtemPanel";
 import BiomedicalSovereignIdentityPanel from "./BiomedicalSovereignIdentityPanel";
 import BiomedicalIncidentCommandPanel from "./BiomedicalIncidentCommandPanel";
+import BiomedicalDataMeshPanel from "./BiomedicalDataMeshPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -454,7 +455,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "mpchsm", label: "Sovereign MPC HSM Key Custody", icon: Share2 },
           { id: "ctem", label: "Healthcare CTEM & Attack Surface", icon: Radar },
           { id: "didvc", label: "Sovereign Identity (W3C DID/VC)", icon: IdCard },
-          { id: "incidentcommand", label: "Incident Command & Air-Gap DR", icon: Power }
+          { id: "incidentcommand", label: "Incident Command & Air-Gap DR", icon: Power },
+          { id: "datamesh", label: "Zero-Trust Data Mesh & ODRL", icon: Boxes }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1000,6 +1002,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 37: BIOMEDICAL INCIDENT COMMAND & CYBER RESILIENCE */}
       {selectedTab === "incidentcommand" && (
         <BiomedicalIncidentCommandPanel />
+      )}
+
+      {/* TAB 38: BIOMEDICAL ZERO-TRUST DATA MESH & ODRL POLICIES */}
+      {selectedTab === "datamesh" && (
+        <BiomedicalDataMeshPanel />
       )}
 
       {/* 4. MODALS */}
