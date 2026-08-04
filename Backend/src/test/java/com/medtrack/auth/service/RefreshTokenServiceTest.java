@@ -112,6 +112,31 @@ public class RefreshTokenServiceTest {
     }
 
     @Test
+    void consumeToken_ActiveToken_RevokesAndReturnsLockedToken() {
+        String tokenStr = "active-token";
+        RefreshToken activeToken = RefreshToken.builder()
+                .id(20L)
+                .userId(7L)
+                .token(tokenStr)
+                .expiryDate(LocalDateTime.now().plusHours(1))
+                .revoked(false)
+                .build();
+
+        when(refreshTokenRepository.findByTokenForUpdate(tokenStr))
+                .thenReturn(Optional.of(activeToken));
+        when(refreshTokenRepository.save(activeToken)).thenReturn(activeToken);
+
+        RefreshToken consumed = refreshTokenService.consumeToken(tokenStr);
+
+        assertSame(activeToken, consumed);
+        assertTrue(consumed.isRevoked());
+        assertEquals(7L, consumed.getUserId());
+        verify(refreshTokenRepository).findByTokenForUpdate(tokenStr);
+        verify(refreshTokenRepository).save(activeToken);
+        verify(refreshTokenRepository, never()).findByToken(tokenStr);
+    }
+
+    @Test
     void revokeToken_Success() {
         String tokenStr = "some-token";
         RefreshToken mockToken = RefreshToken.builder()
