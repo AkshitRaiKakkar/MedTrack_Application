@@ -51,7 +51,11 @@ import {
   Boxes,
   Siren,
   Atom,
-  Stamp
+  Stamp,
+  Share2,
+  Radar,
+  IdCard,
+  Power
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -87,6 +91,12 @@ import ZeroTrustSdpPanel from "./ZeroTrustSdpPanel";
 import BiomedicalSoarPanel from "./BiomedicalSoarPanel";
 import QkdKeyDistributionPanel from "./QkdKeyDistributionPanel";
 import BiomedicalAiWatermarkPanel from "./BiomedicalAiWatermarkPanel";
+import HomomorphicEncryptionPanel from "./HomomorphicEncryptionPanel";
+import BiomedicalMpcHsmPanel from "./BiomedicalMpcHsmPanel";
+import HealthcareCtemPanel from "./HealthcareCtemPanel";
+import BiomedicalSovereignIdentityPanel from "./BiomedicalSovereignIdentityPanel";
+import BiomedicalIncidentCommandPanel from "./BiomedicalIncidentCommandPanel";
+import BiomedicalDataMeshPanel from "./BiomedicalDataMeshPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -440,7 +450,13 @@ export default function EnterpriseSecurityCenter() {
           { id: "sdp", label: "Zero Trust SDP & Perimeter", icon: Network },
           { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren },
           { id: "qkd", label: "Quantum Key Distribution (QKD)", icon: Atom },
-          { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp }
+          { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp },
+          { id: "fhe", label: "Homomorphic FHE & Confidential Compute", icon: Lock },
+          { id: "mpchsm", label: "Sovereign MPC HSM Key Custody", icon: Share2 },
+          { id: "ctem", label: "Healthcare CTEM & Attack Surface", icon: Radar },
+          { id: "didvc", label: "Sovereign Identity (W3C DID/VC)", icon: IdCard },
+          { id: "incidentcommand", label: "Incident Command & Air-Gap DR", icon: Power },
+          { id: "datamesh", label: "Zero-Trust Data Mesh & ODRL", icon: Boxes }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -961,6 +977,36 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 32: BIOMEDICAL AI WATERMARKING & C2PA PROVENANCE */}
       {selectedTab === "watermark" && (
         <BiomedicalAiWatermarkPanel />
+      )}
+
+      {/* TAB 33: HOMOMORPHIC ENCRYPTION & CONFIDENTIAL COMPUTE */}
+      {selectedTab === "fhe" && (
+        <HomomorphicEncryptionPanel />
+      )}
+
+      {/* TAB 34: SOVEREIGN MPC KEY CUSTODY & FIPS 140-3 HSM */}
+      {selectedTab === "mpchsm" && (
+        <BiomedicalMpcHsmPanel />
+      )}
+
+      {/* TAB 35: HEALTHCARE CONTINUOUS THREAT EXPOSURE MANAGEMENT (CTEM) */}
+      {selectedTab === "ctem" && (
+        <HealthcareCtemPanel />
+      )}
+
+      {/* TAB 36: BIOMEDICAL SELF-SOVEREIGN IDENTITY (W3C DID / VC) */}
+      {selectedTab === "didvc" && (
+        <BiomedicalSovereignIdentityPanel />
+      )}
+
+      {/* TAB 37: BIOMEDICAL INCIDENT COMMAND & CYBER RESILIENCE */}
+      {selectedTab === "incidentcommand" && (
+        <BiomedicalIncidentCommandPanel />
+      )}
+
+      {/* TAB 38: BIOMEDICAL ZERO-TRUST DATA MESH & ODRL POLICIES */}
+      {selectedTab === "datamesh" && (
+        <BiomedicalDataMeshPanel />
       )}
 
       {/* 4. MODALS */}
