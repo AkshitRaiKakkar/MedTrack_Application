@@ -303,13 +303,12 @@ public class UserService {
      */
     @Transactional
     public AuthResponse refreshAccessToken(String requestRefreshToken) {
-        var refreshToken = refreshTokenService.verifyToken(requestRefreshToken);
+        // The consume call locks the token row for this entire transaction. The lock is
+        // released only after the replacement token has been persisted and committed.
+        var refreshToken = refreshTokenService.consumeToken(requestRefreshToken);
 
         User user = userRepository.findById(refreshToken.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
-        // Rotate: revoke old refresh token, issue a brand new one
-        refreshTokenService.revokeToken(requestRefreshToken);
 
         return mapToAuthResponse(user, "Token refreshed successfully");
     }
