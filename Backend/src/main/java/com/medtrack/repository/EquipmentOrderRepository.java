@@ -27,18 +27,46 @@ public interface EquipmentOrderRepository extends JpaRepository<EquipmentOrder, 
 
     List<EquipmentOrder> findByOrderDateBetween(LocalDateTime startDate, LocalDateTime endDate);
 
-    @Query("SELECT o FROM EquipmentOrder o WHERE " +
-            "(:status IS NULL OR o.status = :status) AND " +
-            "(:shippingStatus IS NULL OR o.shippingStatus = :shippingStatus) AND " +
-            "(:supplierId IS NULL OR EXISTS (SELECT s FROM ShipmentTracking s WHERE s.orderId = o.id AND s.supplierId = :supplierId)) AND "
-            +
-            "(:search IS NULL OR LOWER(o.orderCode) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(o.equipmentName) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<EquipmentOrder> findSupplierOrders(
+    @Query("SELECT o FROM EquipmentOrder o WHERE "
+            + "(:status IS NULL OR o.status = :status) AND "
+            + "(:shippingStatus IS NULL OR o.shippingStatus = :shippingStatus) AND "
+            + "(:startDate IS NULL OR o.orderDate >= :startDate) AND "
+            + "(:endDate IS NULL OR o.orderDate <= :endDate) AND "
+            + "(:trackingNumber IS NULL OR LOWER(o.trackingNo) LIKE LOWER(CONCAT('%', :trackingNumber, '%')) "
+            + "OR EXISTS (SELECT tracking FROM ShipmentTracking tracking "
+            + "WHERE tracking.orderId = o.id AND LOWER(tracking.shipmentTrackingNumber) "
+            + "LIKE LOWER(CONCAT('%', :trackingNumber, '%')))) AND "
+            + "(:hasShipmentFilters = false OR EXISTS (SELECT shipment FROM ShipmentTracking shipment "
+            + "WHERE shipment.orderId = o.id "
+            + "AND (:supplierId IS NULL OR shipment.supplierId = :supplierId) "
+            + "AND (:deliveryStatus IS NULL OR shipment.shipmentStatus = :deliveryStatus) "
+            + "AND (:isDelayed IS NULL OR shipment.delayDetected = :isDelayed))) AND "
+            + "(:search IS NULL OR LOWER(o.orderCode) LIKE LOWER(CONCAT('%', :search, '%')) "
+            + "OR LOWER(o.equipmentName) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<EquipmentOrder> findAdvancedSupplierOrders(
             @Param("status") String status,
             @Param("shippingStatus") String shippingStatus,
+            @Param("deliveryStatus") com.medtrack.supplier.model.ShipmentStatus deliveryStatus,
+            @Param("isDelayed") Boolean isDelayed,
+            @Param("trackingNumber") String trackingNumber,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
             @Param("supplierId") Long supplierId,
             @Param("search") String search,
+            @Param("hasShipmentFilters") boolean hasShipmentFilters,
             Pageable pageable);
+
+    @Query("SELECT COUNT(order) FROM EquipmentOrder order "
+            + "WHERE EXISTS (SELECT shipment FROM ShipmentTracking shipment "
+            + "WHERE shipment.orderId = order.id AND shipment.supplierId = :supplierId)")
+    long countTotalOrdersBySupplierId(@Param("supplierId") Long supplierId);
+
+    @Query("SELECT COUNT(order) FROM EquipmentOrder order WHERE order.status = :status "
+            + "AND EXISTS (SELECT shipment FROM ShipmentTracking shipment "
+            + "WHERE shipment.orderId = order.id AND shipment.supplierId = :supplierId)")
+    long countOrdersByStatusAndSupplierId(
+            @Param("status") String status,
+            @Param("supplierId") Long supplierId);
 
     // Analytics aggregation queries
     @Query("SELECT SUM(o.totalCost) FROM EquipmentOrder o WHERE LOWER(o.hospital) = LOWER(:hospitalName) AND LOWER(o.shippingStatus) = LOWER(:shippingStatus)")
