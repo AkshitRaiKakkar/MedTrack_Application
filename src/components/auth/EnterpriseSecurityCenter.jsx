@@ -51,7 +51,8 @@ import {
   Boxes,
   Siren,
   Atom,
-  Stamp
+  Stamp,
+  Share2
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -88,6 +89,7 @@ import BiomedicalSoarPanel from "./BiomedicalSoarPanel";
 import QkdKeyDistributionPanel from "./QkdKeyDistributionPanel";
 import BiomedicalAiWatermarkPanel from "./BiomedicalAiWatermarkPanel";
 import HomomorphicEncryptionPanel from "./HomomorphicEncryptionPanel";
+import BiomedicalMpcHsmPanel from "./BiomedicalMpcHsmPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -442,7 +444,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "biomedsoar", label: "Biomedical SOAR Automation", icon: Siren },
           { id: "qkd", label: "Quantum Key Distribution (QKD)", icon: Atom },
           { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp },
-          { id: "fhe", label: "Homomorphic FHE & Confidential Compute", icon: Lock }
+          { id: "fhe", label: "Homomorphic FHE & Confidential Compute", icon: Lock },
+          { id: "mpchsm", label: "Sovereign MPC HSM Key Custody", icon: Share2 }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -968,6 +971,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 33: HOMOMORPHIC ENCRYPTION & CONFIDENTIAL COMPUTE */}
       {selectedTab === "fhe" && (
         <HomomorphicEncryptionPanel />
+      )}
+
+      {/* TAB 34: SOVEREIGN MPC KEY CUSTODY & FIPS 140-3 HSM */}
+      {selectedTab === "mpchsm" && (
+        <BiomedicalMpcHsmPanel />
       )}
 
       {/* 4. MODALS */}
