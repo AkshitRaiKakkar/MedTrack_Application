@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   // Vite 8 defaults JSX to the classic runtime, which compiles every tag to
