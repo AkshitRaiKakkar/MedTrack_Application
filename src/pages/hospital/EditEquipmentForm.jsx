@@ -10,7 +10,16 @@ export default function EditEquipmentForm({ equipmentId, onNavigate }) {
     status: 'Operational',
     purchaseDate: '',
     description: '',
-    category: 'Imaging'
+    category: 'Imaging',
+    purchaseCost: '',
+    usefulLifeYears: '',
+    depreciationMethod: 'STRAIGHT_LINE',
+    warrantyProvider: '',
+    warrantyContractNumber: '',
+    warrantyExpiry: '',
+    warrantyStartDate: '',
+    warrantyCoverageType: 'FULL_PARTS_AND_LABOR',
+    warrantyTerms: ''
   });
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -39,7 +48,16 @@ export default function EditEquipmentForm({ equipmentId, onNavigate }) {
         status: data.status || 'Operational',
         purchaseDate: data.purchaseDate || '',
         description: data.description || '',
-        category: data.category || 'Imaging'
+        category: data.category || 'Imaging',
+        purchaseCost: data.purchaseCost !== null && data.purchaseCost !== undefined ? String(data.purchaseCost) : '',
+        usefulLifeYears: data.usefulLifeYears !== null && data.usefulLifeYears !== undefined ? String(data.usefulLifeYears) : '',
+        depreciationMethod: data.depreciationMethod || 'STRAIGHT_LINE',
+        warrantyProvider: data.warrantyProvider || '',
+        warrantyContractNumber: data.warrantyContractNumber || '',
+        warrantyExpiry: data.warrantyExpiry || '',
+        warrantyStartDate: data.warrantyStartDate || '',
+        warrantyCoverageType: data.warrantyCoverageType || 'FULL_PARTS_AND_LABOR',
+        warrantyTerms: data.warrantyTerms || ''
       });
     } catch (err) {
       console.error("Error loading equipment:", err);
@@ -57,7 +75,16 @@ export default function EditEquipmentForm({ equipmentId, onNavigate }) {
     e.preventDefault();
     setLoading(true);
     try {
-      await updateEquipment(equipmentId, formData);
+      // Omitted finance fields keep their current values on the backend; empty inputs are
+      // dropped so a partial edit cannot wipe the cost or useful life.
+      const payload = {
+        ...formData,
+        purchaseCost: formData.purchaseCost === '' ? null : Number(formData.purchaseCost),
+        usefulLifeYears: formData.usefulLifeYears === '' ? null : Number(formData.usefulLifeYears)
+      };
+      if (formData.purchaseCost === '') delete payload.purchaseCost;
+      if (formData.usefulLifeYears === '') delete payload.usefulLifeYears;
+      await updateEquipment(equipmentId, payload);
       alert('Equipment updated successfully!');
       onNavigate('equipment');
     } catch (err) {
@@ -181,6 +208,90 @@ export default function EditEquipmentForm({ equipmentId, onNavigate }) {
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Purchase Date</label>
               <input type="date" name="purchaseDate" value={formData.purchaseDate} onChange={onChange} className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold transition-all" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Purchase Cost ($)</label>
+              <input 
+                type="number" name="purchaseCost" min="0" step="0.01" 
+                value={formData.purchaseCost} onChange={onChange} 
+                className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold placeholder:text-slate-300 transition-all" 
+                placeholder="e.g., 250000.00"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Useful Life (Years)</label>
+              <input 
+                type="number" name="usefulLifeYears" min="1" step="1" 
+                value={formData.usefulLifeYears} onChange={onChange} 
+                className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold placeholder:text-slate-300 transition-all" 
+                placeholder="e.g., 10"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Depreciation</label>
+              <select 
+                name="depreciationMethod" value={formData.depreciationMethod} onChange={onChange}
+                className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold transition-all cursor-pointer"
+              >
+                <option value="STRAIGHT_LINE">Straight Line</option>
+                <option value="DECLINING_BALANCE">Declining Balance</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Warranty & Service Contract (issue #703) */}
+          <div className="pt-4">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Warranty &amp; Service Contract</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Warranty Provider</label>
+                <input 
+                  type="text" name="warrantyProvider" 
+                  value={formData.warrantyProvider} onChange={onChange} 
+                  className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold placeholder:text-slate-300 transition-all" 
+                  placeholder="e.g., GE Healthcare"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Contract Number</label>
+                <input 
+                  type="text" name="warrantyContractNumber" 
+                  value={formData.warrantyContractNumber} onChange={onChange} 
+                  className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold placeholder:text-slate-300 transition-all" 
+                  placeholder="e.g., WC-2027-001"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Coverage Start</label>
+                <input type="date" name="warrantyStartDate" value={formData.warrantyStartDate} onChange={onChange} className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold transition-all" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Coverage End (Expiry)</label>
+                <input type="date" name="warrantyExpiry" value={formData.warrantyExpiry} onChange={onChange} className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold transition-all" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Coverage Type</label>
+                <select 
+                  name="warrantyCoverageType" value={formData.warrantyCoverageType} onChange={onChange}
+                  className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold transition-all cursor-pointer"
+                >
+                  <option value="FULL_PARTS_AND_LABOR">Full Parts &amp; Labor</option>
+                  <option value="PARTS_ONLY">Parts Only</option>
+                  <option value="LABOR_ONLY">Labor Only</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Terms / Exclusions</label>
+                <input 
+                  type="text" name="warrantyTerms" 
+                  value={formData.warrantyTerms} onChange={onChange} 
+                  className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-600/20 text-slate-900 font-bold placeholder:text-slate-300 transition-all" 
+                  placeholder="e.g., Travel and consumables excluded"
+                />
+              </div>
             </div>
           </div>
 

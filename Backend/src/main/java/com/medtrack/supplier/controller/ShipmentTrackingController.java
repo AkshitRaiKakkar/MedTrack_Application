@@ -1,5 +1,6 @@
 package com.medtrack.supplier.controller;
 
+import com.medtrack.dto.PagedResponse;
 import com.medtrack.supplier.dto.CreateShipmentRequest;
 import com.medtrack.supplier.dto.ShipmentTrackingResponse;
 import com.medtrack.supplier.dto.UpdateShipmentStatusRequest;
@@ -12,12 +13,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/shipments")
@@ -29,70 +31,54 @@ public class ShipmentTrackingController {
     private final ShipmentTrackingService shipmentTrackingService;
 
     @PostMapping
-    @Operation(summary = "Create shipment tracking", description = "Creates a new shipment tracking record for an existing confirmed order.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Shipment created successfully", content = @Content(schema = @Schema(implementation = ShipmentTrackingResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request or duplicate tracking data")
-    })
-    public ResponseEntity<ShipmentTrackingResponse> createShipment(@Valid @RequestBody CreateShipmentRequest request) {
-        ShipmentTrackingResponse response = shipmentTrackingService.createShipment(request);
+    @PreAuthorize("hasRole('SUPPLIER')")
+    public ResponseEntity<ShipmentTrackingResponse> createShipment(@Valid @RequestBody CreateShipmentRequest request,
+            Authentication authentication) {
+        ShipmentTrackingResponse response = shipmentTrackingService.createShipment(request, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PutMapping("/{id}/status")
-    @Operation(summary = "Update shipment status", description = "Updates the shipping status of an existing shipment record and propagates state to the parent order.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Shipment status updated", content = @Content(schema = @Schema(implementation = ShipmentTrackingResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid status transition"),
-            @ApiResponse(responseCode = "404", description = "Shipment record not found")
-    })
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
     public ResponseEntity<ShipmentTrackingResponse> updateShipmentStatus(
             @PathVariable Long id,
-            @Valid @RequestBody UpdateShipmentStatusRequest request) {
-        ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(id, request);
+            @Valid @RequestBody UpdateShipmentStatusRequest request,
+            Authentication authentication) {
+        ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(id, request, authentication);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get shipment by ID", description = "Retrieves a specific shipment tracking record by its internal unique identifier.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Shipment retrieved successfully", content = @Content(schema = @Schema(implementation = ShipmentTrackingResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Shipment record not found")
-    })
-    public ResponseEntity<ShipmentTrackingResponse> getShipmentById(@PathVariable Long id) {
-        ShipmentTrackingResponse response = shipmentTrackingService.getShipmentById(id);
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
+    public ResponseEntity<ShipmentTrackingResponse> getShipmentById(@PathVariable Long id,
+            Authentication authentication) {
+        ShipmentTrackingResponse response = shipmentTrackingService.getShipmentById(id, authentication);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/tracking/{trackingNumber}")
-    @Operation(summary = "Get shipment by tracking number", description = "Retrieves a shipment based on its tracking number.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Shipment retrieved successfully", content = @Content(schema = @Schema(implementation = ShipmentTrackingResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Shipment record not found")
-    })
-    public ResponseEntity<ShipmentTrackingResponse> getShipmentByTrackingNumber(@PathVariable String trackingNumber) {
-        ShipmentTrackingResponse response = shipmentTrackingService.getShipmentByTrackingNumber(trackingNumber);
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
+    public ResponseEntity<ShipmentTrackingResponse> getShipmentByTrackingNumber(@PathVariable String trackingNumber,
+            Authentication authentication) {
+        ShipmentTrackingResponse response = shipmentTrackingService.getShipmentByTrackingNumber(trackingNumber, authentication);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/order/{orderId}")
-    @Operation(summary = "Get shipment by order ID", description = "Retrieves the shipping record associated with a specific order.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Shipment retrieved successfully", content = @Content(schema = @Schema(implementation = ShipmentTrackingResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Shipment record not found")
-    })
-    public ResponseEntity<ShipmentTrackingResponse> getShipmentByOrderId(@PathVariable Long orderId) {
-        ShipmentTrackingResponse response = shipmentTrackingService.getShipmentByOrderId(orderId);
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
+    public ResponseEntity<ShipmentTrackingResponse> getShipmentByOrderId(@PathVariable Long orderId,
+            Authentication authentication) {
+        ShipmentTrackingResponse response = shipmentTrackingService.getShipmentByOrderId(orderId, authentication);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/supplier/{supplierId}")
-    @Operation(summary = "Get all shipments for a supplier", description = "Retrieves a list of all shipments handled by a specific supplier.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Shipments retrieved successfully")
-    })
-    public ResponseEntity<List<ShipmentTrackingResponse>> getShipmentsBySupplier(@PathVariable Long supplierId) {
-        List<ShipmentTrackingResponse> response = shipmentTrackingService.getShipmentsBySupplier(supplierId);
-        return ResponseEntity.ok(response);
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
+    public ResponseEntity<PagedResponse<ShipmentTrackingResponse>> getShipmentsBySupplier(
+            @PathVariable Long supplierId,
+            @PageableDefault(sort = "createdAt") Pageable pageable,
+            Authentication authentication) {
+        return ResponseEntity.ok(
+                PagedResponse.of(shipmentTrackingService.getShipmentsBySupplier(supplierId, pageable, authentication)));
     }
 }

@@ -11,18 +11,22 @@ import com.medtrack.exception.EmailAlreadyExistsException;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.auth.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.LockedException;
+
 import java.time.LocalDateTime;
 import java.security.SecureRandom;
 import java.util.List;
+import java.util.Optional;
 
 import com.medtrack.auth.dto.ForgotPasswordRequest;
 import com.medtrack.auth.dto.VerifyOtpRequest;
@@ -60,6 +64,7 @@ public class UserService {
      * Roles must match authorized paths configured in security configurations.
      */
     private static final List<String> VALID_ROLES = List.of("HOSPITAL", "TECHNICIAN", "SUPPLIER");
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     @Value("${app.jwt.expiration-ms:900000}")
     private long jwtExpirationMs;
@@ -96,6 +101,9 @@ public class UserService {
 
     @Value("${security.otp.expiry-minutes:10}")
     private int otpExpiryMinutes;
+
+    @Value("${security.otp.max-attempts:5}")
+    private int otpMaxAttempts;
 
     /**
      * Registers a new user account in the application database.
@@ -256,8 +264,9 @@ public class UserService {
      * @return the fully populated {@link AuthResponse} object
      */
     private AuthResponse mapToAuthResponse(User user, String message) {
-        // Request a new JWT token signed with user's ID, email and role claims
-        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole());
+        // Request a new JWT token signed with user's ID, email, role, and authority version claims
+        Long authorityVer = user.getAuthorityVersion() != null ? user.getAuthorityVersion() : 1L;
+        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole(), authorityVer);
         String refreshToken = refreshTokenService.createRefreshToken(user.getId()).getToken();
 
         UserResponse userResponse = UserResponse.builder()
@@ -323,8 +332,11 @@ public class UserService {
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
         String email = request.getEmail().trim().toLowerCase();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            log.info("Password reset requested for non-existent email: {}", email);
+            return;
+        }
 
         // Invalidate any existing unused OTP tokens for this email
         List<PasswordResetToken> activeTokens = passwordResetTokenRepository.findByEmailAndUsed(email, false);
@@ -369,19 +381,7 @@ public class UserService {
         String email = request.getEmail().trim().toLowerCase();
         String otp = request.getOtp();
 
-        // Find token by email and OTP
-        PasswordResetToken token = passwordResetTokenRepository.findByEmailAndOtp(email, otp)
-                .orElseThrow(() -> new RuntimeException("Incorrect OTP"));
-
-        // Reject if expired
-        if (token.getExpiryTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("OTP has expired");
-        }
-
-        // Reject if used
-        if (token.isUsed()) {
-            throw new RuntimeException("OTP has already been used");
-        }
+        PasswordResetToken token = resolveActiveTokenForAttempt(email, otp);
 
         // Mark OTP as verified
         token.setVerified(true);
@@ -398,23 +398,11 @@ public class UserService {
         String otp = request.getOtp();
         String newPassword = request.getNewPassword();
 
-        // Verify OTP (find token by email and OTP)
-        PasswordResetToken token = passwordResetTokenRepository.findByEmailAndOtp(email, otp)
-                .orElseThrow(() -> new RuntimeException("Incorrect OTP"));
+        PasswordResetToken token = resolveActiveTokenForAttempt(email, otp);
 
         // Reject if not verified
         if (!token.isVerified()) {
             throw new RuntimeException("OTP has not been verified");
-        }
-
-        // Reject if expired
-        if (token.getExpiryTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("OTP has expired");
-        }
-
-        // Reject if used
-        if (token.isUsed()) {
-            throw new RuntimeException("OTP has already been used");
         }
 
         // Get user and update password
@@ -430,5 +418,45 @@ public class UserService {
 
         // Revoke all active sessions (refresh tokens) for the user
         refreshTokenService.revokeAllForUser(user.getId());
+    }
+
+    /**
+     * Resolves the caller's current password-reset token and checks the submitted OTP
+     * against it, tracking failed guesses so the OTP can't be brute-forced within its
+     * validity window.
+     *
+     * <p>Both {@link #verifyOtp} and {@link #resetPassword} accept an email+OTP pair
+     * directly, so both must route through this same attempt-tracking check - otherwise
+     * a caller could bypass the lockout by guessing against {@code resetPassword} instead
+     * of {@code verifyOtp}.
+     *
+     * @throws RuntimeException if there is no unused token for the email (none was ever
+     *                          requested, or it was already consumed), or the OTP is wrong
+     * @throws LockedException if the token is expired or has exceeded the maximum number
+     *                          of incorrect attempts
+     */
+    private PasswordResetToken resolveActiveTokenForAttempt(String email, String otp) {
+        PasswordResetToken token = passwordResetTokenRepository
+                .findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(email)
+                .orElseThrow(() -> new RuntimeException("Incorrect OTP"));
+
+        if (token.getExpiryTime().isBefore(LocalDateTime.now())) {
+            throw new LockedException("OTP has expired");
+        }
+
+        if (token.getAttemptCount() >= otpMaxAttempts) {
+            token.setUsed(true);
+            passwordResetTokenRepository.save(token);
+            throw new LockedException(
+                    "Too many incorrect attempts. Please request a new OTP.");
+        }
+
+        if (!token.getOtp().equals(otp)) {
+            token.setAttemptCount(token.getAttemptCount() + 1);
+            passwordResetTokenRepository.save(token);
+            throw new RuntimeException("Incorrect OTP");
+        }
+
+        return token;
     }
 }

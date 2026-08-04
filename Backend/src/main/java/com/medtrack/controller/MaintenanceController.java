@@ -1,7 +1,15 @@
 package com.medtrack.controller;
 
+import com.medtrack.dto.MaintenanceAssignmentRequest;
+import com.medtrack.dto.MaintenanceActivityPageResponse;
+import com.medtrack.dto.MaintenanceCreateRequest;
+import com.medtrack.dto.MaintenanceScheduleAmendmentRequest;
+import com.medtrack.dto.MaintenanceScheduleRevisionPageResponse;
+import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.service.MaintenanceService;
+import com.medtrack.service.MaintenanceScheduleService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,29 +31,28 @@ import java.util.List;
 public class MaintenanceController {
 
     private final MaintenanceService maintenanceService;
+    private final MaintenanceScheduleService maintenanceScheduleService;
 
     /**
-     * Retrieves all maintenance tasks.
+     * Retrieves an ownership-scoped list of maintenance tasks, with optional pagination.
      *
-     * @return a list of maintenance tasks if available,
-     *         or HTTP 204 No Content when no tasks exist
+     * @return the matching maintenance tasks as the established JSON-array response
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
-    public ResponseEntity<List<MaintenanceTask>> getAllTasks(Authentication authentication) {
-        // Forward the trusted identity so the service can enforce record ownership.
-        List<MaintenanceTask> tasks = maintenanceService.getAllTasks(authentication);
-
-        if (tasks.isEmpty()) {
-            return ResponseEntity.noContent().build();
-        }
-
-        return ResponseEntity.ok(tasks);
+    public ResponseEntity<List<MaintenanceTask>> getAllTasks(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String equipmentId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication) {
+        return ResponseEntity.ok(maintenanceService.getAllTasks(
+                authentication, status, equipmentId, page, size));
     }
 
     /**
      * Retrieves a maintenance task by its unique identifier.
-     *
+     *completed
      * @param id the maintenance task identifier
      * @return the requested maintenance task
      */
@@ -58,18 +65,86 @@ public class MaintenanceController {
     }
 
     /**
+     * Retrieves the immutable activity timeline for a task. Hospital users can retain access to
+     * archived evidence; technicians can read activity only while the task remains assigned to
+     * their stable user identity.
+     */
+    @GetMapping("/{id}/history")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<MaintenanceActivityPageResponse> getTaskActivity(
+            @PathVariable Long id,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceService.getTaskActivity(
+                id, type, page, size, authentication));
+    }
+
+    /**
      * Schedules a new maintenance task.
      * Accessible only to users with the HOSPITAL role.
      *
-     * @param task the maintenance task to be created
+     * @param request the hospital-controlled scheduling fields
      * @return the newly created maintenance task with HTTP 201 Created
      */
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<MaintenanceTask> scheduleTask(@RequestBody MaintenanceTask task,
+    // Bean validation rejects malformed scheduling requests before business logic runs.
+    public ResponseEntity<MaintenanceTask> scheduleTask(@Valid @RequestBody MaintenanceCreateRequest request,
                                                         Authentication authentication) {
-        MaintenanceTask createdTask = maintenanceService.scheduleTask(task, authentication);
+        MaintenanceTask createdTask = maintenanceService.scheduleTask(request, authentication);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdTask);
+    }
+
+    /**
+     * Assigns or reassigns a technician to a scheduled maintenance task.
+     * Accessible only to the hospital that owns the task.
+     *
+     * @param id the maintenance task identifier
+     * @param request the technician assignment
+     * @return the maintenance task with its canonical technician assignment
+     */
+    @PostMapping("/{id}/assignment")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<MaintenanceTask> assignTechnician(
+            @PathVariable Long id,
+            @Valid @RequestBody MaintenanceAssignmentRequest request,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceService.assignTechnician(id, request, authentication));
+    }
+
+    /**
+     * Amends hospital-controlled scheduling fields before work starts. The task row is locked and
+     * the complete before/after schedule is retained as immutable audit evidence.
+     */
+    @PatchMapping("/{id}/schedule")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<MaintenanceTask> amendSchedule(
+            @PathVariable Long id,
+            @Valid @RequestBody MaintenanceScheduleAmendmentRequest request,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceScheduleService.amendSchedule(
+                id, request, authentication));
+    }
+
+    /**
+     * Returns newest-first schedule revisions. Hospitals retain access after archival; an assigned
+     * technician can read revisions only while they retain access to the active task.
+     */
+    @GetMapping("/{id}/schedule-revisions")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<MaintenanceScheduleRevisionPageResponse> getScheduleRevisions(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceScheduleService.getRevisions(
+                id, page, size, authentication));
     }
 
     /**
@@ -77,24 +152,25 @@ public class MaintenanceController {
      * Accessible only to users with the TECHNICIAN role.
      *
      * @param id the maintenance task identifier
-     * @param task the updated maintenance task details
+     * @param request the technician-controlled report fields
      * @return the updated maintenance task
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('TECHNICIAN')")
     public ResponseEntity<MaintenanceTask> updateTask(@PathVariable Long id,
-                                                      @RequestBody MaintenanceTask task,
+                                                      @Valid @RequestBody MaintenanceUpdateRequest request,
                                                       Authentication authentication) {
         validateId(id);
-        return ResponseEntity.ok(maintenanceService.updateTask(id, task, authentication));
+        return ResponseEntity.ok(maintenanceService.updateTask(id, request, authentication));
     }
 
     /**
-     * Deletes a maintenance task by its identifier.
+     * Soft-deletes a non-completed maintenance task by its identifier.
      * Accessible only to users with the HOSPITAL role.
+     * Completed records are retained as immutable maintenance evidence.
      *
      * @param id the maintenance task identifier
-     * @return HTTP 204 No Content when the task is successfully deleted
+     * @return HTTP 204 No Content when the task is successfully archived
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")
@@ -103,6 +179,22 @@ public class MaintenanceController {
         validateId(id);
         maintenanceService.deleteTask(id, authentication);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Exports all maintenance tasks for the logged-in hospital in RFC-5545 iCalendar format.
+     * Accessible only to users with the HOSPITAL role.
+     *
+     * @return the raw calendar feed content (.ics)
+     */
+    @GetMapping("/export/calendar.ics")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<String> exportCalendar(Authentication authentication) {
+        String icalFeed = maintenanceService.exportTasksToICal(authentication);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, "text/calendar; charset=utf-8")
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"maintenance.ics\"")
+                .body(icalFeed);
     }
 
     /**

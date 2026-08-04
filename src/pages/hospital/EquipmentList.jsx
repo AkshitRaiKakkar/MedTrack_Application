@@ -4,9 +4,28 @@ import {
   deleteEquipment,
   getEquipmentById,
   importEquipmentCsv,
+  previewEquipmentImport,
+  getEquipmentImportHistory,
   getEquipmentQrCode,
+  getEquipmentLifecycle,
+  getEquipmentTimeline,
+  createEquipmentLifecycleAction,
+  approveEquipmentLifecycleAction,
+  rejectEquipmentLifecycleAction,
+  completeEquipmentLifecycleAction,
 } from "../../services/EquipmentService";
+import {
+  IMPORT_HEADERS,
+  IMPORT_COLUMN_GUIDANCE,
+  parseImportFile,
+  rowsToCsv,
+  exportEquipmentCsv,
+  exportEquipmentXlsx,
+  buildImportTemplate,
+} from "../../utils/equipmentImportExport";
 import { useAuth } from "../../context/AuthContext";
+import Pagination from "../../components/common/Pagination";
+import QrScannerModal from "../../components/common/QrScannerModal";
 
 /* ===========================
    DEFAULT PUBLIC EQUIPMENT
@@ -86,45 +105,153 @@ const EQUIPMENT_IMAGES = {
 export default function EquipmentList({ onNavigate }) {
   const { user } = useAuth();
 
+  const formatMoney = (val) => {
+    if (val === null || val === undefined || val === "") return "N/A";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    }).format(Number(val));
+  };
+
+  // Warranty status badge (issue #703). The backend serialises warrantyStatus with each item;
+  // the local fallback keeps demo/default items rendering correctly when the field is absent.
+  const resolveWarrantyStatus = (item) => {
+    if (item.warrantyStatus) return item.warrantyStatus;
+    if (!item.warrantyExpiry) return "NO_COVERAGE";
+    const days = Math.floor((new Date(item.warrantyExpiry) - new Date()) / 86400000);
+    if (days < 0) return "EXPIRED";
+    if (days <= 90) return "EXPIRING_SOON";
+    return "ACTIVE";
+  };
+
+  const warrantyBadgeLabel = (item) => {
+    const status = resolveWarrantyStatus(item);
+    if (status === "ACTIVE") return "Warranty Active";
+    if (status === "EXPIRING_SOON") return "Warranty Expiring Soon";
+    if (status === "EXPIRED") return "Warranty Expired";
+    return "No Coverage";
+  };
+
+  const warrantyBadgeClass = (item) => {
+    const status = resolveWarrantyStatus(item);
+    if (status === "ACTIVE") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+    if (status === "EXPIRING_SOON") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+    if (status === "EXPIRED") return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+    return "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
+  };
+
+  // Visual timeline styling (issue #704): per-event-type icon + dot colour.
+  const timelineMeta = (type) => {
+    const meta = {
+      PURCHASED: { icon: "🛒", dot: "bg-blue-500" },
+      REGISTERED: { icon: "📋", dot: "bg-sky-400" },
+      ASSIGNED: { icon: "👤", dot: "bg-emerald-500" },
+      MOVED: { icon: "🚚", dot: "bg-amber-500" },
+      RETIRED: { icon: "🏁", dot: "bg-slate-500" },
+      DISPOSED: { icon: "🗑️", dot: "bg-red-500" },
+      REPLACED: { icon: "🔄", dot: "bg-indigo-500" },
+      DEPRECIATION_SNAPSHOT: { icon: "💹", dot: "bg-teal-500" },
+      MAINTENANCE_SCHEDULED: { icon: "🛠️", dot: "bg-orange-500" },
+      MAINTENANCE_COMPLETED: { icon: "✅", dot: "bg-green-500" },
+      MAINTENANCE_OVERDUE: { icon: "⚠️", dot: "bg-red-600" },
+      WARRANTY_ALERT: { icon: "🛡️", dot: "bg-amber-400" },
+      STATUS_CHANGED: { icon: "🔁", dot: "bg-violet-500" },
+    };
+    return meta[type] || { icon: "📌", dot: "bg-slate-400" };
+  };
+
+  const formatTimelineDate = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const [equipment, setEquipment] = useState([]);
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [hoveredCard, setHoveredCard] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [equipmentDetails, setEquipmentDetails] = useState(null);
   const [detailsError, setDetailsError] = useState(null);
+  const [lifecycleActions, setLifecycleActions] = useState([]);
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState(null);
+  const [lifecycleSaving, setLifecycleSaving] = useState(false);
+  // Issue #704: aggregated visual timeline (purchase, maintenance, lifecycle, system events).
+  const [timelineEntries, setTimelineEntries] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState(null);
+  const [lifecycleForm, setLifecycleForm] = useState({
+    actionType: "TRANSFER",
+    newDepartment: "",
+    roomLocation: "",
+    wardLocation: "",
+    custodian: "",
+    effectiveDate: "",
+    replacementEquipmentId: "",
+    depreciationAmount: "",
+    notes: "",
+  });
 
-  // CSV Import States
+  // CSV/Excel Import States
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
+  const [parsedRows, setParsedRows] = useState([]);
+  const [importStep, setImportStep] = useState("select"); // select | preview | done
+  const [importPreview, setImportPreview] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
   const [importError, setImportError] = useState(null);
+  const [importHistory, setImportHistory] = useState([]);
   const [dragActive, setDragActive] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   // QR Code States
   const [qrCode, setQrCode] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState(null);
 
+  // Scanner States
+  const [scannerOpen, setScannerOpen] = useState(false);
+
   useEffect(() => {
     fetchEquipment();
   }, []);
 
-  const downloadCsvTemplate = () => {
-    const headers = "Name,Model,Serial Number,Department,Category,Status,Purchase Date\n";
-    const sampleRow = "MRI Scanner,GE Signa HDxt,SN-9281,Radiology,Imaging,Operational,2025-06-12\n";
-    const blob = new Blob([headers + sampleRow], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", "medtrack_equipment_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const openImportModal = () => {
+    setImportFile(null);
+    setParsedRows([]);
+    setImportStep("select");
+    setImportPreview(null);
+    setImportSummary(null);
+    setImportError(null);
+    setShowImportModal(true);
+    fetchImportHistory();
   };
+
+  const fetchImportHistory = async () => {
+    try {
+      setImportHistory(await getEquipmentImportHistory());
+    } catch (err) {
+      console.error("Failed to load import history", err);
+    }
+  };
+
+  const downloadTemplate = (format) => buildImportTemplate(format);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -136,53 +263,119 @@ export default function EquipmentList({ onNavigate }) {
     }
   };
 
+  const acceptFile = (file) => {
+    const extension = file.name.split(".").pop().toLowerCase();
+    if (["csv", "xlsx", "xls"].includes(extension)) {
+      setImportFile(file);
+      setImportError(null);
+      setImportStep("select");
+      setImportPreview(null);
+      setImportSummary(null);
+      parseImportFile(file).then((result) => {
+        if (result.error) {
+          setImportError(result.error);
+          setParsedRows([]);
+          return;
+        }
+        setParsedRows(result.rows);
+        if (result.unknownHeaders.length > 0) {
+          setImportError(
+            `Ignored unrecognised column(s): ${result.unknownHeaders.join(", ")}. ` +
+              "Make sure the required columns are named correctly (see template)."
+          );
+        } else {
+          setImportError(null);
+        }
+      });
+    } else {
+      setImportError("Please upload a valid .csv or .xlsx file.");
+    }
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.name.endsWith(".csv")) {
-        setImportFile(file);
-        setImportError(null);
-      } else {
-        setImportError("Please upload a valid .csv file.");
-      }
+      acceptFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.name.endsWith(".csv")) {
-        setImportFile(file);
-        setImportError(null);
-      } else {
-        setImportError("Please upload a valid .csv file.");
-      }
+      acceptFile(e.target.files[0]);
+    }
+  };
+
+  // The backend consumes one canonical CSV regardless of the uploaded format,
+  // so the client-side parse normalises .xlsx/.xls/.csv before upload.
+  const buildUploadFile = () => {
+    const originalName = importFile ? importFile.name.replace(/\.(csv|xlsx|xls)$/i, "") : "equipment";
+    return new File([rowsToCsv(parsedRows)], `${originalName}.csv`, {
+      type: "text/csv",
+    });
+  };
+
+  const handlePreviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!importFile) {
+      setImportError("Please select a file first.");
+      return;
+    }
+    if (parsedRows.length === 0) {
+      setImportError("No data rows were found in the file.");
+      return;
+    }
+    setImporting(true);
+    setImportError(null);
+    try {
+      const preview = await previewEquipmentImport(buildUploadFile());
+      setImportPreview(preview);
+      setImportStep("preview");
+    } catch (err) {
+      console.error("Preview failed:", err);
+      setImportError(err.response?.data?.message || "Failed to preview import. Please check template columns.");
+    } finally {
+      setImporting(false);
     }
   };
 
   const handleImportSubmit = async (e) => {
     e.preventDefault();
-    if (!importFile) {
-      setImportError("Please select a CSV file first.");
+    if (!importFile || parsedRows.length === 0) {
+      setImportError("Please select a valid file first.");
       return;
     }
     setImporting(true);
     setImportSummary(null);
     setImportError(null);
     try {
-      const summary = await importEquipmentCsv(importFile);
+      const summary = await importEquipmentCsv(buildUploadFile());
       setImportSummary(summary);
+      setImportStep("done");
       if (summary.successCount > 0) {
         fetchEquipment();
       }
+      fetchImportHistory();
     } catch (err) {
       console.error("Import failed:", err);
       setImportError(err.response?.data?.message || "Failed to process import. Please check template columns.");
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleExport = (format) => {
+    setExportMenuOpen(false);
+    if (filtered.length === 0) {
+      alert("No equipment matches the current filters to export.");
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (format === "xlsx") {
+      exportEquipmentXlsx(filtered, `equipment_inventory_${stamp}.xlsx`);
+    } else {
+      exportEquipmentCsv(filtered, `equipment_inventory_${stamp}.csv`);
     }
   };
 
@@ -200,17 +393,24 @@ export default function EquipmentList({ onNavigate }) {
     return Array.from(equipmentMap.values());
   };
 
-  const fetchEquipment = async () => {
+  const fetchEquipment = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllEquipment();
-      setEquipment(Array.isArray(data) ? mergeEquipment(data) : PUBLIC_EQUIPMENT);
+      const response = await getAllEquipment(pageNum, pageSize);
+      const items = response?.content || response?.data || [];
+      setEquipment(Array.isArray(items) ? mergeEquipment(items) : PUBLIC_EQUIPMENT);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
     } catch (error) {
       console.error("Failed to fetch equipment", error);
       setEquipment(PUBLIC_EQUIPMENT);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchEquipment(newPage);
   };
 
   const handleViewDetails = async (id) => {
@@ -220,6 +420,8 @@ export default function EquipmentList({ onNavigate }) {
     setEquipmentDetails(null);
     setQrCode(null);
     setQrError(null);
+    setLifecycleActions([]);
+    setLifecycleError(null);
 
     const isFallbackItem = String(id).startsWith("EQ-00");
 
@@ -237,6 +439,8 @@ export default function EquipmentList({ onNavigate }) {
 
       // Fetch QR Code if it's a database item
       if (!isFallbackItem) {
+        refreshLifecycle(id);
+        refreshTimeline(id);
         setQrLoading(true);
         try {
           const qrData = await getEquipmentQrCode(id);
@@ -255,6 +459,112 @@ export default function EquipmentList({ onNavigate }) {
       setDetailsError(errMsg);
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  const handleScanResult = (parsed) => {
+    setScannerOpen(false);
+    if (!parsed?.id) return;
+
+    const match = equipment.find(
+      (item) => String(item.id).toLowerCase() === String(parsed.id).toLowerCase()
+    );
+
+    // Open details for a local match, otherwise let the details fetch attempt
+    // resolve it via the API (covers items on other pages).
+    handleViewDetails(match ? match.id : parsed.id);
+  };
+
+  const refreshLifecycle = async (id = selectedEquipmentId) => {
+    if (!id || String(id).startsWith("EQ-00")) return;
+    setLifecycleLoading(true);
+    setLifecycleError(null);
+    try {
+      setLifecycleActions(await getEquipmentLifecycle(id));
+    } catch (error) {
+      console.error("Failed to fetch equipment lifecycle", error);
+      setLifecycleError(error.response?.data?.message || "Failed to load lifecycle history.");
+    } finally {
+      setLifecycleLoading(false);
+    }
+  };
+
+  // Issue #704: aggregated read-only timeline. Loaded with the details so the modal opens with
+  // the full history; Refresh on the panel re-fetches both views.
+  const refreshTimeline = async (id = selectedEquipmentId) => {
+    if (!id || String(id).startsWith("EQ-00")) return;
+    setTimelineLoading(true);
+    setTimelineError(null);
+    try {
+      setTimelineEntries(await getEquipmentTimeline(id));
+    } catch (error) {
+      console.error("Failed to fetch equipment timeline", error);
+      setTimelineError(error.response?.data?.message || "Failed to load asset timeline.");
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  const handleLifecycleChange = (field, value) => {
+    setLifecycleForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleLifecycleSubmit = async (event) => {
+    event.preventDefault();
+    if (!selectedEquipmentId || String(selectedEquipmentId).startsWith("EQ-00")) return;
+    setLifecycleSaving(true);
+    setLifecycleError(null);
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(lifecycleForm).filter(([, value]) => value !== "")
+      );
+      if (payload.replacementEquipmentId) {
+        payload.replacementEquipmentId = Number(payload.replacementEquipmentId);
+      }
+      if (payload.depreciationAmount) {
+        payload.depreciationAmount = Number(payload.depreciationAmount);
+      }
+      await createEquipmentLifecycleAction(selectedEquipmentId, payload);
+      setLifecycleForm({
+        actionType: "TRANSFER",
+        newDepartment: "",
+        roomLocation: "",
+        wardLocation: "",
+        custodian: "",
+        effectiveDate: "",
+        replacementEquipmentId: "",
+        depreciationAmount: "",
+        notes: "",
+      });
+      await refreshLifecycle(selectedEquipmentId);
+      await refreshTimeline(selectedEquipmentId);
+    } catch (error) {
+      console.error("Failed to save lifecycle action", error);
+      setLifecycleError(error.response?.data?.message || "Failed to save lifecycle action.");
+    } finally {
+      setLifecycleSaving(false);
+    }
+  };
+
+  const handleLifecycleWorkflow = async (actionId, action) => {
+    setLifecycleSaving(true);
+    setLifecycleError(null);
+    try {
+      if (action === "approve") await approveEquipmentLifecycleAction(actionId);
+      if (action === "reject") await rejectEquipmentLifecycleAction(actionId, "Rejected from lifecycle panel");
+      if (action === "complete") await completeEquipmentLifecycleAction(actionId);
+      await refreshLifecycle(selectedEquipmentId);
+      await refreshTimeline(selectedEquipmentId);
+      if (selectedEquipmentId) {
+        const data = await getEquipmentById(selectedEquipmentId);
+        setEquipmentDetails(data);
+      }
+      fetchEquipment(page);
+    } catch (error) {
+      console.error("Failed to update lifecycle action", error);
+      setLifecycleError(error.response?.data?.message || "Failed to update lifecycle action.");
+    } finally {
+      setLifecycleSaving(false);
     }
   };
 
@@ -288,11 +598,12 @@ export default function EquipmentList({ onNavigate }) {
 
   const statusOptions = [
     "All",
-    ...new Set(equipment.map((item) => item.status).filter(Boolean)),
+    ...new Set(equipment.map((item) => item.status || "Unknown").filter(Boolean)),
   ];
 
   const filtered = equipment.filter((item) => {
     const searchValue = search.toLowerCase().trim();
+    const itemStatus = item.status || "Unknown";
 
     const matchesSearch =
       !searchValue ||
@@ -300,12 +611,12 @@ export default function EquipmentList({ onNavigate }) {
       String(item.id).toLowerCase().includes(searchValue) ||
       item.model?.toLowerCase().includes(searchValue) ||
       item.department?.toLowerCase().includes(searchValue) ||
-      item.status?.toLowerCase().includes(searchValue);
+      itemStatus.toLowerCase().includes(searchValue);
 
     const matchesDepartment =
       departmentFilter === "All" || item.department === departmentFilter;
 
-    const matchesStatus = statusFilter === "All" || item.status === statusFilter;
+    const matchesStatus = statusFilter === "All" || itemStatus === statusFilter;
 
     return matchesSearch && matchesDepartment && matchesStatus;
   });
@@ -319,6 +630,14 @@ export default function EquipmentList({ onNavigate }) {
         </h1>
 
         <div className="flex gap-4 items-center flex-wrap">
+          <button
+            onClick={() => setScannerOpen(true)}
+            className="px-5 py-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-base font-semibold cursor-pointer shadow-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"
+            title="Scan an equipment QR tag"
+          >
+            📷 Scan QR
+          </button>
+
           <input
             type="text"
             placeholder="Search by name, ID, model..."
@@ -352,15 +671,36 @@ export default function EquipmentList({ onNavigate }) {
           </select>
 
           {user?.role === "hospital" && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <div className="relative">
+                <button
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-subtle px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-sm transition-colors flex items-center gap-2"
+                  onClick={() => setExportMenuOpen((open) => !open)}
+                  title="Export the current filtered view"
+                >
+                  📤 Export
+                  <span className="text-xs">{exportMenuOpen ? "▲" : "▼"}</span>
+                </button>
+                {exportMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-44 rounded-xl border border-subtle bg-card shadow-xl z-40 overflow-hidden">
+                    <button
+                      className="w-full text-left px-5 py-3 text-sm font-semibold text-primary hover:bg-hover border-none bg-transparent cursor-pointer flex items-center gap-2"
+                      onClick={() => handleExport("csv")}
+                    >
+                      📄 CSV
+                    </button>
+                    <button
+                      className="w-full text-left px-5 py-3 text-sm font-semibold text-primary hover:bg-hover border-none bg-transparent cursor-pointer flex items-center gap-2"
+                      onClick={() => handleExport("xlsx")}
+                    >
+                      📊 Excel
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-subtle px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-sm transition-colors"
-                onClick={() => {
-                  setImportFile(null);
-                  setImportSummary(null);
-                  setImportError(null);
-                  setShowImportModal(true);
-                }}
+                onClick={openImportModal}
               >
                 📥 Bulk Import
               </button>
@@ -378,7 +718,7 @@ export default function EquipmentList({ onNavigate }) {
       {/* Result Summary */}
       <div className="mb-6 rounded-xl border border-subtle bg-card p-4 shadow-sm">
         <p className="text-primary font-semibold">
-          Showing {filtered.length} of {equipment.length} equipment items
+          Showing {filtered.length} of {equipment.length} equipment items (Page {page + 1} of {totalPages})
         </p>
         <p className="text-secondary text-sm mt-1">
           Department: {departmentFilter === "All" ? "All Departments" : departmentFilter}
@@ -420,14 +760,21 @@ export default function EquipmentList({ onNavigate }) {
               />
 
               <div className="p-5 flex-grow flex flex-col">
-                <div
-                  className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block mb-3 w-fit ${
-                    item.status === "Operational"
-                      ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
-                      : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                  }`}
-                >
-                  {item.status}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block w-fit ${
+                      item.status === "Operational" || item.status === "ACTIVE"
+                        ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
+                        : item.status === "Maintenance" || item.status === "NEEDS_MAINTENANCE" || item.status === "UNDER_MAINTENANCE"
+                        ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                    }`}
+                  >
+                    {item.status || "Unknown"}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block w-fit ${warrantyBadgeClass(item)}`}>
+                    {warrantyBadgeLabel(item)}
+                  </span>
                 </div>
 
                 <h3 className="text-xl font-semibold mb-2 text-primary">
@@ -460,12 +807,14 @@ export default function EquipmentList({ onNavigate }) {
                     Details
                   </button>
 
-                  <button
-                    onClick={() => onNavigate("schedule-maintenance")}
-                    className="flex-1 py-2 px-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg cursor-pointer font-semibold text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                  >
-                    Schedule Service
-                  </button>
+                  {item.status !== "RETIRED" && item.status !== "DISPOSED" && (
+                    <button
+                      onClick={() => onNavigate("schedule-maintenance")}
+                      className="flex-1 py-2 px-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg cursor-pointer font-semibold text-sm transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                    >
+                      Schedule Service
+                    </button>
+                  )}
 
                   {/* Hide delete button for default public items */}
                   {user?.role === "hospital" &&
@@ -492,10 +841,14 @@ export default function EquipmentList({ onNavigate }) {
         </div>
       )}
 
+      {!loading && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+      )}
+
       {/* Equipment Details Modal */}
       {selectedEquipmentId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-card rounded-3xl p-8 max-w-lg w-full shadow-2xl relative border border-subtle">
+          <div className="bg-card rounded-3xl p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative border border-subtle">
             <button
               onClick={() => setSelectedEquipmentId(null)}
               className="absolute top-5 right-5 w-9 h-9 rounded-full bg-hover text-secondary border-none flex items-center justify-center text-xl font-bold cursor-pointer transition-colors hover:bg-subtle"
@@ -540,12 +893,14 @@ export default function EquipmentList({ onNavigate }) {
                     </h2>
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide inline-block mt-1.5 ${
-                        equipmentDetails.status === "Operational"
+                        equipmentDetails.status === "Operational" || equipmentDetails.status === "ACTIVE"
                           ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-                          : "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
+                          : equipmentDetails.status === "Maintenance" || equipmentDetails.status === "NEEDS_MAINTENANCE" || equipmentDetails.status === "UNDER_MAINTENANCE"
+                          ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
+                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                       }`}
                     >
-                      {equipmentDetails.status}
+                      {equipmentDetails.status || "Unknown"}
                     </span>
                   </div>
                 </div>
@@ -577,6 +932,152 @@ export default function EquipmentList({ onNavigate }) {
                       {equipmentDetails.department || "N/A"}
                     </p>
                   </div>
+                </div>
+
+                {/* Valuation Section (issue #702) */}
+                {equipmentDetails.purchaseCost !== null && equipmentDetails.purchaseCost !== undefined && (
+                  <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle">
+                    <h3 className="text-lg font-extrabold text-primary m-0 mb-4">Valuation</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Purchase Cost
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {formatMoney(equipmentDetails.purchaseCost)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Useful Life
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.usefulLifeYears ? `${equipmentDetails.usefulLifeYears} years` : "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Depreciation
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {(equipmentDetails.depreciationMethod || "STRAIGHT_LINE").replaceAll("_", " ")}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Book Value
+                        </span>
+                        <p className="text-[15px] text-emerald-600 font-black m-1">
+                          {formatMoney(equipmentDetails.bookValue)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Depreciated To Date
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {formatMoney(equipmentDetails.accumulatedDepreciation)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Replacement Cost
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {formatMoney(equipmentDetails.projectedReplacementCost)}
+                        </p>
+                      </div>
+                    </div>
+                    {equipmentDetails.bookValue !== null && equipmentDetails.bookValue !== undefined
+                      && Number(equipmentDetails.bookValue) === 0 && (
+                      <p className="text-xs text-secondary font-semibold mt-4 mb-0">
+                        This asset is fully depreciated.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Warranty & Contract Section (issue #703) */}
+                <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle">
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <h3 className="text-lg font-extrabold text-primary m-0">Warranty &amp; Service Contract</h3>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase inline-block ${warrantyBadgeClass(equipmentDetails)}`}>
+                      {warrantyBadgeLabel(equipmentDetails)}
+                    </span>
+                  </div>
+                  {equipmentDetails.warrantyExpiry ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Provider
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.warrantyProvider || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Contract Number
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1 font-mono">
+                          {equipmentDetails.warrantyContractNumber || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Coverage Type
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {(equipmentDetails.warrantyCoverageType || "").replaceAll("_", " ").toLowerCase() || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Coverage Start
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.warrantyStartDate || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Expires
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.warrantyExpiry}
+                          {equipmentDetails.warrantyDaysRemaining !== null
+                            && equipmentDetails.warrantyDaysRemaining !== undefined && (
+                            <span className={`ml-2 text-xs font-bold ${
+                              equipmentDetails.warrantyDaysRemaining < 0
+                                ? "text-red-500"
+                                : equipmentDetails.warrantyDaysRemaining <= 90
+                                ? "text-amber-500"
+                                : "text-emerald-600"
+                            }`}>
+                              ({equipmentDetails.warrantyDaysRemaining < 0
+                                ? `${Math.abs(equipmentDetails.warrantyDaysRemaining)} days ago`
+                                : equipmentDetails.warrantyDaysRemaining === 0
+                                ? "expires today"
+                                : `${equipmentDetails.warrantyDaysRemaining} days left`})
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-secondary font-bold uppercase tracking-wider">
+                          Terms / Exclusions
+                        </span>
+                        <p className="text-[15px] text-primary font-bold m-1">
+                          {equipmentDetails.warrantyTerms || "None recorded"}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-secondary font-semibold m-0">
+                      No warranty or service contract recorded for this asset. Add one to receive
+                      expiry alerts and coverage details.
+                    </p>
+                  )}
                 </div>
 
                 {/* QR Code Section */}
@@ -622,6 +1123,235 @@ export default function EquipmentList({ onNavigate }) {
                   )}
                 </div>
 
+                {!String(equipmentDetails.id).startsWith("EQ-00") && (
+                  <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle space-y-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-extrabold text-primary m-0">Lifecycle Timeline</h3>
+                        <p className="text-xs text-secondary mt-1 mb-0">
+                          Full asset history — purchase, maintenance, lifecycle actions, and system events in chronological order.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            refreshLifecycle(equipmentDetails.id);
+                            refreshTimeline(equipmentDetails.id);
+                          }}
+                          disabled={lifecycleLoading || timelineLoading}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-secondary text-xs font-bold hover:bg-subtle disabled:opacity-60"
+                        >
+                          Refresh
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-secondary text-xs font-bold hover:bg-subtle"
+                        >
+                          Print
+                        </button>
+                      </div>
+                    </div>
+
+                    {user?.role === "hospital" && (
+                      <form onSubmit={handleLifecycleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <select
+                          value={lifecycleForm.actionType}
+                          onChange={(event) => handleLifecycleChange("actionType", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        >
+                          <option value="TRANSFER">Transfer</option>
+                          <option value="ASSIGNMENT">Assignment</option>
+                          <option value="RETIREMENT">Retirement</option>
+                          <option value="DISPOSAL">Disposal</option>
+                          <option value="REPLACEMENT">Replacement</option>
+                          <option value="DEPRECIATION_SNAPSHOT">Depreciation Snapshot</option>
+                        </select>
+                        <input
+                          type="date"
+                          value={lifecycleForm.effectiveDate}
+                          onChange={(event) => handleLifecycleChange("effectiveDate", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="New department"
+                          value={lifecycleForm.newDepartment}
+                          onChange={(event) => handleLifecycleChange("newDepartment", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Room / location"
+                          value={lifecycleForm.roomLocation}
+                          onChange={(event) => handleLifecycleChange("roomLocation", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Ward"
+                          value={lifecycleForm.wardLocation}
+                          onChange={(event) => handleLifecycleChange("wardLocation", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Custodian"
+                          value={lifecycleForm.custodian}
+                          onChange={(event) => handleLifecycleChange("custodian", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Replacement equipment ID"
+                          value={lifecycleForm.replacementEquipmentId}
+                          onChange={(event) => handleLifecycleChange("replacementEquipmentId", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Depreciation amount"
+                          value={lifecycleForm.depreciationAmount}
+                          onChange={(event) => handleLifecycleChange("depreciationAmount", event.target.value)}
+                          className="px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                        />
+                        <textarea
+                          placeholder="Notes"
+                          value={lifecycleForm.notes}
+                          onChange={(event) => handleLifecycleChange("notes", event.target.value)}
+                          className="md:col-span-2 px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm min-h-20"
+                        />
+                        <button
+                          type="submit"
+                          disabled={lifecycleSaving}
+                          className="md:col-span-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          {lifecycleSaving ? "Saving..." : "Request Lifecycle Action"}
+                        </button>
+                      </form>
+                    )}
+
+                    {lifecycleError && (
+                      <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-sm font-semibold border border-red-200 dark:border-red-900">
+                        {lifecycleError}
+                      </div>
+                    )}
+
+                    {timelineLoading ? (
+                      <p className="text-sm text-secondary font-semibold">Loading asset history...</p>
+                    ) : timelineEntries.length === 0 ? (
+                      <p className="text-sm text-secondary font-semibold">No lifecycle events recorded yet.</p>
+                    ) : (
+                      <div className="max-h-80 overflow-y-auto pr-2">
+                        <ol className="relative pl-6 space-y-5 border-l-2 border-slate-300 dark:border-slate-700">
+                          {timelineEntries.map((entry, index) => {
+                            const meta = timelineMeta(entry.type);
+                            return (
+                              <li key={`${entry.source}-${entry.sourceId ?? index}-${index}`} className="relative">
+                                <span className={`absolute -left-[31px] top-1.5 h-4 w-4 rounded-full ${meta.dot} ring-4 ring-hover`} />
+                                <div className="rounded-xl border border-subtle bg-surface p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-2 min-w-0">
+                                      <span className="text-base leading-5">{meta.icon}</span>
+                                      <div className="min-w-0">
+                                        <p className="m-0 text-sm font-extrabold text-primary">{entry.title}</p>
+                                        <p className="m-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide text-secondary">
+                                          {entry.source} · {entry.type?.replaceAll("_", " ")}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <span className="shrink-0 text-[10px] text-secondary font-semibold whitespace-nowrap">
+                                      {formatTimelineDate(entry.date)}
+                                    </span>
+                                  </div>
+                                  {entry.description && (
+                                    <p className="m-0 mt-2 text-xs text-secondary">{entry.description}</p>
+                                  )}
+                                  {(entry.actor || entry.statusChange) && (
+                                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold">
+                                      {entry.actor && (
+                                        <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                          By {entry.actor}
+                                        </span>
+                                      )}
+                                      {entry.statusChange && (
+                                        <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                          {entry.statusChange}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </div>
+                    )}
+
+                    {user?.role === "hospital" &&
+                      (() => {
+                        const pending = lifecycleActions.filter(
+                          (a) => a.status === "PENDING_APPROVAL" || a.status === "APPROVED"
+                        );
+                        if (pending.length === 0) return null;
+                        return (
+                          <div className="pt-2 border-t border-subtle space-y-2">
+                            <p className="m-0 text-xs font-extrabold text-primary">Pending Approvals</p>
+                            {pending.map((action) => (
+                              <div key={action.id} className="flex items-center justify-between gap-3 rounded-xl border border-subtle bg-surface p-3">
+                                <div className="min-w-0">
+                                  <p className="m-0 text-xs font-extrabold text-primary">
+                                    {action.actionType?.replaceAll("_", " ")}
+                                  </p>
+                                  <p className="m-0 text-[10px] text-secondary">
+                                    {action.notes || `${action.newDepartment || action.custodian || "No details"} · ${action.status}`}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                  {action.status === "PENDING_APPROVAL" && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleLifecycleWorkflow(action.id, "approve")}
+                                        disabled={lifecycleSaving}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-60"
+                                      >
+                                        Approve
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleLifecycleWorkflow(action.id, "reject")}
+                                        disabled={lifecycleSaving}
+                                        className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-60"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+                                  {action.status === "APPROVED" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLifecycleWorkflow(action.id, "complete")}
+                                      disabled={lifecycleSaving}
+                                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-60"
+                                    >
+                                      Complete
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                  </div>
+                )}
+
                 <div className="flex justify-end">
                   <button
                     onClick={() => setSelectedEquipmentId(null)}
@@ -636,10 +1366,10 @@ export default function EquipmentList({ onNavigate }) {
         </div>
       )}
 
-      {/* CSV Import Modal */}
+      {/* Bulk Import Modal */}
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-card rounded-3xl p-8 max-w-2xl w-full shadow-2xl relative border border-subtle">
+          <div className="bg-card rounded-3xl p-8 max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative border border-subtle">
             <button
               onClick={() => setShowImportModal(false)}
               className="absolute top-5 right-5 w-9 h-9 rounded-full bg-hover text-secondary border-none flex items-center justify-center text-xl font-bold cursor-pointer transition-colors hover:bg-subtle"
@@ -647,126 +1377,359 @@ export default function EquipmentList({ onNavigate }) {
               &times;
             </button>
 
-            <div className="flex items-center gap-4 mb-6">
+            <div className="flex items-center gap-4 mb-4">
               <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-2xl">
                 📥
               </div>
               <div>
                 <h2 className="text-2xl font-extrabold text-primary m-0">
-                  Bulk CSV Import
+                  Bulk Import
                 </h2>
                 <p className="text-secondary text-sm mt-1">
-                  Onboard multiple medical assets in a single batch.
+                  Onboard hundreds of medical assets from a CSV or Excel file in one batch.
                 </p>
               </div>
             </div>
 
-            <form onSubmit={handleImportSubmit} className="space-y-6">
-              <div
-                className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-3 transition-colors cursor-pointer ${
-                  dragActive ? "border-blue-600 bg-blue-50/20" : "border-subtle hover:bg-hover"
-                }`}
-                onDragEnter={handleDrag}
-                onDragOver={handleDrag}
-                onDragLeave={handleDrag}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById("csv-file-input").click()}
-              >
-                <input
-                  id="csv-file-input"
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-                <span className="text-4xl">📊</span>
-                {importFile ? (
-                  <div className="text-center">
-                    <p className="text-primary font-bold text-base">{importFile.name}</p>
-                    <p className="text-secondary text-xs mt-1">{(importFile.size / 1024).toFixed(2)} KB</p>
+            {/* Step indicator */}
+            <div className="flex items-center gap-2 mb-6 text-xs font-bold">
+              {["Upload File", "Preview (Dry Run)", "Import Result"].map((label, index) => {
+                const stepNames = ["select", "preview", "done"];
+                const active = stepNames.indexOf(importStep) === index;
+                const reached = stepNames.indexOf(importStep) >= index;
+                return (
+                  <div key={label} className="flex items-center gap-2">
+                    <span
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] ${
+                        reached ? "bg-blue-600 text-white" : "bg-subtle text-secondary"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className={active ? "text-primary" : "text-secondary"}>{label}</span>
+                    {index < 2 && <span className="text-secondary mx-1">→</span>}
                   </div>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-primary font-bold text-sm">Drag and drop your CSV file here, or click to browse</p>
-                    <p className="text-secondary text-xs mt-1">Only .csv files are supported</p>
-                  </div>
-                )}
-              </div>
+                );
+              })}
+            </div>
 
-              <div className="flex justify-between items-center bg-hover p-4 rounded-xl text-sm">
-                <span className="text-secondary font-medium">Need the correct column structure?</span>
-                <button
-                  type="button"
-                  onClick={downloadCsvTemplate}
-                  className="text-blue-600 dark:text-blue-400 font-bold border-none bg-transparent hover:underline cursor-pointer flex items-center gap-1"
+            {importStep === "select" && (
+              <form onSubmit={handlePreviewSubmit} className="space-y-6">
+                <div
+                  className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-3 transition-colors cursor-pointer ${
+                    dragActive ? "border-blue-600 bg-blue-50/20" : "border-subtle hover:bg-hover"
+                  }`}
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById("csv-file-input").click()}
                 >
-                  📥 Download CSV Template
-                </button>
-              </div>
-
-              {importError && (
-                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-semibold">
-                  ⚠️ {importError}
-                </div>
-              )}
-
-              {importSummary && (
-                <div className="border border-subtle rounded-2xl p-5 bg-hover space-y-4 max-h-60 overflow-y-auto">
-                  <h4 className="text-base font-bold text-primary m-0 flex items-center gap-2">
-                    📊 Import Summary
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 p-3 rounded-xl text-center">
-                      <span className="text-emerald-600 dark:text-emerald-400 text-2xl font-extrabold">{importSummary.successCount}</span>
-                      <p className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mt-1 mb-0">Succeeded</p>
+                  <input
+                    id="csv-file-input"
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <span className="text-4xl">📊</span>
+                  {importFile ? (
+                    <div className="text-center">
+                      <p className="text-primary font-bold text-base">{importFile.name}</p>
+                      <p className="text-secondary text-xs mt-1">
+                        {(importFile.size / 1024).toFixed(2)} KB
+                        {parsedRows.length > 0 && ` · ${parsedRows.length} data row(s) parsed`}
+                      </p>
                     </div>
-                    <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-3 rounded-xl text-center">
-                      <span className="text-rose-600 dark:text-rose-400 text-2xl font-extrabold">{importSummary.failureCount}</span>
-                      <p className="text-[11px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold mt-1 mb-0">Failed</p>
-                    </div>
-                  </div>
-
-                  {importSummary.failures && importSummary.failures.length > 0 && (
-                    <div className="pt-2">
-                      <span className="text-xs text-secondary font-bold uppercase tracking-wider">Failed Row Log</span>
-                      <div className="mt-2 space-y-2">
-                        {importSummary.failures.map((f, i) => (
-                          <div key={i} className="text-xs border-b border-subtle pb-2 last:border-none">
-                            <div className="flex justify-between font-bold text-red-600">
-                              <span>Row {f.rowNumber}</span>
-                              <span>{f.reason}</span>
-                            </div>
-                            <code className="block mt-1 text-slate-500 bg-surface p-1 rounded font-mono overflow-x-auto truncate">
-                              {f.rowData}
-                            </code>
-                          </div>
-                        ))}
-                      </div>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-primary font-bold text-sm">
+                        Drag and drop your CSV or Excel file here, or click to browse
+                      </p>
+                      <p className="text-secondary text-xs mt-1">Supported: .csv, .xlsx, .xls</p>
                     </div>
                   )}
                 </div>
-              )}
 
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowImportModal(false)}
-                  className="px-6 py-3 text-secondary font-bold hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={importing || !importFile}
-                  className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors disabled:opacity-50"
-                >
-                  {importing ? "Processing..." : "Start Import"}
-                </button>
+                {/* Column guidance */}
+                <div className="bg-hover p-4 rounded-xl">
+                  <div className="flex flex-wrap justify-between items-center gap-2 text-sm mb-3">
+                    <span className="text-secondary font-medium">Need the correct column structure?</span>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => downloadTemplate("csv")}
+                        className="text-blue-600 dark:text-blue-400 font-bold border-none bg-transparent hover:underline cursor-pointer"
+                      >
+                        📥 CSV Template
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadTemplate("xlsx")}
+                        className="text-blue-600 dark:text-blue-400 font-bold border-none bg-transparent hover:underline cursor-pointer"
+                      >
+                        📥 Excel Template
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+                    {IMPORT_HEADERS.map((header) => (
+                      <p key={header} className="text-xs text-secondary m-0">
+                        <strong className="text-primary">{header}</strong> — {IMPORT_COLUMN_GUIDANCE[header]}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+
+                {importError && (
+                  <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-semibold">
+                    ⚠️ {importError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowImportModal(false)}
+                    className="px-6 py-3 text-secondary font-bold hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={importing || !importFile || parsedRows.length === 0}
+                    className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors disabled:opacity-50"
+                  >
+                    {importing ? "Validating..." : "Preview Import"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {importStep === "preview" && importPreview && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 p-3 rounded-xl text-center">
+                    <span className="text-blue-600 dark:text-blue-400 text-2xl font-extrabold">{importPreview.totalRows}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-blue-600 dark:text-blue-400 font-bold mt-1 mb-0">Total Rows</p>
+                  </div>
+                  <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 p-3 rounded-xl text-center">
+                    <span className="text-emerald-600 dark:text-emerald-400 text-2xl font-extrabold">{importPreview.validCount}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mt-1 mb-0">Will Import</p>
+                  </div>
+                  <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-3 rounded-xl text-center">
+                    <span className="text-rose-600 dark:text-rose-400 text-2xl font-extrabold">{importPreview.failureCount}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold mt-1 mb-0">Has Errors</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-subtle overflow-hidden">
+                  <div className="px-4 py-3 bg-hover border-b border-subtle flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-primary m-0">
+                      ✅ Rows that will be imported ({importPreview.validRows.length})
+                    </h4>
+                    <span className="text-[11px] text-secondary font-semibold">
+                      Nothing is saved until you confirm
+                    </span>
+                  </div>
+                  {importPreview.validRows.length === 0 ? (
+                    <p className="text-sm text-secondary p-4 m-0">
+                      No valid rows found. Fix the errors below or use a different file.
+                    </p>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-surface text-secondary text-[11px] uppercase tracking-wider">
+                          <tr>
+                            <th className="text-left px-4 py-2">Row</th>
+                            {["Equipment Code", "Name", "Model", "Department", "Category", "Status"].map((col) => (
+                              <th key={col} className="text-left px-3 py-2">{col}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importPreview.validRows.map((row) => (
+                            <tr key={row.rowNumber} className="border-t border-subtle">
+                              <td className="px-4 py-2 text-secondary">{row.rowNumber}</td>
+                              <td className="px-3 py-2 font-mono text-xs">{row.data["Equipment Code"] || "auto"}</td>
+                              <td className="px-3 py-2 font-semibold text-primary">{row.data.Name}</td>
+                              <td className="px-3 py-2 text-secondary">{row.data.Model}</td>
+                              <td className="px-3 py-2 text-secondary">{row.data.Department}</td>
+                              <td className="px-3 py-2 text-secondary">{row.data.Category}</td>
+                              <td className="px-3 py-2">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                                  {row.data.Status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {importPreview.failures.length > 0 && (
+                  <div className="rounded-xl border border-rose-200 dark:border-rose-900 overflow-hidden">
+                    <div className="px-4 py-3 bg-rose-50 dark:bg-rose-950/20 border-b border-rose-200 dark:border-rose-900 flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400 m-0">
+                        ⚠️ Rows with errors ({importPreview.failures.length})
+                      </h4>
+                      <span className="text-[11px] text-rose-500 font-semibold">
+                        These rows will be skipped
+                      </span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {importPreview.failures.map((f, i) => (
+                        <div key={i} className="px-4 py-2.5 text-xs border-t border-rose-100 dark:border-rose-900/40 first:border-t-0">
+                          <div className="flex justify-between gap-3 font-bold text-rose-600 dark:text-rose-400">
+                            <span>Row {f.rowNumber}</span>
+                            <span className="text-right">{f.reason}</span>
+                          </div>
+                          {f.rowData && (
+                            <code className="block mt-1 text-slate-500 bg-surface p-1 rounded font-mono overflow-x-auto truncate">
+                              {f.rowData}
+                            </code>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setImportStep("select")}
+                    className="px-6 py-3 text-secondary font-bold hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImportSubmit}
+                    disabled={importing || importPreview.validCount === 0}
+                    className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors disabled:opacity-50"
+                  >
+                    {importing ? "Importing..." : `Confirm & Import ${importPreview.validCount} row(s)`}
+                  </button>
+                </div>
               </div>
-            </form>
+            )}
+
+            {importStep === "done" && importSummary && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 p-3 rounded-xl text-center">
+                    <span className="text-emerald-600 dark:text-emerald-400 text-2xl font-extrabold">{importSummary.successCount}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mt-1 mb-0">Imported</p>
+                  </div>
+                  <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-3 rounded-xl text-center">
+                    <span className="text-rose-600 dark:text-rose-400 text-2xl font-extrabold">{importSummary.failureCount}</span>
+                    <p className="text-[11px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold mt-1 mb-0">Skipped</p>
+                  </div>
+                </div>
+
+                {importSummary.failures && importSummary.failures.length > 0 && (
+                  <div className="rounded-xl border border-rose-200 dark:border-rose-900 overflow-hidden">
+                    <div className="px-4 py-3 bg-rose-50 dark:bg-rose-950/20 border-b border-rose-200 dark:border-rose-900">
+                      <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400 m-0">
+                        ⚠️ Skipped rows ({importSummary.failures.length})
+                      </h4>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {importSummary.failures.map((f, i) => (
+                        <div key={i} className="px-4 py-2.5 text-xs border-t border-rose-100 dark:border-rose-900/40 first:border-t-0">
+                          <div className="flex justify-between gap-3 font-bold text-rose-600 dark:text-rose-400">
+                            <span>Row {f.rowNumber}</span>
+                            <span className="text-right">{f.reason}</span>
+                          </div>
+                          {f.rowData && (
+                            <code className="block mt-1 text-slate-500 bg-surface p-1 rounded font-mono overflow-x-auto truncate">
+                              {f.rowData}
+                            </code>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportFile(null);
+                      setParsedRows([]);
+                      setImportPreview(null);
+                      setImportSummary(null);
+                      setImportError(null);
+                      setImportStep("select");
+                    }}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl border-none cursor-pointer shadow-md transition-colors"
+                  >
+                    📥 Import Another File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowImportModal(false)}
+                    className="px-6 py-3 text-secondary font-bold hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {importStep === "select" && importHistory.length > 0 && (
+              <div className="mt-8 rounded-xl border border-subtle overflow-hidden">
+                <div className="px-4 py-3 bg-hover border-b border-subtle">
+                  <h4 className="text-sm font-bold text-primary m-0">
+                    🕓 Recent Import Batches
+                  </h4>
+                  <p className="text-[11px] text-secondary mt-0.5 mb-0">
+                    Every import is audit-logged (actor, file, row counts, failures).
+                  </p>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-surface text-secondary text-[11px] uppercase tracking-wider">
+                      <tr>
+                        <th className="text-left px-4 py-2">Date</th>
+                        <th className="text-left px-3 py-2">File</th>
+                        <th className="text-left px-3 py-2">By</th>
+                        <th className="text-left px-3 py-2">Imported</th>
+                        <th className="text-left px-3 py-2">Skipped</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importHistory.map((entry) => (
+                        <tr key={entry.id} className="border-t border-subtle">
+                          <td className="px-4 py-2 text-secondary text-xs">
+                            {entry.importedAt?.replace("T", " ").slice(0, 16)}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs">{entry.filename}</td>
+                          <td className="px-3 py-2 text-secondary text-xs">{entry.actor}</td>
+                          <td className="px-3 py-2 text-emerald-600 font-bold text-xs">{entry.successCount}</td>
+                          <td className="px-3 py-2 text-rose-600 font-bold text-xs">{entry.failureCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* QR Scanner Modal */}
+      <QrScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleScanResult}
+        title="Scan Equipment Tag"
+      />
     </div>
   );
 }

@@ -8,6 +8,33 @@ export const registerUser = async (data) => {
 
 // Login user
 export const loginUser = async (data) => {
+  const { email, password } = data;
+
+  // Dev-only demo shortcut, bypassing the real backend for local exploration
+  // without a running API. `process.env.NODE_ENV` is inlined at build time by
+  // react-scripts, so this whole branch (credentials included) is dead-code
+  // eliminated from production bundles - it never ships.
+  if (process.env.NODE_ENV !== 'production') {
+    if (email === 'hospital@medtrack.com' && password === 'admin123') {
+      return {
+        token: 'demo-token-hospital',
+        user: { id: 'demo-hosp-1', name: 'Hospital Admin', email, phone: '555-0101', organization: 'MedTrack General', role: 'HOSPITAL' }
+      };
+    }
+    if (email === 'tech@medtrack.com' && password === 'tech123') {
+      return {
+        token: 'demo-token-tech',
+        user: { id: 'demo-tech-1', name: 'Technician Demo', email, phone: '555-0102', organization: 'MedTrack Support', role: 'TECHNICIAN' }
+      };
+    }
+    if (email === 'supplier@medtrack.com' && password === 'supply123') {
+      return {
+        token: 'demo-token-supplier',
+        user: { id: 'demo-supp-1', name: 'Supplier Demo', email, phone: '555-0103', organization: 'MedTrack Suppliers', role: 'SUPPLIER' }
+      };
+    }
+  }
+
   const response = await API.post("/api/auth/login", data);
   return response.data;
 };
@@ -27,5 +54,29 @@ export const verifyOtp = async (data) => {
 // Reset password
 export const resetPassword = async (data) => {
   const response = await API.post("/api/auth/reset-password", data);
+  return response.data;
+};
+
+// Get authority version and permissions for a user
+export const getAuthorityVersion = async (userId) => {
+  const response = await API.get(`/api/auth/authority/version/${userId}`);
+  return response.data;
+};
+
+// Increment authority version for a targeted user (Revokes active sessions)
+export const incrementAuthorityVersion = async (data) => {
+  const response = await API.post("/api/auth/authority/version/increment", data);
+  return response.data;
+};
+
+// Bump system-wide global authority version
+export const bumpGlobalAuthorityVersion = async (data) => {
+  const response = await API.post("/api/auth/authority/version/bump-global", data);
+  return response.data;
+};
+
+// Fetch security audit logs for a user
+export const getAuthorityAuditLogs = async (userId) => {
+  const response = await API.get(`/api/auth/authority/audit-logs/${userId}`);
   return response.data;
 };

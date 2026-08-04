@@ -1,28 +1,64 @@
 import { useState, useEffect } from "react";
 import { getAllTasks } from "../../services/MaintenanceService";
 import { useAuth } from "../../context/AuthContext";
+import Pagination from "../../components/common/Pagination";
+import QrScannerModal from "../../components/common/QrScannerModal";
 
 export default function TaskList({ onNavigate }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 20;
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanMessage, setScanMessage] = useState(null);
 
   useEffect(() => {
     fetchTasks();
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (pageNum = 0) => {
     try {
       setLoading(true);
-      const data = await getAllTasks();
-      setTasks(data);
+      const response = await getAllTasks({ page: pageNum, size: pageSize });
+      const items = response?.content || response?.data || [];
+      setTasks(items);
+      if (response?.totalPages) setTotalPages(response.totalPages);
+      if (response?.page !== undefined) setPage(response.page);
       setError(null);
     } catch (err) {
       console.error("Error fetching tasks:", err);
       setError("Failed to load tasks. Please try again later.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchTasks(newPage);
+  };
+
+  const handleScanResult = (parsed) => {
+    setScannerOpen(false);
+    if (!parsed?.id) return;
+
+    const scannedId = String(parsed.id).toLowerCase();
+    const match = tasks.find(
+      (task) =>
+        String(task.equipmentId || "").toLowerCase() === scannedId ||
+        String(task.equipmentRecordId || "").toLowerCase() === scannedId ||
+        String(task.id).toLowerCase() === scannedId
+    );
+
+    if (match) {
+      setScanMessage(null);
+      onNavigate("update-task", match);
+    } else {
+      setScanMessage(
+        `No open task found for asset "${parsed.id}". If the task was assigned to you, it may have been completed already.`
+      );
     }
   };
 
@@ -56,7 +92,14 @@ export default function TaskList({ onNavigate }) {
           <h1 className="text-3xl font-bold text-primary mb-2">My Assignments</h1>
           <p className="text-secondary">Manage and update your maintenance tasks</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
+          <button
+            onClick={() => setScannerOpen(true)}
+            className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold transition-all duration-300 hover:bg-primary/90 hover:scale-105 active:scale-95 shadow-lg shadow-primary/20"
+            title="Scan an asset tag to find its task"
+          >
+            📷 Scan Asset
+          </button>
           <div className="bg-card px-4 py-2 rounded-xl border border-subtle shadow-sm">
             <span className="text-sm text-secondary block">Total Tasks</span>
             <span className="text-xl font-bold text-primary">{tasks.length}</span>
@@ -64,11 +107,24 @@ export default function TaskList({ onNavigate }) {
           <div className="bg-card px-4 py-2 rounded-xl border border-subtle shadow-sm">
             <span className="text-sm text-secondary block">Pending</span>
             <span className="text-xl font-bold text-orange-500">
-              {tasks.filter(t => t.status === 'Pending').length}
+              {tasks.filter(t => t.status === 'Scheduled').length}
             </span>
           </div>
         </div>
       </div>
+
+      {scanMessage && (
+        <div className="mb-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 p-4 text-sm font-semibold flex items-start justify-between gap-3">
+          <span>{scanMessage}</span>
+          <button
+            onClick={() => setScanMessage(null)}
+            className="border-none bg-transparent cursor-pointer font-bold text-amber-700 dark:text-amber-400"
+            aria-label="Dismiss message"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tasks.map((task) => (
@@ -163,6 +219,15 @@ export default function TaskList({ onNavigate }) {
           <p className="text-secondary">You're all caught up! New assignments will appear here.</p>
         </div>
       )}
+
+      <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+
+      <QrScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleScanResult}
+        title="Scan Asset Tag"
+      />
     </div>
   );
 }
