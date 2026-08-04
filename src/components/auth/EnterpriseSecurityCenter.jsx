@@ -53,7 +53,8 @@ import {
   Atom,
   Stamp,
   Share2,
-  Radar
+  Radar,
+  IdCard
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -92,6 +93,7 @@ import BiomedicalAiWatermarkPanel from "./BiomedicalAiWatermarkPanel";
 import HomomorphicEncryptionPanel from "./HomomorphicEncryptionPanel";
 import BiomedicalMpcHsmPanel from "./BiomedicalMpcHsmPanel";
 import HealthcareCtemPanel from "./HealthcareCtemPanel";
+import BiomedicalSovereignIdentityPanel from "./BiomedicalSovereignIdentityPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -448,7 +450,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "watermark", label: "AI Watermark & C2PA Provenance", icon: Stamp },
           { id: "fhe", label: "Homomorphic FHE & Confidential Compute", icon: Lock },
           { id: "mpchsm", label: "Sovereign MPC HSM Key Custody", icon: Share2 },
-          { id: "ctem", label: "Healthcare CTEM & Attack Surface", icon: Radar }
+          { id: "ctem", label: "Healthcare CTEM & Attack Surface", icon: Radar },
+          { id: "didvc", label: "Sovereign Identity (W3C DID/VC)", icon: IdCard }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -984,6 +987,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 35: HEALTHCARE CONTINUOUS THREAT EXPOSURE MANAGEMENT (CTEM) */}
       {selectedTab === "ctem" && (
         <HealthcareCtemPanel />
+      )}
+
+      {/* TAB 36: BIOMEDICAL SELF-SOVEREIGN IDENTITY (W3C DID / VC) */}
+      {selectedTab === "didvc" && (
+        <BiomedicalSovereignIdentityPanel />
       )}
 
       {/* 4. MODALS */}
