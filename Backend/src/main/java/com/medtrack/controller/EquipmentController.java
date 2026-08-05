@@ -45,12 +45,13 @@ public class EquipmentController {
      */
     @GetMapping
     public ResponseEntity<com.medtrack.dto.PagedResponse<Equipment>> getAllEquipment(
+            @RequestParam(required = false) Long locationId,
             @PageableDefault(sort = "name") Pageable pageable,
             Principal principal) {
 
         return ResponseEntity.ok(
                 com.medtrack.dto.PagedResponse.of(
-                        equipmentService.getAllEquipment(principal.getName(), pageable)
+                        equipmentService.getAllEquipment(principal.getName(), locationId, pageable)
                 )
         );
     }
