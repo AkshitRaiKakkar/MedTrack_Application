@@ -33,7 +33,7 @@ public class SupplierController {
     private final SupplierAccessGuard supplierAccessGuard;
 
     @GetMapping("/orders")
-    @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
+    @PreAuthorize("hasRole('SUPPLIER')")
     @Operation(summary = "Get paginated, filtered supplier orders", description = "Allows suppliers to search and filter through synchronized equipment purchase orders. Suppliers only ever see their own orders; HOSPITAL admins may filter by any supplier.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully retrieved orders", content = @Content(schema = @Schema(implementation = Page.class))),
