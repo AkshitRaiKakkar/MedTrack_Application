@@ -137,3 +137,32 @@ export const assignEquipmentToLocation = async (equipmentId, data) => {
   const response = await API.post(`/api/locations/equipment/${equipmentId}/assign`, data);
   return response.data;
 };
+
+// ---------------------------------------------------------------------------
+// Duplicate detection & tag reconciliation (issue #746)
+// ---------------------------------------------------------------------------
+
+// Entry-time warning feed: does this asset closely match an existing one?
+// Params: name, model, serialNumber, equipmentCode, excludeId (while editing)
+export const checkForDuplicates = async (params = {}) => {
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join("&");
+  const response = await API.get(`/api/equipment/duplicates/check?${query}`);
+  return response.data;
+};
+
+// Reconciliation clusters of likely-duplicate records
+export const getDuplicateGroups = async () => {
+  const response = await API.get("/api/equipment/duplicates");
+  return response.data;
+};
+
+// Confirm a reviewed pair: archive the duplicate, keep the survivor
+export const mergeDuplicates = async (keepId, mergeId) => {
+  const response = await API.post(
+    `/api/equipment/duplicates/merge?keepId=${keepId}&mergeId=${mergeId}`
+  );
+  return response.data;
+};

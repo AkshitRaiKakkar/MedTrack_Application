@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { addEquipment, getLocationTree } from '../../services/EquipmentService';
+import { addEquipment, getLocationTree, checkForDuplicates } from '../../services/EquipmentService';
 import LocationPicker from '../../components/hospital/LocationPicker';
 
 export default function AddEquipmentForm({ onNavigate }) {
@@ -26,6 +26,9 @@ export default function AddEquipmentForm({ onNavigate }) {
   // Facility location tree (issue #745)
   const [locations, setLocations] = useState([]);
   const [locationId, setLocationId] = useState(null);
+  // Duplicate detection (issue #746): warning banner shown at entry time for near-matches.
+  const [duplicateWarnings, setDuplicateWarnings] = useState([]);
+  const [duplicateChecking, setDuplicateChecking] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -43,10 +46,42 @@ export default function AddEquipmentForm({ onNavigate }) {
 
   const onChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (e.target.name === "serialNumber" || e.target.name === "name") {
+      setDuplicateWarnings([]);
+    }
+  };
+
+  // Entry-time duplicate check (issue #746): asks the backend whether the tag/serial being
+  // entered closely matches an existing asset. If so, the form pauses with a warning banner the
+  // user can dismiss for legitimate near-duplicates (e.g. two devices from the same batch).
+  const runDuplicateCheck = async () => {
+    if (!formData.serialNumber && !formData.name) return [];
+    setDuplicateChecking(true);
+    try {
+      const matches = await checkForDuplicates({
+        name: formData.name,
+        model: formData.model,
+        serialNumber: formData.serialNumber,
+      });
+      setDuplicateWarnings(matches || []);
+      return matches || [];
+    } catch (err) {
+      console.error("Duplicate check failed", err);
+      setDuplicateWarnings([]);
+      return [];
+    } finally {
+      setDuplicateChecking(false);
+    }
   };
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.serialNumber && !formData.name) return;
+    if (duplicateWarnings.length === 0) {
+      // First pass: warn before registering; a second pass (after "Register anyway") proceeds.
+      const matches = await runDuplicateCheck();
+      if (matches.length > 0) return;
+    }
     setLoading(true);
     try {
       const equipmentData = {
@@ -249,6 +284,56 @@ export default function AddEquipmentForm({ onNavigate }) {
               </div>
             </div>
           </div>
+
+          {/* Duplicate detection warning (issue #746): shown when the tag/serial closely matches
+              an existing asset; dismissible for legitimate near-duplicates. */}
+          {duplicateWarnings.length > 0 && (
+            <div className="pt-4">
+              <div className="p-5 rounded-2xl border border-amber-300 bg-amber-50">
+                <p className="text-sm font-black text-amber-800 mb-2">
+                  ⚠️ Possible duplicate detected
+                </p>
+                <p className="text-[13px] text-amber-700 font-medium mb-3">
+                  This device closely matches {duplicateWarnings.length === 1 ? "an existing asset" : `${duplicateWarnings.length} existing assets`}.
+                  Please verify before registering to avoid duplicate records.
+                </p>
+                <ul className="space-y-2 mb-4">
+                  {duplicateWarnings.map((match) => (
+                    <li
+                      key={match.id}
+                      className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white border border-amber-200"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-slate-800 m-0 truncate">
+                          {match.name || "Unnamed asset"} {match.equipmentCode ? `(${match.equipmentCode})` : ""}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-medium m-0">
+                          {match.serialNumber ? `Serial: ${match.serialNumber}` : ""}
+                          {match.model ? ` · ${match.model}` : ""}
+                          {" · "}
+                          {match.exact ? "exact match" : `${Math.round(match.similarity * 100)}% similar`}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-amber-600">
+                        {match.matchedOn === "SERIAL_NUMBER"
+                          ? "Serial No."
+                          : match.matchedOn === "ASSET_CODE"
+                          ? "Asset ID"
+                          : "Name / Model"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWarnings([])}
+                  className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer border-none transition-colors"
+                >
+                  These are different devices — Register anyway
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="pt-8 flex justify-end gap-4">
             <button 

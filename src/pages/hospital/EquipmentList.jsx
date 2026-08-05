@@ -823,6 +823,13 @@ export default function EquipmentList({ onNavigate }) {
                 📥 Bulk Import
               </button>
               <button
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-subtle px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-sm transition-colors"
+                onClick={() => onNavigate("duplicates")}
+                title="Review and merge likely duplicate records"
+              >
+                🔎 Find Duplicates
+              </button>
+              <button
                 className="bg-blue-600 hover:bg-blue-700 text-white border-none px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-md transition-colors"
                 onClick={() => onNavigate("add-equipment")}
               >
