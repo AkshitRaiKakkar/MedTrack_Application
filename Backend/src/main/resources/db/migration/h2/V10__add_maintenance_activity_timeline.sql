@@ -17,8 +17,6 @@ CREATE TABLE maintenance_task_activities (
     CONSTRAINT uk_maintenance_activity_sequence UNIQUE (task_id, sequence_number),
     CONSTRAINT fk_maintenance_activity_task
         FOREIGN KEY (task_id) REFERENCES maintenance_tasks(id),
-    CONSTRAINT fk_maintenance_activity_hospital
-        FOREIGN KEY (hospital_id) REFERENCES hospital(id),
     CONSTRAINT fk_maintenance_activity_actor
         FOREIGN KEY (actor_user_id) REFERENCES users(id),
     CONSTRAINT chk_maintenance_activity_sequence CHECK (sequence_number > 0),
