@@ -213,6 +213,91 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/auth/vulnerability/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/auth/vulnerability/**").hasRole("HOSPITAL")
 
+                // Security administration modules added after the original authorization matrix.
+                // Their policies, telemetry, cloud posture, playbooks and threat records affect
+                // the security posture of the full deployment. Read access remains available to
+                // signed-in users; every state-changing route requires a hospital administrator.
+                .requestMatchers(HttpMethod.GET,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).authenticated()
+                .requestMatchers(HttpMethod.POST,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PATCH,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).hasRole("HOSPITAL")
+
                 // Equipment module boundaries:
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.
