@@ -2,6 +2,7 @@ package com.medtrack.model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,6 +10,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.SQLRestriction;
 
+import com.medtrack.util.DepreciationCalculator;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -92,6 +96,180 @@ public class Equipment {
     private LocalDate purchaseDate;
 
     private LocalDate warrantyExpiry;
+
+    // ---------------------------------------------------------------------
+    // Warranty & service contract fields (issue #703)
+    //
+    // warrantyExpiry above is the coverage end date; the fields below carry the contract details
+    // so staff never have to ask the vendor or dig through emails. The lifecycle state is derived
+    // on read by the @Transient getters below and serialised with every JSON response.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Vendor or service provider backing the warranty, e.g. "Siemens Healthineers".
+     */
+    @Column(name = "warranty_provider", length = 255)
+    private String warrantyProvider;
+
+    /**
+     * The contract or warranty registration number issued by the provider.
+     */
+    @Column(name = "warranty_contract_number", length = 100)
+    private String warrantyContractNumber;
+
+    /**
+     * Start of the coverage period. {@code null} means only the expiry is known.
+     */
+    @Column(name = "warranty_start_date")
+    private LocalDate warrantyStartDate;
+
+    /**
+     * What the coverage includes: full parts and labor, parts only, or labor only.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "warranty_coverage_type", length = 30)
+    private WarrantyCoverageType warrantyCoverageType;
+
+    /**
+     * Free-text terms, exclusions, or service-level notes from the contract.
+     */
+    @Column(name = "warranty_terms", length = 2000)
+    private String warrantyTerms;
+
+    /**
+     * Lifecycle state of the warranty as of today, for the status badge on the inventory list and
+     * detail page. Never persisted; serialised with the entity.
+     */
+    @Transient
+    public WarrantyStatus getWarrantyStatus() {
+        if (warrantyExpiry == null) {
+            return WarrantyStatus.NO_COVERAGE;
+        }
+        long daysUntil = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), warrantyExpiry);
+        if (daysUntil < 0) {
+            return WarrantyStatus.EXPIRED;
+        }
+        if (daysUntil <= 90) {
+            return WarrantyStatus.EXPIRING_SOON;
+        }
+        return WarrantyStatus.ACTIVE;
+    }
+
+    /**
+     * Days remaining until the warranty expires, negative once expired, {@code null} when no
+     * expiry is recorded. Never persisted; serialised with the entity.
+     */
+    @Transient
+    public Long getWarrantyDaysRemaining() {
+        if (warrantyExpiry == null) {
+            return null;
+        }
+        return java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), warrantyExpiry);
+    }
+
+    // ---------------------------------------------------------------------
+    // Depreciation & valuation fields
+    //
+    // The three stored fields are entered at registration; the value the finance team cares
+    // about - book value, accumulated depreciation, replacement cost - is derived on read by the
+    // @Transient getters below and serialised into every JSON response alongside the entity.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Purchase price of the asset. {@code null} means the finance fields were never filled in,
+     * in which case no depreciation accrues and the book value equals the cost (or zero).
+     */
+    @Column(name = "purchase_cost", precision = 14, scale = 2)
+    @PositiveOrZero(message = "Purchase cost cannot be negative")
+    private BigDecimal purchaseCost;
+
+    /**
+     * Depreciable life of the asset in years. {@code null} (or &le; 0) means no depreciation.
+     */
+    @Column(name = "useful_life_years")
+    @Positive(message = "Useful life must be a positive number of years")
+    private Integer usefulLifeYears;
+
+    /**
+     * Depreciation method; straight line by default. Stored as an enum constant so the import and
+     * export can round-trip it unambiguously.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "depreciation_method", length = 30)
+    @Builder.Default
+    private DepreciationMethod depreciationMethod = DepreciationMethod.STRAIGHT_LINE;
+
+    /**
+     * Current book value (purchase cost minus accumulated depreciation, floored at 0), computed
+     * as of today. Never persisted; serialised by Jackson for every read of this entity.
+     */
+    @Transient
+    public BigDecimal getBookValue() {
+        return DepreciationCalculator.bookValue(
+                purchaseCost, purchaseDate, usefulLifeYears, depreciationMethod, LocalDate.now());
+    }
+
+    /**
+     * Depreciation recognised to date. Never persisted; serialised with the entity.
+     */
+    @Transient
+    public BigDecimal getAccumulatedDepreciation() {
+        BigDecimal cost = purchaseCost;
+        if (cost == null) {
+            return null;
+        }
+        BigDecimal value = getBookValue();
+        return value == null ? null : cost.subtract(value).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Projected cost of replacing this asset today, compounding the purchase price at the medical
+     * equipment inflation rate since acquisition. Never persisted; serialised with the entity.
+     */
+    @Transient
+    public BigDecimal getProjectedReplacementCost() {
+        return DepreciationCalculator.projectedReplacementCost(
+                purchaseCost, purchaseDate, LocalDate.now());
+    }
+
+    @Column(name = "room_location", length = 100)
+    private String roomLocation;
+
+    @Column(name = "ward_location", length = 100)
+    private String wardLocation;
+
+    @Column(name = "custodian", length = 255)
+    private String custodian;
+
+    @Column(name = "location_effective_date")
+    private LocalDate locationEffectiveDate;
+
+    // ---------------------------------------------------------------------
+    // Structured facility location (issue #745)
+    //
+    // The room/ward free-text fields above predate the location tree and are kept for
+    // back-compat. location is the asset's current node in facility_location; the tree's flat
+    // list carries name, type and parentId so the UI can render a breadcrumb without joins.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Current facility-location node for this asset.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_id")
+    private FacilityLocation location;
+
+    /**
+     * Read-only projection of the {@code location_id} column. Automatically populated on read
+     * and bound from JSON on write, but never written by Hibernate - the relationship above is
+     * the single write path, so a raw id cannot bypass hospital-scoping or breadcrumb integrity.
+     */
+    @Column(name = "location_id", insertable = false, updatable = false)
+    private Long locationId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "replacement_equipment_id")
+    private Equipment replacementEquipment;
 
     /**
      * Many Equipment items belong to one Hospital.

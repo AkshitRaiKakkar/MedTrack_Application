@@ -39,6 +39,9 @@ public class ShipmentTrackingServiceTest {
     @Mock
     private SupplierAccessGuard supplierAccessGuard;
 
+    @org.mockito.Spy
+    private com.medtrack.supplier.validation.ShipmentRequestValidator validator = new com.medtrack.supplier.validation.ShipmentRequestValidator();
+
     @InjectMocks
     private ShipmentTrackingService shipmentTrackingService;
 
@@ -92,6 +95,8 @@ public class ShipmentTrackingServiceTest {
         CreateShipmentRequest request = CreateShipmentRequest.builder()
                 .orderId(1L)
                 .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
                 .build();
 
         when(orderRepository.findById(1L)).thenReturn(Optional.empty());
@@ -105,6 +110,8 @@ public class ShipmentTrackingServiceTest {
         CreateShipmentRequest request = CreateShipmentRequest.builder()
                 .orderId(1L)
                 .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
                 .build();
 
         EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
@@ -122,6 +129,8 @@ public class ShipmentTrackingServiceTest {
         CreateShipmentRequest request = CreateShipmentRequest.builder()
                 .orderId(1L)
                 .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
                 .build();
 
         EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
@@ -140,17 +149,66 @@ public class ShipmentTrackingServiceTest {
         CreateShipmentRequest request = CreateShipmentRequest.builder()
                 .orderId(1L)
                 .shipmentTrackingNumber("TRK123456")
+                .carrier("FedEx")
                 .estimatedDeliveryDate(LocalDateTime.now().minusDays(1)) // Past date
                 .build();
 
-        EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
-
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(shipmentTrackingRepository.findByOrderId(1L)).thenReturn(Optional.empty());
-        when(shipmentTrackingRepository.findByShipmentTrackingNumber("TRK123456")).thenReturn(Optional.empty());
-
-        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(request, authentication));
         verify(shipmentTrackingRepository, never()).save(any());
+    }
+
+    @Test
+    void createShipment_NullRequest_ThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(null, authentication));
+    }
+
+    @Test
+    void createShipment_NullOrInvalidOrderId_ThrowsException() {
+        CreateShipmentRequest requestNullOrder = CreateShipmentRequest.builder()
+                .orderId(null)
+                .shipmentTrackingNumber("TRK123")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(1))
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestNullOrder, authentication));
+
+        CreateShipmentRequest requestZeroOrder = CreateShipmentRequest.builder()
+                .orderId(0L)
+                .shipmentTrackingNumber("TRK123")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(1))
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestZeroOrder, authentication));
+    }
+
+    @Test
+    void createShipment_BlankTrackingNumberOrCarrier_ThrowsException() {
+        CreateShipmentRequest requestBlankTracking = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("   ")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(1))
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestBlankTracking, authentication));
+
+        CreateShipmentRequest requestBlankCarrier = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123")
+                .carrier("   ")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(1))
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestBlankCarrier, authentication));
+    }
+
+    @Test
+    void createShipment_NullEstimatedDeliveryDate_ThrowsException() {
+        CreateShipmentRequest requestNullDate = CreateShipmentRequest.builder()
+                .orderId(1L)
+                .shipmentTrackingNumber("TRK123")
+                .carrier("FedEx")
+                .estimatedDeliveryDate(null)
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.createShipment(requestNullDate, authentication));
     }
 
     @Test
@@ -223,6 +281,16 @@ public class ShipmentTrackingServiceTest {
     }
 
     @Test
+    void updateShipmentStatus_NullRequestOrBlankStatus_ThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.updateShipmentStatus(1L, null, authentication));
+
+        UpdateShipmentStatusRequest requestBlankStatus = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("  ")
+                .build();
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.updateShipmentStatus(1L, requestBlankStatus, authentication));
+    }
+
+    @Test
     void updateShipmentStatus_InvalidTransition_ThrowsException() {
         UpdateShipmentStatusRequest request = UpdateShipmentStatusRequest.builder()
                 .shipmentStatus("PENDING") // Cannot transition back from SHIPPED to PENDING
@@ -252,7 +320,7 @@ public class ShipmentTrackingServiceTest {
 
         when(shipmentTrackingRepository.findById(5L)).thenReturn(Optional.of(shipment));
 
-        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request));
+        assertThrows(InvalidStatusTransitionException.class, () -> shipmentTrackingService.updateShipmentStatus(5L, request, authentication));
         verify(shipmentTrackingRepository, never()).save(any());
     }
 
@@ -293,11 +361,21 @@ public class ShipmentTrackingServiceTest {
     }
 
     @Test
+    void validateEntityIdsAndTrackingNumbers_InvalidInputs_ThrowException() {
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentById(null, authentication));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentById(-1L, authentication));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentByOrderId(0L, authentication));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentByTrackingNumber("  ", authentication));
+        assertThrows(IllegalArgumentException.class, () -> shipmentTrackingService.getShipmentsBySupplier(-5L, null, authentication));
+    }
+
+    @Test
     void createShipment_StampsResolvedCallerIdNotClientSuppliedSupplierId() {
         CreateShipmentRequest request = CreateShipmentRequest.builder()
                 .orderId(1L)
                 .shipmentTrackingNumber("TRK999")
                 .carrier("FedEx")
+                .estimatedDeliveryDate(LocalDateTime.now().plusDays(3))
                 .supplierId(999L) // client-supplied value must be ignored
                 .build();
 

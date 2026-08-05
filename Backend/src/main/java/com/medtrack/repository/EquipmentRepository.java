@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -74,6 +75,13 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
 
+    // Retired view (issue #744): assets that have been decommissioned keep their full history and
+    // remain searchable instead of being deleted. The class-level @SQLRestriction("deleted = false")
+    // applies to these derived queries, which is exactly what the retired view wants.
+    List<Equipment> findByHospitalIdAndStatusIn(Long hospitalId, Collection<EquipmentStatus> statuses);
+
+    Page<Equipment> findByHospitalIdAndStatusIn(Long hospitalId, Collection<EquipmentStatus> statuses, Pageable pageable);
+
     // countByHospitalId and countByHospitalIdAndStatus are declared above as @Query methods.
     // They were also declared here as derived queries, which is a duplicate method signature
     // and is rejected by javac, so only the @Query declarations are kept.
@@ -119,4 +127,18 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     @Query(value = "SELECT * FROM equipment WHERE id = :id AND deleted = TRUE", nativeQuery = true)
     Optional<Equipment> findByIdAndDeletedTrue(@Param("id") Long id);
+
+    // ---------------------------------------------------------------------
+    // Preventive-maintenance automation matching queries
+    // ---------------------------------------------------------------------
+
+    List<Equipment> findByHospitalIdAndCategory(Long hospitalId, EquipmentCategory category);
+
+    @Query("SELECT e FROM Equipment e "
+            + "WHERE e.hospital.id = :hospitalId "
+            + "AND (LOWER(e.model) LIKE LOWER(CONCAT('%', :manufacturer, '%')) "
+            + "OR LOWER(e.name) LIKE LOWER(CONCAT('%', :manufacturer, '%')))")
+    List<Equipment> findByHospitalIdAndManufacturer(
+            @Param("hospitalId") Long hospitalId,
+            @Param("manufacturer") String manufacturer);
 }

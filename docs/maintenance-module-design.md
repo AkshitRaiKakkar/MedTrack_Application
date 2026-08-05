@@ -25,6 +25,28 @@ The frontend also already has Maintenance-related pages and API helpers:
 The current backend can create, fetch, assign, update, and delete maintenance tasks through
 `/api/maintenance` endpoints.
 
+The backend also contains a hospital-owned preventive-maintenance automation subsystem using:
+
+- `model/MaintenancePolicyRule.java`
+- `model/MaintenanceGenerationRun.java`
+- `model/MaintenanceRuleScope.java`
+- `model/RecurrenceFrequency.java`
+- `model/SlaState.java`
+- `dto/MaintenanceRuleRequest.java`
+- `dto/MaintenanceRuleResponse.java`
+- `dto/RulePreviewResponse.java`
+- `dto/SlaSummaryResponse.java`
+- `dto/TechnicianWorkloadResponse.java`
+- `repository/MaintenancePolicyRuleRepository.java`
+- `repository/MaintenanceGenerationRunRepository.java`
+- `service/PreventiveMaintenanceService.java`
+- `service/PreventiveMaintenanceScheduler.java`
+- `controller/PreventiveMaintenanceController.java`
+
+This subsystem manages recurrence policies, previews exact equipment/deadline occurrences,
+generates scheduled tasks, refreshes SLA state, and provides workload suggestions under
+`/api/maintenance/automation`.
+
 ## What The Existing Files Do
 
 ### MaintenanceTask.java
@@ -32,6 +54,11 @@ The current backend can create, fetch, assign, update, and delete maintenance ta
 `MaintenanceTask` is the current JPA entity for maintenance records. It maps to the `maintenance_tasks` table and stores task details such as task code, equipment name, hospital name, deadline, assigned technician, priority, status, notes, hours worked, parts used, signature, and the server-recorded completion timestamp. Its `status` field uses the strongly typed `MaintenanceStatus` enum and is persisted with `EnumType.STRING`. It also stores `hospitalId`, which is populated by the backend and used as a stable ownership key.
 
 The task keeps the existing API-facing equipment code/name fields and also stores a lazy, required `ManyToOne` relationship to the real `Equipment` record. The relationship uses `equipment_record_id` so it can coexist with the legacy string field without breaking the frontend contract. Versioned Flyway migrations backfill legacy rows, enforce non-null equipment and hospital ownership, and add a restrictive equipment foreign key so maintenance history cannot be orphaned by equipment deletion.
+
+The entity also maps `equipment_record_id` as a read-only, JSON-ignored scalar. Maintenance uses
+that internal key for ownership and recurrence-eligibility checks without forcing Hibernate to
+load the active-only `Equipment` entity. This is required because equipment archival must not
+hide retained maintenance history.
 
 Technician assignment retains the existing `assignedTechnician` email response field and adds a
 lazy, JSON-ignored `assignedTechnicianRecord` relationship to `User`. Assignment paths trim and
@@ -89,6 +116,14 @@ requires `MaintenanceTask.hospitalId` to match the hospital that owns `equipment
 whose two ownership paths disagree is therefore excluded from API access instead of being trusted
 solely because its scalar `hospitalId` matches the caller.
 
+These access paths use explicit native ownership queries. Native SQL is intentional here:
+`Equipment` has an entity-level `deleted = false` restriction, and an ordinary JPQL join would
+otherwise make every retained maintenance record disappear when its equipment is archived. The
+Maintenance queries explicitly exclude archived maintenance tasks while allowing archived
+equipment rows to participate in the ownership check. Hospital/technician reads, write locks,
+equipment history, filters, and analytics therefore retain maintenance evidence after equipment
+archival without weakening tenant isolation.
+
 The hospital deletion query uses a pessimistic write lock. Together with the existing
 locked technician-update query, this serializes deletion and completion attempts for
 the same task.
@@ -101,7 +136,7 @@ remains an email for frontend compatibility.
 The two list-filter queries accept optional status and equipment-code values plus a Spring Data
 `Pageable`, and return `Page` internally. The service exposes only the page content so the existing
 JSON-array response contract is preserved. The queries retain the same dual ownership checks as the
-unfiltered queries, and the service supplies deterministic deadline/database-ID ordering. The former
+unfiltered queries, and the repository supplies deterministic deadline/database-ID ordering. The former
 global `findByStatus` method was removed because a tenant-agnostic status lookup is unsafe for API use.
 
 Maintenance analytics queries enforce the same dual ownership invariant. Status totals, completed
@@ -156,6 +191,8 @@ It currently supports:
 - preserving the hospital-configured recurrence period during technician updates
 - requiring technician sign-off and recording `completedAt` on the transition to `COMPLETED`
 - creating one recurring task only when a task transitions to `COMPLETED`
+- rechecking that linked equipment is not archived, retired, or disposed before creating a
+  recurring task; valid completion evidence is retained when recurrence is skipped
 - revalidating the previous technician before assigning a recurring task and leaving the
   recurrence unassigned if that account becomes ineligible during completion processing
 - serializing technician updates to the same task so concurrent completion requests cannot create duplicate recurrences
@@ -298,6 +335,7 @@ Scheduling should validate:
 
 - equipment id is present
 - equipment exists
+- equipment is not archived, retired, or disposed
 - deadline is present
 - maintenance type is present
 - priority is valid
@@ -332,6 +370,9 @@ Updating should validate:
   exists, remains active, and has the technician role; otherwise the recurrence is created
   unassigned. A caller already known to be locked, disabled, deleted, or role-changed cannot
   perform the completion itself.
+- recurrence is created only while the linked equipment still belongs to the task's hospital and
+  is neither archived, retired, nor disposed. If equipment becomes unavailable after the original
+  task was scheduled, completing that task remains valid but no future task is created.
 
 ## Security Rules
 
@@ -383,6 +424,42 @@ The current frontend field names should be preserved unless frontend changes are
 - `partsUsed`
 - `signature`
 - `completedAt` (response field controlled by the server)
+
+## Preventive-Maintenance Automation
+
+Preventive rules are owned by a hospital and select eligible equipment by category, individual
+equipment record, manufacturer text, or hospital-wide priority. Every generated task starts in
+`SCHEDULED`, receives the same task/equipment hospital ownership values as a manually scheduled
+task, and enters the existing Maintenance lifecycle without introducing a separate task API.
+
+Generation uses an inclusive `windowStart..windowEnd` horizon. For equipment without generated
+history under the rule, the first occurrence is the window start. For equipment with history, the
+latest retained generated-task deadline is the cadence anchor and the rule frequency calculates the
+next occurrence. Every missing occurrence inside the window is generated; weekly, monthly,
+quarterly, yearly, and custom schedules therefore do not reset merely because the daily scheduler's
+window advances.
+
+Generated history queries intentionally include soft-deleted Maintenance tasks. An archived task
+remains audit evidence for its rule/equipment/deadline occurrence and cannot be recreated by a
+later run. Those queries use native ownership checks so archived equipment does not erase the
+cadence history, while archived, retired, and disposed equipment is excluded from new generation.
+
+Manual generation and scheduled generation lock the same hospital-owned policy row before reading
+the generation ledger or task history. This serializes overlapping runs for one rule. An exact
+repeat of a recorded rule/window returns the existing `MaintenanceGenerationRun`; an overlapping
+new window starts after each equipment's latest generated deadline and creates only the missing
+occurrences.
+
+Preview and generation share the same occurrence planner. Preview fields have these meanings:
+
+- `matchedEquipment`: eligible equipment selected by the rule
+- `totalDueDates`: distinct due dates across all selected equipment
+- `wouldCreate`: missing equipment/deadline occurrences
+- `skippedExisting`: retained equipment/deadline occurrences already present in the window
+- `dueDates`: sorted union of the missing dates
+
+The complete endpoint, cadence, idempotency, SLA, and workload contract is documented in
+`docs/maintenance-preventive-automation.md`.
 
 ## Next Implementation Steps
 
@@ -514,7 +591,7 @@ remain unchanged. Regression coverage is implemented in `MaintenanceServiceTest`
 
 The endpoint paths, JSON field names, role guards, lifecycle, and success status codes remain
 unchanged. Regression coverage is implemented in `MaintenanceServiceTest` and the isolated
-`MaintenanceTaskRepositoryTest`, which executes the ownership-scoped JPQL against H2 without
+`MaintenanceTaskRepositoryTest`, which executes the ownership-scoped repository queries against H2 without
 loading unrelated application repositories.
 
 ### Completed on 2026-07-25
@@ -627,9 +704,50 @@ compilation on unrelated rate-limiting and equipment test-source errors.
    without referencing a removed `Pageable` service overload. No production endpoint, payload,
    response field, role, or status code changed.
 2. [x] **Corrected Maintenance deployment documentation.** The soft-delete migration and operator
-   verification steps now identify the real gapless Flyway version `7`. The verification record
+   verification steps identified the then-current gapless Flyway version `7`; the repository now
+   continues through equipment lifecycle version `8`. The verification record
    also distinguishes successful main-source compilation from the remaining unrelated test-source
    compilation blockers.
+
+### Completed on 2026-08-02
+
+1. [x] **Preserved Maintenance history after equipment archival.** Maintenance ownership,
+   filtering, locking, equipment-history, and analytics queries now inspect the retained equipment
+   row without inheriting its active-only Hibernate restriction. Archived Maintenance tasks remain
+   excluded, and task/equipment hospital mismatches remain inaccessible.
+2. [x] **Prevented invalid completion-driven recurrence.** Before creating a recurring task, the
+   service now verifies that the linked equipment still belongs to the task hospital and is not
+   archived, retired, or disposed. The completed task and its sign-off remain committed when the
+   recurrence is skipped.
+
+The endpoint paths, request and response JSON, roles, status lifecycle, and successful HTTP status
+codes remain unchanged. Repository and service regression tests cover both rules.
+
+### Completed on 2026-08-03
+
+1. [x] **Made preventive generation cadence-correct.** Rule evaluation now anchors each equipment
+   to its latest retained generated deadline and creates every missing recurrence occurrence in the
+   inclusive generation window. Advancing the daily scheduler window no longer resets weekly,
+   monthly, quarterly, yearly, or custom recurrence cadence.
+2. [x] **Serialized and aligned preview/generation.** Scheduled and manual generation take the same
+   ownership-scoped policy write lock, and preview uses the same occurrence planner as execution.
+   Soft-deleted task history remains part of idempotency, while task APIs continue to hide archived
+   records. Preview and run counters now describe exact equipment/deadline occurrences.
+
+Endpoint paths, request and response field names, roles, task lifecycle, and successful HTTP status
+codes remain unchanged. Focused service and repository coverage verifies cadence, overlapping
+windows, exact reruns, soft-deleted history, and ownership isolation.
+
+### Maintenance activity history
+
+Maintenance task mutations now append immutable `MaintenanceTaskActivity` evidence. Manual,
+recurring, and rule-generated creation; assignment and reassignment; technician status/work-detail
+updates; and archival are recorded with per-task ordering and actor snapshots. The new additive
+`GET /api/maintenance/{id}/history` endpoint returns a filtered, bounded page without changing any
+existing Maintenance API contract. Hospital history access includes archived owned tasks and
+rechecks the linked equipment ownership key; technician access remains restricted to the stable
+assigned user identity. The complete contract and migration behavior are documented in
+`maintenance-activity-history.md`.
 
 ### Recommended future work
 

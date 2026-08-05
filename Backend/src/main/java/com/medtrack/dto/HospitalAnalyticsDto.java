@@ -20,4 +20,10 @@ public class HospitalAnalyticsDto {
     private long criticalFailingAssetsCount;
     private double downtimePercentage;
     private long upcomingWarrantyExpirationsCount;
+    // Fleet valuation (issue #702): what the equipment fleet is worth, at cost and on the books.
+    private BigDecimal fleetPurchaseCost;
+    private BigDecimal fleetBookValue;
+    private BigDecimal fleetReplacementCost;
+    private Map<String, BigDecimal> bookValueByCategory;
+    private long fullyDepreciatedCount;
 }

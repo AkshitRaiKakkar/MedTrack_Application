@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getAllEquipment } from '../../services/EquipmentService';
 import { getAllTasks } from '../../services/MaintenanceService';
+import { computeEquipmentHealthScore } from '../../services/AnalyticsService';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
@@ -10,7 +11,7 @@ import {
   ThumbsUp, Clock, Activity, Calendar, ChevronDown, MoreHorizontal,
   Phone, Video, Paperclip, Smile, Mic, CheckCircle2, CircleDashed, Download,
   Box, ClipboardList, MessageSquare, LineChart, Mail, Workflow, Puzzle, MessageCircle, ChevronsUpDown, Diamond,
-  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown
+  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown, Award
 } from 'lucide-react';
 import MedTrackLogo from '../../components/common/MedTrackLogo';
 
@@ -94,8 +95,17 @@ export default function Dashboard({ onNavigate }) {
               <button onClick={() => onNavigate && onNavigate("equipment")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Box size={18} /> Equipment
               </button>
+              <button onClick={() => onNavigate && onNavigate("retired-assets")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Diamond size={18} /> Retired Assets
+              </button>
               <button onClick={() => onNavigate && onNavigate("maintenance")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <ClipboardList size={18} /> Maintenance
+              </button>
+              <button onClick={() => onNavigate && onNavigate("calibration")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Award size={18} /> Calibration & Compliance
+              </button>
+              <button onClick={() => onNavigate && onNavigate("lifecycle-predictor")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <TrendingDown size={18} /> Lifecycle & EOL Risk
               </button>
               <button onClick={() => onNavigate && onNavigate("scim-provisioning")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Users size={18} /> Staff (SCIM)
@@ -313,28 +323,36 @@ export default function Dashboard({ onNavigate }) {
             </div>
 
             <div className="space-y-3">
-              {tasksList.map((task, idx) => (
+              {equipmentList.slice(0, 5).map((equipment, idx) => {
+                const health = computeEquipmentHealthScore(equipment);
+                const healthColorClass = health?.color === 'red' ? 'bg-red-500' : health?.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500';
+                return (
                 <div key={idx} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-xl transition-colors group">
                   <div className="flex items-center gap-4 w-1/2">
                     <div className="w-10 h-10 rounded-full bg-[#f4f3ef] flex items-center justify-center text-gray-700">
-                      {task.icon}
+                      <Box size={18} />
                     </div>
-                    <span className="font-bold text-sm text-gray-900">{task.title}</span>
+                    <span className="font-bold text-sm text-gray-900">{equipment.name}</span>
                   </div>
                   
                   <div className="w-1/4 flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${task.status === 'Done' ? 'bg-emerald-500' : task.status === 'In progress' ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
-                    <span className="text-[11px] font-bold text-gray-700">{task.status}</span>
+                    <div className={`w-1.5 h-1.5 rounded-full ${equipment.status === 'OPERATIONAL' || equipment.status === 'ACTIVE' || equipment.status === 'Operational' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                    <span className="text-[11px] font-bold text-gray-700">{equipment.status}</span>
                   </div>
 
                   <div className="w-1/4 flex items-center justify-end gap-6 text-gray-400">
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold">
-                      <Clock size={12} /> {task.time}
-                    </div>
+                    {health && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Health:</span>
+                        <span className={`px-2 py-0.5 rounded-full text-white text-[10px] font-bold ${healthColorClass}`}>
+                          {health.score}
+                        </span>
+                      </div>
+                    )}
                     <button className="p-1 hover:bg-gray-200 rounded-md transition-colors"><MoreHorizontal size={14} /></button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         </main>

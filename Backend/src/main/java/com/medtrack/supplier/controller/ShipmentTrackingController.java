@@ -73,7 +73,7 @@ public class ShipmentTrackingController {
     }
 
     @GetMapping("/supplier/{supplierId}")
-    @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
+    @PreAuthorize("hasRole('SUPPLIER')")
     public ResponseEntity<PagedResponse<ShipmentTrackingResponse>> getShipmentsBySupplier(
             @PathVariable Long supplierId,
             @PageableDefault(sort = "createdAt") Pageable pageable,

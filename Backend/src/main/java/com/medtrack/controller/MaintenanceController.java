@@ -1,10 +1,14 @@
 package com.medtrack.controller;
 
 import com.medtrack.dto.MaintenanceAssignmentRequest;
+import com.medtrack.dto.MaintenanceActivityPageResponse;
 import com.medtrack.dto.MaintenanceCreateRequest;
+import com.medtrack.dto.MaintenanceScheduleAmendmentRequest;
+import com.medtrack.dto.MaintenanceScheduleRevisionPageResponse;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.service.MaintenanceService;
+import com.medtrack.service.MaintenanceScheduleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -27,6 +31,7 @@ import java.util.List;
 public class MaintenanceController {
 
     private final MaintenanceService maintenanceService;
+    private final MaintenanceScheduleService maintenanceScheduleService;
 
     /**
      * Retrieves an ownership-scoped list of maintenance tasks, with optional pagination.
@@ -57,6 +62,24 @@ public class MaintenanceController {
                                                        Authentication authentication) {
         validateId(id);
         return ResponseEntity.ok(maintenanceService.getTaskById(id, authentication));
+    }
+
+    /**
+     * Retrieves the immutable activity timeline for a task. Hospital users can retain access to
+     * archived evidence; technicians can read activity only while the task remains assigned to
+     * their stable user identity.
+     */
+    @GetMapping("/{id}/history")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<MaintenanceActivityPageResponse> getTaskActivity(
+            @PathVariable Long id,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceService.getTaskActivity(
+                id, type, page, size, authentication));
     }
 
     /**
@@ -91,6 +114,37 @@ public class MaintenanceController {
             Authentication authentication) {
         validateId(id);
         return ResponseEntity.ok(maintenanceService.assignTechnician(id, request, authentication));
+    }
+
+    /**
+     * Amends hospital-controlled scheduling fields before work starts. The task row is locked and
+     * the complete before/after schedule is retained as immutable audit evidence.
+     */
+    @PatchMapping("/{id}/schedule")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<MaintenanceTask> amendSchedule(
+            @PathVariable Long id,
+            @Valid @RequestBody MaintenanceScheduleAmendmentRequest request,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceScheduleService.amendSchedule(
+                id, request, authentication));
+    }
+
+    /**
+     * Returns newest-first schedule revisions. Hospitals retain access after archival; an assigned
+     * technician can read revisions only while they retain access to the active task.
+     */
+    @GetMapping("/{id}/schedule-revisions")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<MaintenanceScheduleRevisionPageResponse> getScheduleRevisions(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            Authentication authentication) {
+        validateId(id);
+        return ResponseEntity.ok(maintenanceScheduleService.getRevisions(
+                id, page, size, authentication));
     }
 
     /**

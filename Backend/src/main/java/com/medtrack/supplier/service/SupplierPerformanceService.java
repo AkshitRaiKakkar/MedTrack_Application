@@ -7,9 +7,13 @@ import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.medtrack.supplier.event.SupplierPerformanceUpdatedEvent;
+import java.time.LocalDateTime;
 
 import java.util.List;
 
@@ -47,6 +51,12 @@ public class SupplierPerformanceService {
 
     @Value("${app.supplier.scoring.delay-penalty-weight:20.0}")
     private double delayPenaltyWeight;
+
+    @Autowired(required = false)
+    private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Value("${app.kafka.topics.analytics-events:analytics-events}")
+    private String analyticsTopic;
 
     /**
      * Returns a full performance report for the given supplier.
@@ -93,5 +103,33 @@ public class SupplierPerformanceService {
                 .onTimeDeliveryRate(onTimeDeliveryRate)
                 .performanceScore(performanceScore)
                 .build();
+    }
+
+    /**
+     * Publishes the latest performance score to the analytics topic.
+     * @param supplierId the supplier ID
+     */
+    public void publishPerformanceUpdate(Long supplierId) {
+        if (kafkaTemplate == null) {
+            log.warn("KafkaTemplate not available. Skipping analytics event publication for supplier ID: {}", supplierId);
+            return;
+        }
+        SupplierPerformanceResponse metrics = getPerformance(supplierId);
+        try {
+            SupplierPerformanceUpdatedEvent event = SupplierPerformanceUpdatedEvent.builder()
+                    .supplierId(supplierId)
+                    .totalShipments(metrics.getTotalShipments())
+                    .deliveredShipments(metrics.getDeliveredShipments())
+                    .delayedShipments(metrics.getDelayedShipments())
+                    .onTimeDeliveryRate(metrics.getOnTimeDeliveryRate())
+                    .performanceScore(metrics.getPerformanceScore())
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+            kafkaTemplate.send(analyticsTopic, String.valueOf(supplierId), event);
+            log.info("Published analytics performance event for supplier ID: {} with score: {:.2f}", supplierId, metrics.getPerformanceScore());
+        } catch (Exception e) {
+            log.error("Failed to publish analytics event for supplier ID: {} - {}", supplierId, e.getMessage(), e);
+        }
     }
 }
