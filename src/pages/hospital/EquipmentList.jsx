@@ -13,6 +13,14 @@ import {
   approveEquipmentLifecycleAction,
   rejectEquipmentLifecycleAction,
   completeEquipmentLifecycleAction,
+  // Retirement / disposal workflow (issue #744)
+  requestEquipmentDisposal,
+  getEquipmentDisposals,
+  approveDisposal,
+  rejectDisposal,
+  recordDataSanitization,
+  completeDisposal,
+  downloadDisposalCertificate,
 } from "../../services/EquipmentService";
 import {
   IMPORT_HEADERS,
@@ -206,6 +214,25 @@ export default function EquipmentList({ onNavigate }) {
     depreciationAmount: "",
     notes: "",
   });
+
+  // Retirement / disposal workflow (issue #744)
+  const [disposalOpen, setDisposalOpen] = useState(false);
+  const [disposalTarget, setDisposalTarget] = useState(null);
+  const [disposalStep, setDisposalStep] = useState(1);
+  const [disposalForm, setDisposalForm] = useState({
+    disposalMethod: "SCRAP",
+    disposalReason: "",
+    effectiveDate: "",
+    storesPatientData: false,
+    dataSanitizationDetails: "",
+    notes: "",
+  });
+  const [disposalSaving, setDisposalSaving] = useState(false);
+  const [disposalError, setDisposalError] = useState(null);
+  const [disposalSuccess, setDisposalSuccess] = useState(null);
+  const [disposalRecords, setDisposalRecords] = useState([]);
+  const [disposalRecordsLoading, setDisposalRecordsLoading] = useState(false);
+  const [certDownloading, setCertDownloading] = useState(false);
 
   // CSV/Excel Import States
   const [showImportModal, setShowImportModal] = useState(false);
@@ -441,6 +468,7 @@ export default function EquipmentList({ onNavigate }) {
       if (!isFallbackItem) {
         refreshLifecycle(id);
         refreshTimeline(id);
+        refreshDisposalRecords(id);
         setQrLoading(true);
         try {
           const qrData = await getEquipmentQrCode(id);
@@ -579,6 +607,115 @@ export default function EquipmentList({ onNavigate }) {
     }
   };
 
+  // ---------------------------------------------------------------------
+  // Retirement / disposal workflow (issue #744)
+  // ---------------------------------------------------------------------
+  const openDisposalModal = (item) => {
+    setDisposalTarget(item);
+    setDisposalStep(1);
+    setDisposalForm({
+      disposalMethod: "SCRAP",
+      disposalReason: "",
+      effectiveDate: "",
+      storesPatientData: false,
+      dataSanitizationDetails: "",
+      notes: "",
+    });
+    setDisposalError(null);
+    setDisposalSuccess(null);
+    setDisposalOpen(true);
+  };
+
+  const handleDisposalChange = (field, value) => {
+    setDisposalForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleDisposalSubmit = async (event) => {
+    event.preventDefault();
+    if (!disposalTarget) return;
+    setDisposalSaving(true);
+    setDisposalError(null);
+    setDisposalSuccess(null);
+    try {
+      const payload = {
+        ...disposalForm,
+        effectiveDate: disposalForm.effectiveDate || undefined,
+        dataSanitizationDetails: disposalForm.dataSanitizationDetails || undefined,
+        notes: disposalForm.notes || undefined,
+        disposalReason: disposalForm.disposalReason || undefined,
+      };
+      await requestEquipmentDisposal(disposalTarget.id, payload);
+      setDisposalStep(3);
+      setDisposalSuccess(
+        "Disposal request submitted for manager approval. Once approved and completed, a certificate of disposal is generated automatically."
+      );
+      fetchEquipment(page);
+    } catch (error) {
+      console.error("Failed to submit disposal request", error);
+      setDisposalError(error.response?.data?.message || "Failed to submit the disposal request.");
+    } finally {
+      setDisposalSaving(false);
+    }
+  };
+
+  const refreshDisposalRecords = async (id = selectedEquipmentId) => {
+    if (!id || String(id).startsWith("EQ-00")) return;
+    setDisposalRecordsLoading(true);
+    try {
+      setDisposalRecords(await getEquipmentDisposals(id));
+    } catch (error) {
+      console.error("Failed to fetch disposal records", error);
+      setDisposalRecords([]);
+    } finally {
+      setDisposalRecordsLoading(false);
+    }
+  };
+
+  const handleDisposalWorkflow = async (disposalId, action) => {
+    setDisposalSaving(true);
+    setDisposalError(null);
+    try {
+      if (action === "approve") await approveDisposal(disposalId);
+      if (action === "reject") await rejectDisposal(disposalId, "Rejected from equipment panel");
+      if (action === "sanitize") await recordDataSanitization(disposalId, "Data wipe confirmed on device");
+      if (action === "complete") await completeDisposal(disposalId);
+      await refreshDisposalRecords(selectedEquipmentId);
+      await refreshLifecycle(selectedEquipmentId);
+      await refreshTimeline(selectedEquipmentId);
+      if (selectedEquipmentId) {
+        const data = await getEquipmentById(selectedEquipmentId);
+        setEquipmentDetails(data);
+      }
+      fetchEquipment(page);
+    } catch (error) {
+      console.error("Failed to update disposal record", error);
+      setDisposalError(error.response?.data?.message || "Failed to update the disposal record.");
+    } finally {
+      setDisposalSaving(false);
+    }
+  };
+
+  const handleCertificateDownload = async (disposal) => {
+    setCertDownloading(true);
+    setDisposalError(null);
+    try {
+      const blob = await downloadDisposalCertificate(disposal.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `disposal-certificate-${disposal.certificateNumber || disposal.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download certificate", error);
+      setDisposalError(error.response?.data?.message || "Failed to download the certificate of disposal.");
+    } finally {
+      setCertDownloading(false);
+    }
+  };
+
   const getImage = (name = "") => {
     const lower = name.toLowerCase();
 
@@ -703,6 +840,13 @@ export default function EquipmentList({ onNavigate }) {
                 onClick={openImportModal}
               >
                 📥 Bulk Import
+              </button>
+              <button
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-subtle px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-sm transition-colors"
+                onClick={() => onNavigate("retired-assets")}
+                title="Searchable archive of decommissioned assets"
+              >
+                🏁 Retired Assets
               </button>
               <button
                 className="bg-blue-600 hover:bg-blue-700 text-white border-none px-6 py-3 rounded-lg text-base font-semibold cursor-pointer shadow-md transition-colors"
@@ -838,6 +982,15 @@ export default function EquipmentList({ onNavigate }) {
                         >
                           Edit
                         </button>
+                        {item.status !== "RETIRED" && item.status !== "DISPOSED" && (
+                          <button
+                            onClick={() => openDisposalModal(item)}
+                            className="py-2 px-3 bg-slate-700 hover:bg-slate-800 text-white border-none rounded-lg cursor-pointer font-semibold text-sm transition-colors shadow-sm"
+                            title="Start the retirement / disposal workflow for this asset"
+                          >
+                            🏁 Retire
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(item.id)}
                           className="py-2 px-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg cursor-pointer font-semibold text-sm transition-colors hover:bg-red-100 dark:hover:bg-red-900/40"
@@ -1395,6 +1548,109 @@ export default function EquipmentList({ onNavigate }) {
                           </div>
                         );
                       })()}
+
+                    {/* Disposal records (issue #744) */}
+                    <div className="pt-2 border-t border-subtle space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="m-0 text-xs font-extrabold text-primary">Disposal / Decommission Records</p>
+                        <button
+                          type="button"
+                          onClick={() => refreshDisposalRecords(equipmentDetails.id)}
+                          disabled={disposalRecordsLoading}
+                          className="px-3 py-1.5 rounded-lg border border-subtle bg-surface text-secondary text-[10px] font-bold hover:bg-subtle disabled:opacity-60"
+                        >
+                          Refresh
+                        </button>
+                      </div>
+                      {disposalRecordsLoading ? (
+                        <p className="m-0 text-[10px] text-secondary">Loading disposal records...</p>
+                      ) : disposalRecords.length === 0 ? (
+                        <p className="m-0 text-[10px] text-secondary">
+                          No decommission requests recorded for this asset.
+                        </p>
+                      ) : (
+                        disposalRecords.map((disposal) => (
+                          <div key={disposal.id} className="rounded-xl border border-subtle bg-surface p-3">
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                              <div className="min-w-0">
+                                <p className="m-0 text-xs font-extrabold text-primary">
+                                  {disposal.disposalMethod?.replaceAll("_", " ")}
+                                  <span className="ml-2 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                    {disposal.status?.replaceAll("_", " ")}
+                                  </span>
+                                  {disposal.certificateNumber && (
+                                    <span className="ml-2 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                      {disposal.certificateNumber}
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="m-0 mt-1 text-[10px] text-secondary">
+                                  {disposal.disposalReason || "No reason recorded"}
+                                  {disposal.storesPatientData
+                                    ? ` · ${disposal.dataSanitizationConfirmed ? "Data sanitised" : "Sanitisation pending"}`
+                                    : " · No stored patient data"}
+                                </p>
+                              </div>
+                              <div className="flex gap-2 shrink-0 flex-wrap">
+                                {disposal.status === "PENDING_APPROVAL" && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDisposalWorkflow(disposal.id, "approve")}
+                                      disabled={disposalSaving}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-60"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDisposalWorkflow(disposal.id, "reject")}
+                                      disabled={disposalSaving}
+                                      className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-60"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                                {disposal.status === "APPROVED" && (
+                                  <>
+                                    {disposal.storesPatientData && !disposal.dataSanitizationConfirmed && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDisposalWorkflow(disposal.id, "sanitize")}
+                                        disabled={disposalSaving}
+                                        title="Confirm that patient / operational data was wiped from this device"
+                                        className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 disabled:opacity-60"
+                                      >
+                                        Confirm Data Sanitisation
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDisposalWorkflow(disposal.id, "complete")}
+                                      disabled={disposalSaving}
+                                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-60"
+                                    >
+                                      Complete
+                                    </button>
+                                  </>
+                                )}
+                                {disposal.status === "COMPLETED" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCertificateDownload(disposal)}
+                                    disabled={certDownloading}
+                                    className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-60"
+                                  >
+                                    ⬇ Certificate (PDF)
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1407,6 +1663,248 @@ export default function EquipmentList({ onNavigate }) {
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Retirement / Disposal Workflow Modal (issue #744) */}
+      {disposalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-card rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative border border-subtle">
+            <button
+              onClick={() => setDisposalOpen(false)}
+              className="absolute top-5 right-5 w-9 h-9 rounded-full bg-hover text-secondary border-none flex items-center justify-center text-xl font-bold cursor-pointer transition-colors hover:bg-subtle"
+            >
+              &times;
+            </button>
+
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-14 h-14 rounded-2xl bg-slate-700 text-white flex items-center justify-center text-2xl">
+                🏁
+              </div>
+              <div>
+                <h2 className="text-2xl font-extrabold text-primary m-0">
+                  Retire / Dispose Equipment
+                </h2>
+                <p className="text-secondary text-sm mt-1">
+                  Decommission{" "}
+                  <strong className="text-primary">
+                    {disposalTarget?.name} ({disposalTarget?.id})
+                  </strong>{" "}
+                  with a documented, approvable record and certificate of disposal.
+                </p>
+              </div>
+            </div>
+
+            {/* Step indicator */}
+            <div className="flex items-center gap-2 mb-6 text-xs font-bold">
+              {["Disposal Details", "Data Sanitisation", "Review & Submit"].map((label, index) => {
+                const step = index + 1;
+                return (
+                  <div key={label} className="flex items-center gap-2">
+                    <span
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] ${
+                        disposalStep >= step ? "bg-slate-700 text-white" : "bg-subtle text-secondary"
+                      }`}
+                    >
+                      {step}
+                    </span>
+                    <span className={disposalStep >= step ? "text-primary" : "text-secondary"}>
+                      {label}
+                    </span>
+                    {step < 3 && <span className="text-secondary">→</span>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {disposalSuccess ? (
+              <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900">
+                <p className="m-0 text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                  ✓ Disposal request submitted
+                </p>
+                <p className="m-0 mt-1 text-xs text-secondary">{disposalSuccess}</p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => setDisposalOpen(false)}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold border-none cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleDisposalSubmit}>
+                {disposalStep === 1 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">
+                        Disposal Method *
+                      </label>
+                      <select
+                        value={disposalForm.disposalMethod}
+                        onChange={(event) => handleDisposalChange("disposalMethod", event.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                      >
+                        <option value="SALE">Sale</option>
+                        <option value="SCRAP">Scrap</option>
+                        <option value="DONATION">Donation</option>
+                        <option value="RETURN_TO_VENDOR">Return to Vendor</option>
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">
+                        Disposal Reason *
+                      </label>
+                      <textarea
+                        required
+                        value={disposalForm.disposalReason}
+                        onChange={(event) => handleDisposalChange("disposalReason", event.target.value)}
+                        placeholder="Why is this asset being decommissioned? (e.g. end of useful life, obsolete, beyond economical repair)"
+                        className="w-full px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm min-h-20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">
+                        Effective Date
+                      </label>
+                      <input
+                        type="date"
+                        value={disposalForm.effectiveDate}
+                        onChange={(event) => handleDisposalChange("effectiveDate", event.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">
+                        Notes
+                      </label>
+                      <textarea
+                        value={disposalForm.notes}
+                        onChange={(event) => handleDisposalChange("notes", event.target.value)}
+                        placeholder="Any additional context for the approver"
+                        className="w-full px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm min-h-16"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {disposalStep === 2 && (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl border border-subtle bg-hover">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={disposalForm.storesPatientData}
+                          onChange={(event) => handleDisposalChange("storesPatientData", event.target.checked)}
+                          className="mt-1 w-4 h-4 accent-slate-700"
+                        />
+                        <span>
+                          <span className="block text-sm font-bold text-primary">
+                            This device stores patient or operational data
+                          </span>
+                          <span className="block text-xs text-secondary mt-0.5">
+                            Imaging consoles, bedside monitors, lab analysers with internal storage,
+                            and similar devices must have their data wiped or removed before
+                            disposal can be completed.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                    {disposalForm.storesPatientData && (
+                      <div>
+                        <label className="block text-[11px] text-secondary font-bold uppercase tracking-wider mb-1">
+                          Sanitisation Details
+                        </label>
+                        <textarea
+                          value={disposalForm.dataSanitizationDetails}
+                          onChange={(event) => handleDisposalChange("dataSanitizationDetails", event.target.value)}
+                          placeholder="e.g. drives removed and destroyed, factory reset performed, cryptographic erase completed"
+                          className="w-full px-3 py-2 rounded-lg border border-subtle bg-surface text-primary text-sm min-h-20"
+                        />
+                        <p className="m-0 mt-2 text-[10px] text-amber-600 font-semibold">
+                          ⚠ The sanitisation confirmation is recorded separately after manager
+                          approval, with the acting user and timestamp.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {disposalStep === 3 && (
+                  <div className="rounded-xl border border-subtle bg-hover p-5 space-y-2">
+                    <p className="m-0 text-sm font-extrabold text-primary">
+                      {disposalTarget?.name} ({disposalTarget?.id})
+                    </p>
+                    {[
+                      ["Disposal Method", disposalForm.disposalMethod.replaceAll("_", " ")],
+                      ["Reason", disposalForm.disposalReason],
+                      ["Effective Date", disposalForm.effectiveDate || "Today"],
+                      ["Stores Patient / Operational Data", disposalForm.storesPatientData ? "Yes" : "No"],
+                      ["Sanitisation Details", disposalForm.dataSanitizationDetails || "N/A"],
+                      ["Notes", disposalForm.notes || "N/A"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex justify-between gap-4 text-xs">
+                        <span className="text-secondary font-bold uppercase tracking-wide shrink-0">
+                          {label}
+                        </span>
+                        <span className="text-primary font-semibold text-right">{value || "N/A"}</span>
+                      </div>
+                    ))}
+                    <p className="m-0 pt-2 text-[10px] text-secondary">
+                      Submitting creates a{" "}
+                      <strong>PENDING_APPROVAL</strong> record. A manager must approve it; once the
+                      asset is retired, the certificate of disposal is generated automatically.
+                    </p>
+                  </div>
+                )}
+
+                {disposalError && (
+                  <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-sm font-semibold border border-red-200 dark:border-red-900">
+                    {disposalError}
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setDisposalOpen(false)}
+                    className="px-4 py-2 rounded-lg border border-subtle bg-surface text-secondary text-xs font-bold hover:bg-subtle"
+                  >
+                    Cancel
+                  </button>
+                  <div className="flex gap-2">
+                    {disposalStep > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setDisposalStep((step) => step - 1)}
+                        className="px-4 py-2 rounded-lg border border-subtle bg-surface text-secondary text-xs font-bold hover:bg-subtle"
+                      >
+                        ← Back
+                      </button>
+                    )}
+                    {disposalStep < 3 ? (
+                      <button
+                        type="button"
+                        disabled={disposalStep === 1 && !disposalForm.disposalReason.trim()}
+                        onClick={() => setDisposalStep((step) => step + 1)}
+                        className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold border-none disabled:opacity-50"
+                      >
+                        Next →
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={disposalSaving}
+                        className="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold border-none disabled:opacity-60"
+                      >
+                        {disposalSaving ? "Submitting..." : "Submit Disposal Request"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </form>
             )}
           </div>
         </div>

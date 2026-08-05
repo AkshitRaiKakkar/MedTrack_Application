@@ -97,3 +97,71 @@ export const completeEquipmentLifecycleAction = async (actionId) => {
   const response = await API.post(`/api/equipment/lifecycle/${actionId}/complete`);
   return response.data;
 };
+
+// ---------------------------------------------------------------------------
+// Retirement / disposal workflow (issue #744)
+// ---------------------------------------------------------------------------
+
+// Retired and disposed assets, paginated - the dedicated retired view.
+export const getRetiredEquipment = async (page = 0, size = 20) => {
+  const response = await API.get(`/api/equipment/retired?page=${page}&size=${size}`);
+  return response.data;
+};
+
+// Open a decommissioning request for one asset.
+export const requestEquipmentDisposal = async (id, data) => {
+  const response = await API.post(`/api/equipment/${id}/disposal`, data);
+  return response.data;
+};
+
+// Disposal records for a single asset.
+export const getEquipmentDisposals = async (id) => {
+  const response = await API.get(`/api/equipment/${id}/disposals`);
+  return response.data;
+};
+
+// Disposals awaiting manager approval.
+export const getPendingDisposals = async () => {
+  const response = await API.get("/api/equipment/disposals/pending");
+  return response.data;
+};
+
+// Full disposal history for the hospital.
+export const getDisposalHistory = async () => {
+  const response = await API.get("/api/equipment/disposals/history");
+  return response.data;
+};
+
+export const approveDisposal = async (disposalId) => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/approve`);
+  return response.data;
+};
+
+export const rejectDisposal = async (disposalId, reason = "") => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/reject`, { reason });
+  return response.data;
+};
+
+export const cancelDisposal = async (disposalId) => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/cancel`);
+  return response.data;
+};
+
+// Data-sanitisation confirmation for devices that stored patient/operational data.
+export const recordDataSanitization = async (disposalId, details = "") => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/data-sanitization`, { details });
+  return response.data;
+};
+
+export const completeDisposal = async (disposalId) => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/complete`);
+  return response.data;
+};
+
+// Certificate of disposal (PDF blob).
+export const downloadDisposalCertificate = async (disposalId) => {
+  const response = await API.get(`/api/equipment/disposals/${disposalId}/certificate`, {
+    responseType: "blob",
+  });
+  return response.data;
+};
