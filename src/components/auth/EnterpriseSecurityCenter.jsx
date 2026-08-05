@@ -56,7 +56,8 @@ import {
   Radar,
   IdCard,
   Power,
-  RotateCw
+  RotateCw,
+  SlidersHorizontal
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -100,6 +101,7 @@ import BiomedicalIncidentCommandPanel from "./BiomedicalIncidentCommandPanel";
 import BiomedicalDataMeshPanel from "./BiomedicalDataMeshPanel";
 import BiomedicalKeyLifecyclePanel from "./BiomedicalKeyLifecyclePanel";
 import BiomedicalSecureEnclavePanel from "./BiomedicalSecureEnclavePanel";
+import BiomedicalDifferentialPrivacyPanel from "./BiomedicalDifferentialPrivacyPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -461,7 +463,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "incidentcommand", label: "Incident Command & Air-Gap DR", icon: Power },
           { id: "datamesh", label: "Zero-Trust Data Mesh & ODRL", icon: Boxes },
           { id: "keylifecycle", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw },
-          { id: "secureenclave", label: "Confidential Compute Enclaves", icon: Cpu }
+          { id: "secureenclave", label: "Confidential Compute Enclaves", icon: Cpu },
+          { id: "diffprivacy", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1022,6 +1025,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 40: BIOMEDICAL CONFIDENTIAL COMPUTE & HARDWARE ENCLAVES */}
       {selectedTab === "secureenclave" && (
         <BiomedicalSecureEnclavePanel />
+      )}
+
+      {/* TAB 41: BIOMEDICAL DIFFERENTIAL PRIVACY & SYNTHETIC HEALTH DATA */}
+      {selectedTab === "diffprivacy" && (
+        <BiomedicalDifferentialPrivacyPanel />
       )}
 
       {/* 4. MODALS */}
