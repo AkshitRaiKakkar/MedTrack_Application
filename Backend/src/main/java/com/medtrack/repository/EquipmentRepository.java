@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -73,6 +74,13 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
+
+    // Retired view (issue #744): assets that have been decommissioned keep their full history and
+    // remain searchable instead of being deleted. The class-level @SQLRestriction("deleted = false")
+    // applies to these derived queries, which is exactly what the retired view wants.
+    List<Equipment> findByHospitalIdAndStatusIn(Long hospitalId, Collection<EquipmentStatus> statuses);
+
+    Page<Equipment> findByHospitalIdAndStatusIn(Long hospitalId, Collection<EquipmentStatus> statuses, Pageable pageable);
 
     // countByHospitalId and countByHospitalIdAndStatus are declared above as @Query methods.
     // They were also declared here as derived queries, which is a duplicate method signature
