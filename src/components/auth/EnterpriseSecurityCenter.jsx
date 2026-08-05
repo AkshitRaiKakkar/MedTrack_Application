@@ -57,7 +57,8 @@ import {
   IdCard,
   Power,
   RotateCw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Target
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -102,6 +103,7 @@ import BiomedicalDataMeshPanel from "./BiomedicalDataMeshPanel";
 import BiomedicalKeyLifecyclePanel from "./BiomedicalKeyLifecyclePanel";
 import BiomedicalSecureEnclavePanel from "./BiomedicalSecureEnclavePanel";
 import BiomedicalDifferentialPrivacyPanel from "./BiomedicalDifferentialPrivacyPanel";
+import BiomedicalBasPenetrationTestingPanel from "./BiomedicalBasPenetrationTestingPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -464,7 +466,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "datamesh", label: "Zero-Trust Data Mesh & ODRL", icon: Boxes },
           { id: "keylifecycle", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw },
           { id: "secureenclave", label: "Confidential Compute Enclaves", icon: Cpu },
-          { id: "diffprivacy", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal }
+          { id: "diffprivacy", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal },
+          { id: "baspentest", label: "Automated BAS & PenTesting", icon: Target }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1030,6 +1033,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 41: BIOMEDICAL DIFFERENTIAL PRIVACY & SYNTHETIC HEALTH DATA */}
       {selectedTab === "diffprivacy" && (
         <BiomedicalDifferentialPrivacyPanel />
+      )}
+
+      {/* TAB 42: BIOMEDICAL AUTOMATED BAS & PENETRATION TESTING */}
+      {selectedTab === "baspentest" && (
+        <BiomedicalBasPenetrationTestingPanel />
       )}
 
       {/* 4. MODALS */}
