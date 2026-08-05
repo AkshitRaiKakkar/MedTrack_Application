@@ -6,6 +6,12 @@ export const getHospitalAnalytics = async () => {
   return response.data;
 };
 
+// Fetch equipment failure risk
+export const getEquipmentFailureRisk = async (equipmentId) => {
+  const response = await API.get(`/api/analytics/equipment/${equipmentId}/failure-risk`);
+  return response.data;
+};
+
 const healthScoreCache = new Map();
 
 /**
