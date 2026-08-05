@@ -55,7 +55,8 @@ import {
   Share2,
   Radar,
   IdCard,
-  Power
+  Power,
+  RotateCw
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -97,6 +98,7 @@ import HealthcareCtemPanel from "./HealthcareCtemPanel";
 import BiomedicalSovereignIdentityPanel from "./BiomedicalSovereignIdentityPanel";
 import BiomedicalIncidentCommandPanel from "./BiomedicalIncidentCommandPanel";
 import BiomedicalDataMeshPanel from "./BiomedicalDataMeshPanel";
+import BiomedicalKeyLifecyclePanel from "./BiomedicalKeyLifecyclePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -456,7 +458,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "ctem", label: "Healthcare CTEM & Attack Surface", icon: Radar },
           { id: "didvc", label: "Sovereign Identity (W3C DID/VC)", icon: IdCard },
           { id: "incidentcommand", label: "Incident Command & Air-Gap DR", icon: Power },
-          { id: "datamesh", label: "Zero-Trust Data Mesh & ODRL", icon: Boxes }
+          { id: "datamesh", label: "Zero-Trust Data Mesh & ODRL", icon: Boxes },
+          { id: "keylifecycle", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1007,6 +1010,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 38: BIOMEDICAL ZERO-TRUST DATA MESH & ODRL POLICIES */}
       {selectedTab === "datamesh" && (
         <BiomedicalDataMeshPanel />
+      )}
+
+      {/* TAB 39: BIOMEDICAL CRYPTOGRAPHIC KEY LIFECYCLE & PQC ZEROIZATION */}
+      {selectedTab === "keylifecycle" && (
+        <BiomedicalKeyLifecyclePanel />
       )}
 
       {/* 4. MODALS */}
