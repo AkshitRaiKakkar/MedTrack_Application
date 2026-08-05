@@ -11,7 +11,7 @@ import {
   ThumbsUp, Clock, Activity, Calendar, ChevronDown, MoreHorizontal,
   Phone, Video, Paperclip, Smile, Mic, CheckCircle2, CircleDashed, Download,
   Box, ClipboardList, MessageSquare, LineChart, Mail, Workflow, Puzzle, MessageCircle, ChevronsUpDown, Diamond,
-  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown, Award
+  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown, Award, Package
 } from 'lucide-react';
 import MedTrackLogo from '../../components/common/MedTrackLogo';
 
