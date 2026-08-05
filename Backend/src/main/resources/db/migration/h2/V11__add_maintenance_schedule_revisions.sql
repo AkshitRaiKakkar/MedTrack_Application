@@ -29,8 +29,6 @@ CREATE TABLE maintenance_schedule_revisions (
         UNIQUE (task_id, revision_number),
     CONSTRAINT fk_maintenance_revision_task
         FOREIGN KEY (task_id) REFERENCES maintenance_tasks(id),
-    CONSTRAINT fk_maintenance_revision_hospital
-        FOREIGN KEY (hospital_id) REFERENCES hospital(id),
     CONSTRAINT fk_maintenance_revision_actor
         FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT chk_maintenance_revision_number

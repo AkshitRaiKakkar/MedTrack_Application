@@ -75,7 +75,7 @@ public class PreventiveMaintenanceService {
     @Transactional
     public MaintenanceRuleResponse createRule(MaintenanceRuleRequest request, Authentication authentication) {
         Long hospitalId = getHospitalForUser(authentication).getId();
-        validateRule(request);
+        validateRule(request, hospitalId);
 
         MaintenancePolicyRule rule = MaintenancePolicyRule.builder()
                 .hospitalId(hospitalId)
@@ -104,7 +104,7 @@ public class PreventiveMaintenanceService {
         Long hospitalId = getHospitalForUser(authentication).getId();
         MaintenancePolicyRule rule = ruleRepository.findByIdAndHospitalId(id, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Maintenance rule not found or access denied"));
-        validateRule(request);
+        validateRule(request, hospitalId);
 
         rule.setName(request.getName().trim());
         rule.setDescription(request.getDescription());
@@ -320,6 +320,7 @@ public class PreventiveMaintenanceService {
                 task.setSlaState(SlaState.ESCALATED);
                 task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
                 taskRepository.save(task);
+                activityService.recordSystemCreated(task, "escalated due to critical SLA breach");
             }
         }
 
@@ -330,6 +331,7 @@ public class PreventiveMaintenanceService {
                 task.setSlaState(SlaState.ESCALATED);
                 task.setEscalatedTo(hospitalUser != null ? hospitalUser.getEmail() : null);
                 taskRepository.save(task);
+                activityService.recordSystemCreated(task, "escalated due to unassigned SLA breach");
             }
         }
 
@@ -541,7 +543,9 @@ public class PreventiveMaintenanceService {
         for (Equipment equipment : matchedEquipment) {
             LocalDate latestDeadline = latestDeadlineByEquipment.get(equipment.getId());
             for (LocalDate deadline : computeDueDates(rule, start, end, latestDeadline)) {
-                plannedOccurrences.add(new PlannedOccurrence(equipment, deadline));
+                if (!existingInWindow.contains(new OccurrenceKey(equipment.getId(), deadline))) {
+                    plannedOccurrences.add(new PlannedOccurrence(equipment, deadline));
+                }
                 dueDates.add(deadline);
             }
         }
@@ -638,12 +642,19 @@ public class PreventiveMaintenanceService {
                 .map(Equipment::getName).orElse(null);
     }
 
-    private void validateRule(MaintenanceRuleRequest request) {
+    private void validateRule(MaintenanceRuleRequest request, Long hospitalId) {
         if (request.getRuleScope() == MaintenanceRuleScope.EQUIPMENT_CATEGORY && request.getEquipmentCategory() == null) {
             throw new IllegalArgumentException("Equipment category rules require an equipment category");
         }
-        if (request.getRuleScope() == MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT && request.getEquipmentRecordId() == null) {
-            throw new IllegalArgumentException("Individual equipment rules require an equipment record");
+        if (request.getRuleScope() == MaintenanceRuleScope.INDIVIDUAL_EQUIPMENT) {
+            if (request.getEquipmentRecordId() == null) {
+                throw new IllegalArgumentException("Individual equipment rules require an equipment record");
+            }
+            Equipment equipment = equipmentRepository.findByIdAndHospitalId(request.getEquipmentRecordId(), hospitalId)
+                    .orElseThrow(() -> new IllegalArgumentException("Equipment record not found or access denied for hospital"));
+            if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
+                throw new IllegalArgumentException("Retired or disposed equipment cannot be scheduled for preventive maintenance");
+            }
         }
         if (request.getRuleScope() == MaintenanceRuleScope.MANUFACTURER_INTERVAL
                 && (request.getManufacturer() == null || request.getManufacturer().isBlank())) {
