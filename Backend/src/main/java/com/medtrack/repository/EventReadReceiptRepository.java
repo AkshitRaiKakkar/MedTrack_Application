@@ -20,6 +20,8 @@ public interface EventReadReceiptRepository extends JpaRepository<EventReadRecei
 
     List<EventReadReceipt> findByUserId(Long userId);
 
+    List<EventReadReceipt> findByUserIdAndEventIdIn(Long userId, List<Long> eventIds);
+
     List<EventReadReceipt> findByEventId(Long eventId);
 
     @Modifying

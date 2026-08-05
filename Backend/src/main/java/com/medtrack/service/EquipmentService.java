@@ -14,10 +14,13 @@ import com.medtrack.model.DepreciationMethod;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
+import com.medtrack.model.FacilityLocation;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.OperationsEvent;
 import com.medtrack.model.WarrantyCoverageType;
 import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
+import com.medtrack.repository.FacilityLocationRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.specifications.EquipmentSpecifications;
 import com.medtrack.util.CsvSupport;
@@ -69,6 +72,7 @@ public class EquipmentService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
+    private final FacilityLocationRepository facilityLocationRepository;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
@@ -167,12 +171,45 @@ public class EquipmentService {
      * Fetches one page of the caller's equipment records.
      *
      * @param username authenticated user's username
+     * @param locationId optional facility-location node; when set, only assets placed at that
+     *                   node or any of its descendants are returned (issue #745)
      * @param pageable the page to fetch
      * @return the requested page of equipment
      */
-    public Page<Equipment> getAllEquipment(String username, Pageable pageable) {
+    public Page<Equipment> getAllEquipment(String username, Long locationId, Pageable pageable) {
         Hospital hospital = getHospitalForUser(username);
+        if (locationId != null) {
+            return equipmentRepository.findByHospitalIdAndLocationIn(
+                    hospital.getId(),
+                    resolveLocationSubtree(locationId, hospital.getId()),
+                    pageable);
+        }
         return equipmentRepository.findByHospitalId(hospital.getId(), pageable);
+    }
+
+    /**
+     * The selected node plus every descendant, so filtering on a floor or facility also matches
+     * assets in the rooms beneath it.
+     */
+    private Set<Long> resolveLocationSubtree(Long rootId, Long hospitalId) {
+        List<FacilityLocation> all = facilityLocationRepository.findByHospitalId(hospitalId);
+        Set<Long> ids = new HashSet<>();
+        Set<Long> pending = new HashSet<>();
+        pending.add(rootId);
+        while (!pending.isEmpty()) {
+            Set<Long> next = new HashSet<>();
+            for (Long parent : pending) {
+                for (FacilityLocation location : all) {
+                    if (parent.equals(location.getParentId())) {
+                        ids.add(location.getId());
+                        next.add(location.getId());
+                    }
+                }
+            }
+            pending = next;
+        }
+        ids.add(rootId);
+        return ids;
     }
 
     public List<Equipment> getEquipmentByDepartment(String department, String username) {
@@ -238,7 +275,14 @@ public class EquipmentService {
             equipment.setMinimumStock(request.getMinimumStock());
         }
 
+        int minimumStock = equipment.getMinimumStock() != null ? equipment.getMinimumStock() : 0;
+        boolean crossedIntoLowStock = currentQuantity > minimumStock && (int) adjusted <= minimumStock;
+
         Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        if (crossedIntoLowStock) {
+            publishLowStockEvent(savedEquipment, minimumStock);
+        }
 
         logger.info(
                 "Equipment stock adjusted | User: {} | Equipment ID: {} | Delta: {} | "
@@ -254,6 +298,38 @@ public class EquipmentService {
         return savedEquipment;
     }
 
+    /**
+     * Raises an {@code EQUIPMENT_LOW_STOCK} operations event the moment a stock adjustment
+     * drives quantity down to or below the minimum threshold. Fired only on the crossing
+     * (see the caller), so repeated adjustments while already low do not spam the feed.
+     */
+    private void publishLowStockEvent(Equipment equipment, int minimumStock) {
+        if (equipment.getHospital() == null) {
+            return;
+        }
+        String title = equipment.getQuantity() == 0
+                ? "Out of stock: " + equipment.getName()
+                : "Low stock: " + equipment.getName();
+        String detail = "{"
+                + "\"equipmentCode\":\"" + escapeJson(equipment.getEquipmentCode()) + "\","
+                + "\"quantity\":" + equipment.getQuantity() + ","
+                + "\"minimumStock\":" + minimumStock
+                + "}";
+        OperationsEvent.EventSeverity severity = equipment.getQuantity() == 0
+                ? OperationsEvent.EventSeverity.CRITICAL
+                : OperationsEvent.EventSeverity.WARNING;
+
+        eventPublisherService.publishEvent(
+                equipment.getHospital().getId(),
+                OperationsEvent.EventCategory.EQUIPMENT,
+                OperationsEvent.EventType.EQUIPMENT_LOW_STOCK,
+                title,
+                detail,
+                equipment.getId(),
+                OperationsEvent.EntityType.EQUIPMENT,
+                "system",
+                severity);
+    }
 
     public EquipmentUtilizationResponse getEquipmentUtilization(String username) {
 
@@ -717,6 +793,11 @@ public class EquipmentService {
         Hospital hospital = getHospitalForUser(username);
         equipment.setHospital(hospital);
 
+        // Structured location (issue #745): the client sends locationId, which binds to the
+        // read-only column projection. The managed node is resolved here so a raw id can never
+        // point outside the caller's hospital.
+        equipment.setLocation(resolveLocation(equipment, hospital));
+
         // Generate a simple code if not provided
         if (equipment.getEquipmentCode() == null) {
             equipment.setEquipmentCode("EQ-" + UUID.randomUUID().toString());
@@ -756,6 +837,23 @@ public class EquipmentService {
         );
 
         return savedEquipment;
+    }
+
+    /**
+     * Resolves the incoming {@code locationId} to a managed node of the caller's hospital, or
+     * {@code null} when no location was supplied.
+     */
+    private FacilityLocation resolveLocation(Equipment source, Hospital hospital) {
+        Long locationId = source.getLocationId();
+        if (locationId == null) {
+            return null;
+        }
+        FacilityLocation location = facilityLocationRepository.findById(locationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Location not found"));
+        if (!location.getHospital().getId().equals(hospital.getId())) {
+            throw new ResourceNotFoundException("Location not found or you don't have access");
+        }
+        return location;
     }
 
     /**
@@ -827,6 +925,12 @@ public class EquipmentService {
         }
         if (equipmentDetails.getDepreciationMethod() != null) {
             equipment.setDepreciationMethod(equipmentDetails.getDepreciationMethod());
+        }
+
+        // Structured location (issue #745): an omitted id means "leave the asset where it is";
+        // explicit moves go through the dedicated assign endpoint so they leave a history trail.
+        if (equipmentDetails.getLocationId() != null) {
+            equipment.setLocation(resolveLocation(equipmentDetails, hospital));
         }
 
         Equipment updatedEquipment = equipmentRepository.save(equipment);

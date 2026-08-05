@@ -27,6 +27,12 @@ public class EventPublisherService {
     public OperationsEvent publishEvent(OperationsEvent event) {
         OperationsEvent saved = eventRepository.save(event);
         // Broadcast to WebSocket subscribers
+        // ponytail: broadcast is hospital-wide and does not consult NotificationPreference, since
+        // EventWebSocketHandler tracks subscribers by hospitalId only, not userId - a muted user
+        // still receives the live push. Mute is enforced in OperationsEventController's REST feed
+        // and unread-counts (what ActivityCenter actually renders and polls every 30s), so the
+        // gap self-corrects quickly. Upgrade path if a muted push turns out to matter: track
+        // (session -> userId) in EventWebSocketHandler and filter broadcastToHospital per session.
         webSocketHandler.broadcastToHospital(event.getHospitalId(), saved);
         return saved;
     }
