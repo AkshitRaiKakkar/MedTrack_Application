@@ -58,7 +58,8 @@ import {
   Power,
   RotateCw,
   SlidersHorizontal,
-  Target
+  Target,
+  Bot
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -104,6 +105,7 @@ import BiomedicalKeyLifecyclePanel from "./BiomedicalKeyLifecyclePanel";
 import BiomedicalSecureEnclavePanel from "./BiomedicalSecureEnclavePanel";
 import BiomedicalDifferentialPrivacyPanel from "./BiomedicalDifferentialPrivacyPanel";
 import BiomedicalBasPenetrationTestingPanel from "./BiomedicalBasPenetrationTestingPanel";
+import BiomedicalAiAgentGovernancePanel from "./BiomedicalAiAgentGovernancePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -467,7 +469,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "keylifecycle", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw },
           { id: "secureenclave", label: "Confidential Compute Enclaves", icon: Cpu },
           { id: "diffprivacy", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal },
-          { id: "baspentest", label: "Automated BAS & PenTesting", icon: Target }
+          { id: "baspentest", label: "Automated BAS & PenTesting", icon: Target },
+          { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1038,6 +1041,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 42: BIOMEDICAL AUTOMATED BAS & PENETRATION TESTING */}
       {selectedTab === "baspentest" && (
         <BiomedicalBasPenetrationTestingPanel />
+      )}
+
+      {/* TAB 43: BIOMEDICAL AUTONOMOUS AI AGENT GOVERNANCE */}
+      {selectedTab === "aiagent" && (
+        <BiomedicalAiAgentGovernancePanel />
       )}
 
       {/* 4. MODALS */}
