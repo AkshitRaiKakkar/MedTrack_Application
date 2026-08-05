@@ -11,7 +11,7 @@ import {
   ThumbsUp, Clock, Activity, Calendar, ChevronDown, MoreHorizontal,
   Phone, Video, Paperclip, Smile, Mic, CheckCircle2, CircleDashed, Download,
   Box, ClipboardList, MessageSquare, LineChart, Mail, Workflow, Puzzle, MessageCircle, ChevronsUpDown, Diamond,
-  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown, Award
+  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown, Award, Package
 } from 'lucide-react';
 import MedTrackLogo from '../../components/common/MedTrackLogo';
 
@@ -94,6 +94,9 @@ export default function Dashboard({ onNavigate }) {
               </button>
               <button onClick={() => onNavigate && onNavigate("equipment")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Box size={18} /> Equipment
+              </button>
+              <button onClick={() => onNavigate && onNavigate("spare-parts")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Package size={18} /> Spare Parts
               </button>
               <button onClick={() => onNavigate && onNavigate("maintenance")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <ClipboardList size={18} /> Maintenance
