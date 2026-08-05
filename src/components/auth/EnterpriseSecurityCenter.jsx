@@ -110,6 +110,7 @@ import BiomedicalBasPenetrationTestingPanel from "./BiomedicalBasPenetrationTest
 import BiomedicalAiAgentGovernancePanel from "./BiomedicalAiAgentGovernancePanel";
 import BiomedicalZkpVerifiableEhrPanel from "./BiomedicalZkpVerifiableEhrPanel";
 import BiomedicalHsmAttestationPanel from "./BiomedicalHsmAttestationPanel";
+import BiomedicalCtiStixTaxiiPanel from "./BiomedicalCtiStixTaxiiPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -476,7 +477,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "baspentest", label: "Automated BAS & PenTesting", icon: Target },
           { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot },
           { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound },
-          { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive }
+          { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive },
+          { id: "ctistix", label: "CTI & STIX/TAXII Threat Sharing", icon: Radar }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1062,6 +1064,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 45: BIOMEDICAL HSM KEY MANAGEMENT & FIPS ATTESTATION */}
       {selectedTab === "hsmattest" && (
         <BiomedicalHsmAttestationPanel />
+      )}
+
+      {/* TAB 46: BIOMEDICAL CTI & STIX/TAXII THREAT SHARING */}
+      {selectedTab === "ctistix" && (
+        <BiomedicalCtiStixTaxiiPanel />
       )}
 
       {/* 4. MODALS */}
