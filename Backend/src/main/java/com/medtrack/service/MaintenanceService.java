@@ -4,11 +4,13 @@ import com.medtrack.auth.model.AccountStatus;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.MaintenanceAssignmentRequest;
+import com.medtrack.dto.MaintenanceActivityPageResponse;
 import com.medtrack.dto.MaintenanceCreateRequest;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
@@ -18,7 +20,6 @@ import com.medtrack.repository.MaintenanceTaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -29,11 +30,13 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -51,6 +54,7 @@ public class MaintenanceService {
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
     private final EquipmentRepository equipmentRepository;
+    private final MaintenanceActivityService activityService;
 
     // The lifecycle is centralized here so every update path follows the same rules.
     private static final Map<MaintenanceStatus, Set<MaintenanceStatus>> ALLOWED_TRANSITIONS = Map.of(
@@ -130,7 +134,9 @@ public class MaintenanceService {
                 .createdAt(LocalDateTime.now())
                 .build();
         validateOwnershipInvariant(task);
-        return taskRepository.save(task);
+        MaintenanceTask savedTask = taskRepository.save(task);
+        activityService.recordCreated(savedTask, hospital.getUser(), "manually");
+        return savedTask;
     }
 
     @Transactional
@@ -144,8 +150,8 @@ public class MaintenanceService {
             throw new IllegalArgumentException("Assigned technician is required");
         }
 
-        Long hospitalId = getHospitalForUser(authentication).getId();
-        MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)
+        Hospital hospital = getHospitalForUser(authentication);
+        MaintenanceTask task = taskRepository.findByIdAndHospitalIdForUpdate(id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Maintenance task not found or access denied"));
         validateOwnershipInvariant(task);
@@ -155,10 +161,16 @@ public class MaintenanceService {
                     "Technician assignment can only be changed while the task is Scheduled");
         }
 
+        String previousAssignee = task.getAssignedTechnician();
         User assignedTechnician = resolveEligibleTechnician(request.getAssignedTechnician());
         task.setAssignedTechnician(assignedTechnician.getEmail());
         task.setAssignedTechnicianRecord(assignedTechnician);
-        return taskRepository.save(task);
+        MaintenanceTask savedTask = taskRepository.save(task);
+        if (!Objects.equals(previousAssignee, savedTask.getAssignedTechnician())) {
+            activityService.recordAssignment(
+                    savedTask, hospital.getUser(), previousAssignee, savedTask.getAssignedTechnician());
+        }
+        return savedTask;
     }
 
     @Transactional
@@ -172,6 +184,8 @@ public class MaintenanceService {
 
         MaintenanceStatus previousStatus = task.getStatus();
         validateTechnicianUpdate(task, request);
+
+        List<String> changedReportFields = changedReportFields(task, request);
 
         task.setStatus(request.getStatus());
         // Technician updates are partial: omitted optional report fields must not erase
@@ -197,11 +211,18 @@ public class MaintenanceService {
 
         MaintenanceTask savedTask = taskRepository.save(task);
 
+        if (previousStatus != savedTask.getStatus()) {
+            changedReportFields.add(0, "status");
+        }
+        activityService.recordTechnicianUpdate(
+                savedTask, technician, previousStatus, changedReportFields);
+
         // Generate recurrence only on the transition into COMPLETED, never on repeated saves.
         if (previousStatus != MaintenanceStatus.COMPLETED
                 && savedTask.getStatus() == MaintenanceStatus.COMPLETED
                 && savedTask.getRecurrencePeriodDays() != null
-                && savedTask.getRecurrencePeriodDays() > 0) {
+                && savedTask.getRecurrencePeriodDays() > 0
+                && isEquipmentEligibleForRecurrence(savedTask)) {
 
             User recurringTechnician = resolveRecurringTechnician(savedTask);
             MaintenanceTask nextTask = MaintenanceTask.builder()
@@ -223,10 +244,49 @@ public class MaintenanceService {
                     .build();
 
             validateOwnershipInvariant(nextTask);
-            taskRepository.save(nextTask);
+            MaintenanceTask savedNextTask = taskRepository.save(nextTask);
+            activityService.recordCreated(
+                    savedNextTask, technician, "from recurring task " + savedTask.getTaskCode());
         }
 
         return savedTask;
+    }
+
+    private List<String> changedReportFields(
+        MaintenanceTask task,
+            MaintenanceUpdateRequest request) {
+        List<String> changedFields = new ArrayList<>();
+        if (request.getNotes() != null && !Objects.equals(request.getNotes(), task.getNotes())) {
+            changedFields.add("notes");
+        }
+        if (request.getHoursWorked() != null
+                && !Objects.equals(request.getHoursWorked(), task.getHoursWorked())) {
+            changedFields.add("hoursWorked");
+        }
+        if (request.getPartsUsed() != null
+                && !Objects.equals(request.getPartsUsed(), task.getPartsUsed())) {
+            changedFields.add("partsUsed");
+        }
+        if (request.getSignature() != null
+                && !Objects.equals(request.getSignature(), task.getSignature())) {
+            changedFields.add("signature");
+        }
+        if (task.getStatus() != MaintenanceStatus.COMPLETED
+                && request.getStatus() == MaintenanceStatus.COMPLETED) {
+            changedFields.add("completedAt");
+        }
+        return changedFields;
+    }
+
+    private boolean isEquipmentEligibleForRecurrence(MaintenanceTask completedTask) {
+        Long equipmentRecordId = completedTask.getEquipmentRecordId();
+        if (equipmentRecordId == null && completedTask.getEquipmentRecord() != null) {
+            equipmentRecordId = completedTask.getEquipmentRecord().getId();
+        }
+        return equipmentRecordId != null
+                && completedTask.getHospitalId() != null
+                && taskRepository.countSchedulableEquipment(
+                        equipmentRecordId, completedTask.getHospitalId()) == 1;
     }
 
     private void validateSchedulingRequest(MaintenanceCreateRequest request) {
@@ -263,11 +323,8 @@ public class MaintenanceService {
     }
 
     private Pageable resolvePageable(Integer page, Integer size) {
-        Sort sort = Sort.by(
-                Sort.Order.asc("deadline"),
-                Sort.Order.asc("id"));
         if (page == null && size == null) {
-            return Pageable.unpaged(sort);
+            return Pageable.unpaged();
         }
 
         int resolvedPage = page != null ? page : 0;
@@ -279,7 +336,7 @@ public class MaintenanceService {
             throw new IllegalArgumentException(
                     "Page size must be between 1 and " + MAX_PAGE_SIZE);
         }
-        return PageRequest.of(resolvedPage, resolvedSize, sort);
+        return PageRequest.of(resolvedPage, resolvedSize);
     }
 
     private Equipment resolveOwnedEquipment(String equipmentReference, Long hospitalId) {
@@ -299,6 +356,9 @@ public class MaintenanceService {
 
         if (equipment.getEquipmentCode() == null || equipment.getEquipmentCode().isBlank()) {
             throw new IllegalArgumentException("Selected equipment does not have an equipment code");
+        }
+        if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
+            throw new IllegalArgumentException("Retired or disposed equipment cannot be scheduled for maintenance");
         }
         return equipment;
     }
@@ -371,6 +431,14 @@ public class MaintenanceService {
     }
 
     private void validateOwnershipInvariant(MaintenanceTask task) {
+        if (task.getId() != null && task.getEquipmentRecordId() != null) {
+            if (task.getHospitalId() == null
+                    || taskRepository.countValidOwnership(task.getId(), task.getHospitalId()) != 1) {
+                throw new IllegalStateException(
+                        "Maintenance task hospital ownership does not match its equipment");
+            }
+            return;
+        }
         Equipment equipment = task.getEquipmentRecord();
         if (task.getHospitalId() == null
                 || equipment == null
@@ -515,6 +583,16 @@ public class MaintenanceService {
         task.setDeletedAt(LocalDateTime.now());
         task.setDeletedBy(authentication.getName().trim().toLowerCase(Locale.ROOT));
         taskRepository.save(task);
+        activityService.recordArchived(task, hospital.getUser());
+    }
+
+    public MaintenanceActivityPageResponse getTaskActivity(
+            Long id,
+            String type,
+            Integer page,
+            Integer size,
+            Authentication authentication) {
+        return activityService.getHistory(id, type, page, size, authentication);
     }
 
     private MaintenanceTask findOwnedTask(Long id, Authentication authentication) {

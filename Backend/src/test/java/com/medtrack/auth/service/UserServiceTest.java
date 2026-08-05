@@ -445,7 +445,7 @@ public class UserServiceTest {
                 .accountStatus(AccountStatus.ACTIVE)
                 .build();
 
-        when(refreshTokenRepository.findByToken(tokenStr)).thenReturn(Optional.of(mockRefreshToken));
+        when(refreshTokenRepository.findByTokenForUpdate(tokenStr)).thenReturn(Optional.of(mockRefreshToken));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -456,7 +456,9 @@ public class UserServiceTest {
         assertFalse(response.getToken().isEmpty());
         assertNotNull(response.getRefreshToken());
 
-        verify(refreshTokenRepository, times(2)).findByToken(tokenStr);
+        verify(refreshTokenRepository).findByTokenForUpdate(tokenStr);
+        verify(refreshTokenRepository, never()).findByToken(tokenStr);
+        assertTrue(mockRefreshToken.isRevoked());
     }
 
     @Test

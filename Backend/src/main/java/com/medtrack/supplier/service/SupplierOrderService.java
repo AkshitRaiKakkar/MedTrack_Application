@@ -40,6 +40,7 @@ public class SupplierOrderService {
     private final EquipmentOrderRepository orderRepository;
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final SupplierAccessGuard supplierAccessGuard;
+    private final SupplierPerformanceService supplierPerformanceService;
 
     @Autowired(required = false)
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -53,23 +54,36 @@ public class SupplierOrderService {
     private static final List<String> VALID_SHIPPING_STATUSES = Arrays.asList(
             "Processing", "Shipped", "Delivered", "Cancelled");
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "orderCode", "equipmentName", "quantity", "status", "shippingStatus",
+            "hospital", "orderDate", "updatedAt", "estimatedDelivery", "deliveredAt");
+
+    private static final int MAX_PAGE_SIZE = 100;
+
     @Transactional(readOnly = true)
     public Page<EquipmentOrder> getSupplierOrders(
             int page, int size, String sortBy, String sortDir,
-            String status, String shippingStatus, Long supplierId, String search) {
+            String status, String shippingStatus, Long supplierId, String search,
+            String deliveryStatus, Boolean isDelayed, String trackingNumber,
+            LocalDateTime startDate, LocalDateTime endDate) {
 
         if (page < 0) {
             throw new IllegalArgumentException("Page index must not be less than zero");
         }
-        if (size <= 0) {
-            throw new IllegalArgumentException("Page size must not be less than or equal to zero");
+        if (size <= 0 || size > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("Page size must be between 1 and " + MAX_PAGE_SIZE);
         }
 
-        if (status != null && !status.isEmpty() && !VALID_STATUSES.contains(status)) {
+        status = normalize(status);
+        shippingStatus = normalize(shippingStatus);
+        deliveryStatus = normalize(deliveryStatus);
+        trackingNumber = normalize(trackingNumber);
+
+        if (status != null && !VALID_STATUSES.contains(status)) {
             throw new IllegalArgumentException("Invalid order status: " + status);
         }
 
-        if (shippingStatus != null && !shippingStatus.isEmpty() && !VALID_SHIPPING_STATUSES.contains(shippingStatus)) {
+        if (shippingStatus != null && !VALID_SHIPPING_STATUSES.contains(shippingStatus)) {
             throw new IllegalArgumentException("Invalid shipping status: " + shippingStatus);
         }
 
@@ -77,8 +91,15 @@ public class SupplierOrderService {
             throw new IllegalArgumentException("Supplier ID must be positive");
         }
 
-        // Handle empty or null search
-        String searchQuery = (search == null || search.trim().isEmpty()) ? null : search.trim();
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("Start date must not be after end date");
+        }
+
+        if (sortBy == null || !ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            throw new IllegalArgumentException("Invalid sort field: " + sortBy);
+        }
+
+        String searchQuery = normalize(search);
 
         Sort.Direction direction;
         try {
@@ -90,7 +111,24 @@ public class SupplierOrderService {
         Sort sort = Sort.by(direction, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        return orderRepository.findSupplierOrders(status, shippingStatus, supplierId, searchQuery, pageable);
+        ShipmentStatus shipmentStatusEnum = null;
+        if (deliveryStatus != null) {
+            try {
+                shipmentStatusEnum = ShipmentStatus.valueOf(deliveryStatus.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid delivery status: " + deliveryStatus);
+            }
+        }
+
+        boolean hasShipmentFilters = supplierId != null || shipmentStatusEnum != null || isDelayed != null;
+
+        return orderRepository.findAdvancedSupplierOrders(
+                status, shippingStatus, shipmentStatusEnum, isDelayed, trackingNumber,
+                startDate, endDate, supplierId, searchQuery, hasShipmentFilters, pageable);
+    }
+
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     @Transactional
@@ -182,7 +220,7 @@ public class SupplierOrderService {
             order.setDispatchedAt(LocalDateTime.now());
             order.setEstimatedDelivery(shipment.getEstimatedDeliveryDate().toString());
 
-            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents);
+            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
 
         } else if (requestedStatus == ShipmentStatus.DELIVERED) {
             ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
@@ -204,7 +242,7 @@ public class SupplierOrderService {
             order.setShippingStatus("Delivered");
             order.setDeliveredAt(LocalDateTime.now());
 
-            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents);
+            scheduleEventPublish(orderId, requestedStatus, shipment, publishedEvents, order);
         }
 
         order.setStatus(requestedStatus.name());
@@ -222,7 +260,7 @@ public class SupplierOrderService {
     }
 
     private void scheduleEventPublish(Long orderId, ShipmentStatus status, ShipmentTracking shipment,
-            Set<String> publishedEvents) {
+            Set<String> publishedEvents, EquipmentOrder order) {
         String eventKey = orderId + ":" + status;
         if (publishedEvents.contains(eventKey)) {
             return;
@@ -233,15 +271,16 @@ public class SupplierOrderService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    publishKafkaEvent(orderId, status, shipment);
+                    publishKafkaEvent(orderId, status, shipment, order);
                 }
             });
         } else {
-            publishKafkaEvent(orderId, status, shipment);
+            publishKafkaEvent(orderId, status, shipment, order);
         }
     }
 
-    private void publishKafkaEvent(Long orderId, ShipmentStatus status, ShipmentTracking shipment) {
+    private void publishKafkaEvent(Long orderId, ShipmentStatus status, ShipmentTracking shipment,
+            EquipmentOrder order) {
         if (kafkaTemplate == null) {
             log.warn("KafkaTemplate is not available. Skipping event publication for order ID: [{}]", orderId);
             return;
@@ -255,6 +294,9 @@ public class SupplierOrderService {
                         .estimatedDeliveryDate(shipment.getEstimatedDeliveryDate())
                         .shippedAt(LocalDateTime.now())
                         .supplierId(shipment.getSupplierId())
+                        .hospital(order.getHospital())
+                        .equipmentName(order.getEquipmentName())
+                        .quantity(order.getQuantity())
                         .build();
                 log.info("Publishing OrderShippedEvent for order ID: [{}]", orderId);
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
@@ -266,9 +308,13 @@ public class SupplierOrderService {
                         .actualDeliveryDate(shipment.getActualDeliveryDate() != null ? shipment.getActualDeliveryDate()
                                 : LocalDateTime.now())
                         .supplierId(shipment.getSupplierId())
+                        .hospital(order.getHospital())
+                        .equipmentName(order.getEquipmentName())
+                        .quantity(order.getQuantity())
                         .build();
                 log.info("Publishing OrderDeliveredEvent for order ID: [{}]", orderId);
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
+                supplierPerformanceService.publishPerformanceUpdate(shipment.getSupplierId());
             }
         } catch (Exception e) {
             log.error("Failed to publish Kafka event for order ID: [{}], status: [{}] due to error: {}",

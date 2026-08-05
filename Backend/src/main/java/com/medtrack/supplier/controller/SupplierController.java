@@ -13,10 +13,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/supplier")
@@ -46,6 +49,13 @@ public class SupplierController {
             @RequestParam(required = false) String shippingStatus,
             @RequestParam(required = false) Long supplierId,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String deliveryStatus,
+            @RequestParam(required = false) Boolean isDelayed,
+            @RequestParam(required = false) String trackingNumber,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime endDate,
             Authentication authentication) {
 
         // A supplier can only ever see their own orders: the caller-supplied supplierId is
@@ -57,14 +67,15 @@ public class SupplierController {
         }
 
         Page<EquipmentOrder> orders = supplierOrderService.getSupplierOrders(
-                page, size, sortBy, sortDir, status, shippingStatus, effectiveSupplierId, search);
+                page, size, sortBy, sortDir, status, shippingStatus, effectiveSupplierId, search,
+                deliveryStatus, isDelayed, trackingNumber, startDate, endDate);
 
-        if (orders.isEmpty()) {
-            return ResponseEntity.noContent().build();
+                if (orders.isEmpty()) {
+                        return ResponseEntity.noContent().build();
+                }
+
+                return ResponseEntity.ok(orders);
         }
-
-        return ResponseEntity.ok(orders);
-    }
 
     @PutMapping("/order/update/{orderId}")
     @PreAuthorize("hasRole('SUPPLIER')")
@@ -83,9 +94,9 @@ public class SupplierController {
         return ResponseEntity.ok(updatedOrder);
     }
 
-    // -----------------------------------------------------------------------
-    // Phase 7 – Supplier Performance Scoring
-    // -----------------------------------------------------------------------
+        // -----------------------------------------------------------------------
+        // Phase 7 – Supplier Performance Scoring
+        // -----------------------------------------------------------------------
 
     @GetMapping("/suppliers/{supplierId}/performance")
     @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")

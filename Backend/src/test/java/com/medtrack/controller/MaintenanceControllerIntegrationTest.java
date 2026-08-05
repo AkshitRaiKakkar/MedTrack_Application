@@ -3,12 +3,19 @@ package com.medtrack.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medtrack.auth.service.KafkaEventPublisher;
 import com.medtrack.dto.MaintenanceAssignmentRequest;
+import com.medtrack.dto.MaintenanceActivityPageResponse;
+import com.medtrack.dto.MaintenanceActivityResponse;
 import com.medtrack.dto.MaintenanceCreateRequest;
+import com.medtrack.dto.MaintenanceScheduleAmendmentRequest;
+import com.medtrack.dto.MaintenanceScheduleRevisionPageResponse;
+import com.medtrack.dto.MaintenanceScheduleRevisionResponse;
 import com.medtrack.dto.MaintenanceUpdateRequest;
 import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.model.MaintenanceStatus;
+import com.medtrack.model.MaintenanceActivityType;
 import com.medtrack.model.MaintenanceTask;
 import com.medtrack.service.MaintenanceService;
+import com.medtrack.service.MaintenanceScheduleService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +27,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 
@@ -32,6 +40,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,6 +52,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration",
         "security.rate-limit.capacity=1000",
         "security.rate-limit.refill-tokens=1000",
+        "app.jwt.secret=maintenance-integration-test-secret-123456789",
         "app.data-initializer.enabled=false"
 })
 // Custom JWT filters replace the test SecurityContext when no bearer token is
@@ -61,7 +71,96 @@ class MaintenanceControllerIntegrationTest {
     private MaintenanceService maintenanceService;
 
     @MockitoBean
+    private MaintenanceScheduleService maintenanceScheduleService;
+
+    @MockitoBean
     private KafkaEventPublisher kafkaEventPublisher;
+
+    @Test
+    @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
+    void hospitalCanAmendScheduledMaintenance() throws Exception {
+        LocalDate amendedDeadline = LocalDate.now().plusDays(10);
+        MaintenanceTask amended = MaintenanceTask.builder().id(42L).taskCode("MNT-42")
+                .equipmentId("EQ-1001").maintenanceType("Calibration")
+                .deadline(amendedDeadline).priority("Critical")
+                .status(MaintenanceStatus.SCHEDULED).scheduleRevision(1).build();
+        when(maintenanceScheduleService.amendSchedule(
+                eq(42L), any(MaintenanceScheduleAmendmentRequest.class), any()))
+                .thenReturn(amended);
+
+        mockMvc.perform(patch("/api/maintenance/42/schedule")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "deadline":"%s",
+                                  "maintenanceType":"Calibration",
+                                  "priority":"Critical",
+                                  "reason":"Vendor availability changed"
+                                }
+                                """.formatted(amendedDeadline)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deadline").value(amendedDeadline.toString()))
+                .andExpect(jsonPath("$.priority").value("Critical"))
+                .andExpect(jsonPath("$.scheduleRevision").doesNotExist());
+
+        verify(maintenanceScheduleService).amendSchedule(
+                eq(42L), any(MaintenanceScheduleAmendmentRequest.class), any());
+    }
+
+    @Test
+    @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
+    void amendmentRequestValidationRejectsBlankReasonAndPastDeadline() throws Exception {
+        mockMvc.perform(patch("/api/maintenance/42/schedule")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"deadline":"%s","reason":" "}
+                                """.formatted(LocalDate.now().minusDays(1))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.deadline")
+                        .value("Amended deadline cannot be in the past"))
+                .andExpect(jsonPath("$.errors.reason")
+                        .value("Amendment reason is required"));
+
+        verify(maintenanceScheduleService, never()).amendSchedule(any(), any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "tech@medtrack.com", roles = "TECHNICIAN")
+    void technicianCannotAmendSchedule() throws Exception {
+        mockMvc.perform(patch("/api/maintenance/42/schedule")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"deadline":"%s","reason":"Planning update"}
+                                """.formatted(LocalDate.now().plusDays(1))))
+                .andExpect(status().isForbidden());
+
+        verify(maintenanceScheduleService, never()).amendSchedule(any(), any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "tech@medtrack.com", roles = "TECHNICIAN")
+    void assignedTechnicianCanReadScheduleRevisionHistory() throws Exception {
+        MaintenanceScheduleRevisionResponse revision = MaintenanceScheduleRevisionResponse.builder()
+                .id(7L).taskId(42L).revisionNumber(2)
+                .actorEmail("hospital@medtrack.com").reason("Planning update")
+                .changedFields(List.of("deadline"))
+                .previousDeadline(LocalDate.now().plusDays(1))
+                .newDeadline(LocalDate.now().plusDays(2))
+                .amendedAt(LocalDateTime.now()).build();
+        MaintenanceScheduleRevisionPageResponse response =
+                MaintenanceScheduleRevisionPageResponse.builder()
+                        .content(List.of(revision)).page(0).size(20)
+                        .totalElements(1).totalPages(1).first(true).last(true).build();
+        when(maintenanceScheduleService.getRevisions(
+                eq(42L), eq(0), eq(20), any())).thenReturn(response);
+
+        mockMvc.perform(get("/api/maintenance/42/schedule-revisions")
+                        .param("page", "0").param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].revisionNumber").value(2))
+                .andExpect(jsonPath("$.content[0].changedFields[0]").value("deadline"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
 
     @Test
     @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
@@ -74,6 +173,46 @@ class MaintenanceControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    @WithMockUser(username = "hospital@medtrack.com", roles = "HOSPITAL")
+    void hospitalCanFilterPaginatedTaskActivity() throws Exception {
+        MaintenanceActivityResponse activity = MaintenanceActivityResponse.builder()
+                .id(8L)
+                .taskId(42L)
+                .sequenceNumber(2L)
+                .eventType(MaintenanceActivityType.STATUS_CHANGED)
+                .actorEmail("tech@medtrack.com")
+                .actorRole("TECHNICIAN")
+                .previousStatus(MaintenanceStatus.IN_PROGRESS)
+                .newStatus(MaintenanceStatus.COMPLETED)
+                .changedFields(List.of("status"))
+                .occurredAt(LocalDateTime.of(2026, 8, 3, 10, 30))
+                .build();
+        MaintenanceActivityPageResponse response = MaintenanceActivityPageResponse.builder()
+                .content(List.of(activity))
+                .page(0)
+                .size(10)
+                .totalElements(1)
+                .totalPages(1)
+                .first(true)
+                .last(true)
+                .build();
+        when(maintenanceService.getTaskActivity(
+                eq(42L), eq("status-changed"), eq(0), eq(10), any()))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/maintenance/42/history")
+                        .param("type", "status-changed")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].eventType").value("STATUS_CHANGED"))
+                .andExpect(jsonPath("$.content[0].previousStatus").value("In Progress"))
+                .andExpect(jsonPath("$.content[0].newStatus").value("Completed"))
+                .andExpect(jsonPath("$.content[0].changedFields[0]").value("status"))
+                .andExpect(jsonPath("$.totalElements").value(1));
     }
 
     @Test

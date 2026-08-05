@@ -2,6 +2,7 @@ package com.medtrack.service;
 
 import com.medtrack.dto.HospitalAnalyticsDto;
 import com.medtrack.exception.ResourceNotFoundException;
+import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentCategory;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.model.EquipmentStatus;
@@ -91,6 +92,33 @@ public class AnalyticsService {
             spendByCategory.put(category, spendByCategory.getOrDefault(category, BigDecimal.ZERO).add(cost));
         }
 
+        // 6. Fleet valuation (issue #702): aggregate the whole inventory at cost, on the books,
+        // and at replacement value. Assets without a purchase cost carry no value.
+        BigDecimal fleetPurchaseCost = BigDecimal.ZERO;
+        BigDecimal fleetBookValue = BigDecimal.ZERO;
+        BigDecimal fleetReplacementCost = BigDecimal.ZERO;
+        long fullyDepreciatedCount = 0;
+        Map<String, BigDecimal> bookValueByCategory = new HashMap<>();
+
+        for (Equipment item : equipmentRepository.findByHospitalId(hospitalId)) {
+            if (item.getPurchaseCost() != null) {
+                fleetPurchaseCost = fleetPurchaseCost.add(item.getPurchaseCost());
+            }
+            BigDecimal bookValue = item.getBookValue();
+            if (bookValue != null) {
+                fleetBookValue = fleetBookValue.add(bookValue);
+                if (bookValue.signum() == 0) {
+                    fullyDepreciatedCount++;
+                }
+                String category = item.getCategory() != null ? item.getCategory().name() : "UNCATEGORISED";
+                bookValueByCategory.put(category, bookValueByCategory.getOrDefault(category, BigDecimal.ZERO).add(bookValue));
+            }
+            BigDecimal replacement = item.getProjectedReplacementCost();
+            if (replacement != null) {
+                fleetReplacementCost = fleetReplacementCost.add(replacement);
+            }
+        }
+
         return HospitalAnalyticsDto.builder()
                 .totalSpend(totalSpend)
                 .spendByCategory(spendByCategory)
@@ -99,6 +127,11 @@ public class AnalyticsService {
                 .criticalFailingAssetsCount(criticalPending)
                 .downtimePercentage(downtimePercentage)
                 .upcomingWarrantyExpirationsCount(upcomingWarrantyCount)
+                .fleetPurchaseCost(fleetPurchaseCost.setScale(2, java.math.RoundingMode.HALF_UP))
+                .fleetBookValue(fleetBookValue.setScale(2, java.math.RoundingMode.HALF_UP))
+                .fleetReplacementCost(fleetReplacementCost.setScale(2, java.math.RoundingMode.HALF_UP))
+                .bookValueByCategory(bookValueByCategory)
+                .fullyDepreciatedCount(fullyDepreciatedCount)
                 .build();
     }
 

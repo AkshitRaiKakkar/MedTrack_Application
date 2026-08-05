@@ -18,4 +18,7 @@ public class OrderDeliveredEvent {
     private String shipmentTrackingNumber;
     private LocalDateTime actualDeliveryDate;
     private Long supplierId;
+    private String hospital;
+    private String equipmentName;
+    private Integer quantity;
 }

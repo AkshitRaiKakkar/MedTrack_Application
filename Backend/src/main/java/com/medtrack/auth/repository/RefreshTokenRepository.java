@@ -1,7 +1,11 @@
 package com.medtrack.auth.repository;
 
 import com.medtrack.auth.model.RefreshToken;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -27,6 +31,18 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
      * @return an {@link Optional} containing the matched {@link RefreshToken} if found, or {@link Optional#empty()} if no match exists
      */
     Optional<RefreshToken> findByToken(String token);
+
+    /**
+     * Loads a refresh token while holding a database write lock until the surrounding
+     * transaction completes. Rotation uses this lookup so two requests cannot both
+     * observe the same token as active and issue independent replacement sessions.
+     *
+     * @param token the token value to lock
+     * @return the locked token, when it exists
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select refreshToken from RefreshToken refreshToken where refreshToken.token = :token")
+    Optional<RefreshToken> findByTokenForUpdate(@Param("token") String token);
 
     /**
      * Deletes all refresh tokens belonging to the specified user ID from database storage.

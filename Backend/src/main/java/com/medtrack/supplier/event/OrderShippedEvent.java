@@ -19,4 +19,7 @@ public class OrderShippedEvent {
     private LocalDateTime estimatedDeliveryDate;
     private LocalDateTime shippedAt;
     private Long supplierId;
+    private String hospital;
+    private String equipmentName;
+    private Integer quantity;
 }
