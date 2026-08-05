@@ -3,14 +3,20 @@ package com.medtrack.service;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.EquipmentDashboardResponse;
+import com.medtrack.dto.EquipmentImportPreviewResponse;
 import com.medtrack.dto.EquipmentImportSummary;
 import com.medtrack.dto.EquipmentStatisticsResponse;
+import com.medtrack.dto.EquipmentValuationResponse;
 import com.medtrack.dto.LowStockSummaryResponse;
 import com.medtrack.dto.StockAdjustmentRequest;
 import com.medtrack.dto.WarrantySummaryResponse;
+import com.medtrack.model.DepreciationMethod;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.WarrantyCoverageType;
+import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
 import com.medtrack.specifications.EquipmentSpecifications;
@@ -38,10 +44,13 @@ import com.medtrack.model.EquipmentCategory;
 import com.medtrack.dto.EquipmentUtilizationResponse;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +68,7 @@ public class EquipmentService {
     private final EquipmentRepository equipmentRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
@@ -71,7 +81,10 @@ public class EquipmentService {
      */
     static final String[] EQUIPMENT_CSV_HEADERS = {
             "Equipment Code", "Name", "Model", "Serial Number", "Department",
-            "Category", "Status", "Purchase Date", "Warranty Expiry"
+            "Category", "Status", "Purchase Date", "Warranty Expiry",
+            "Purchase Cost", "Useful Life (Years)", "Depreciation Method",
+            "Warranty Provider", "Warranty Contract Number", "Warranty Start Date",
+            "Warranty Coverage Type", "Warranty Terms"
     };
 
     private Hospital getHospitalForUser(String username) {
@@ -611,6 +624,91 @@ public class EquipmentService {
     }
 
     /**
+     * Fleet valuation for the analytics dashboard: what the inventory is worth on the books, what
+     * it originally cost, what replacing it would cost today, and per-category / per-asset
+     * breakdowns (issue #702).
+     *
+     * <p>Assets without a purchase cost are excluded from the money totals but still counted in
+     * {@code assetCount}, so finance can see how much of the fleet is still untracked.</p>
+     *
+     * @param username authenticated user's username
+     * @return the valuation summary
+     */
+    public EquipmentValuationResponse getEquipmentValuation(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        List<Equipment> inventory = equipmentRepository.findByHospitalId(hospital.getId());
+
+        BigDecimal totalPurchaseCost = BigDecimal.ZERO;
+        BigDecimal totalBookValue = BigDecimal.ZERO;
+        BigDecimal totalReplacementCost = BigDecimal.ZERO;
+        long assetsWithCost = 0;
+        long fullyDepreciatedCount = 0;
+
+        Map<String, BigDecimal> purchaseCostByCategory = new LinkedHashMap<>();
+        Map<String, BigDecimal> bookValueByCategory = new LinkedHashMap<>();
+        List<EquipmentValuationResponse.AssetValuation> topAssets = new ArrayList<>();
+
+        for (Equipment item : inventory) {
+            BigDecimal cost = item.getPurchaseCost();
+            BigDecimal bookValue = item.getBookValue();
+            BigDecimal replacement = item.getProjectedReplacementCost();
+
+            if (cost != null) {
+                assetsWithCost++;
+                totalPurchaseCost = totalPurchaseCost.add(cost);
+            }
+            if (bookValue != null) {
+                totalBookValue = totalBookValue.add(bookValue);
+                if (bookValue.signum() == 0) {
+                    fullyDepreciatedCount++;
+                }
+            }
+            if (replacement != null) {
+                totalReplacementCost = totalReplacementCost.add(replacement);
+            }
+
+            String category = item.getCategory() != null
+                    ? item.getCategory().name()
+                    : "UNCATEGORISED";
+            if (cost != null) {
+                purchaseCostByCategory.merge(category, cost, BigDecimal::add);
+            }
+            if (bookValue != null) {
+                bookValueByCategory.merge(category, bookValue, BigDecimal::add);
+            }
+
+            if (bookValue != null) {
+                topAssets.add(new EquipmentValuationResponse.AssetValuation(
+                        item.getId(),
+                        item.getName(),
+                        item.getDepartment(),
+                        item.getEquipmentCode(),
+                        cost,
+                        bookValue,
+                        replacement));
+            }
+        }
+
+        // Most valuable assets first, capped at five for the dashboard table.
+        topAssets.sort(Comparator.comparing(EquipmentValuationResponse.AssetValuation::getBookValue)
+                .reversed());
+        List<EquipmentValuationResponse.AssetValuation> topFive =
+                topAssets.size() > 5 ? topAssets.subList(0, 5) : topAssets;
+
+        return EquipmentValuationResponse.builder()
+                .assetCount(inventory.size())
+                .assetsWithCost(assetsWithCost)
+                .fullyDepreciatedCount(fullyDepreciatedCount)
+                .totalPurchaseCost(totalPurchaseCost.setScale(2, RoundingMode.HALF_UP))
+                .totalBookValue(totalBookValue.setScale(2, RoundingMode.HALF_UP))
+                .totalReplacementCost(totalReplacementCost.setScale(2, RoundingMode.HALF_UP))
+                .purchaseCostByCategory(purchaseCostByCategory)
+                .bookValueByCategory(bookValueByCategory)
+                .topAssetsByBookValue(topFive)
+                .build();
+    }
+
+    /**
      * Adds a new equipment record.
      * If no equipmentCode is provided by the caller, auto-generates one
      * using a unique UUID.
@@ -629,6 +727,13 @@ public class EquipmentService {
 
         if (equipment.getMinimumStock() == null) {
             equipment.setMinimumStock(10);
+        }
+
+        // Straight-line depreciation is the documented default. Jackson + Lombok builds the
+        // entity from the request body field by field, so @Builder.Default does not apply on
+        // deserialisation - the default must be applied here.
+        if (equipment.getDepreciationMethod() == null) {
+            equipment.setDepreciationMethod(DepreciationMethod.STRAIGHT_LINE);
         }
 
         if (equipment.getEquipmentCode() != null &&
@@ -712,6 +817,17 @@ public class EquipmentService {
         }
         equipment.setStatus(equipmentDetails.getStatus());
         equipment.setPurchaseDate(equipmentDetails.getPurchaseDate());
+        // Finance fields follow the same "omitted means leave alone" rule as stock levels, so an
+        // update that does not restate them cannot wipe the cost or useful life.
+        if (equipmentDetails.getPurchaseCost() != null) {
+            equipment.setPurchaseCost(equipmentDetails.getPurchaseCost());
+        }
+        if (equipmentDetails.getUsefulLifeYears() != null) {
+            equipment.setUsefulLifeYears(equipmentDetails.getUsefulLifeYears());
+        }
+        if (equipmentDetails.getDepreciationMethod() != null) {
+            equipment.setDepreciationMethod(equipmentDetails.getDepreciationMethod());
+        }
 
         Equipment updatedEquipment = equipmentRepository.save(equipment);
 
@@ -763,6 +879,10 @@ public class EquipmentService {
     /**
      * Imports multiple equipment items from a CSV upload.
      * Performs row-by-row validation and commits all valid rows in a batch transaction.
+     *
+     * <p>Every batch is recorded in {@code equipment_import_audit_logs} - who imported, from which
+     * file, and how many rows succeeded or failed - so an import can always be traced back to its
+     * actor and contents.</p>
      */
     @Transactional
     public EquipmentImportSummary importEquipmentFromCsv(MultipartFile file, String username) {
@@ -771,9 +891,93 @@ public class EquipmentService {
         }
 
         Hospital hospital = getHospitalForUser(username);
+        ParsedImport parsed = parseAndValidateImport(file, hospital);
 
+        if (!parsed.equipmentToSave.isEmpty()) {
+            equipmentRepository.saveAll(parsed.equipmentToSave);
+        }
+
+        int totalRows = parsed.successCount + parsed.failureCount;
+        equipmentImportAuditLogRepository.save(EquipmentImportAuditLog.builder()
+                .hospitalId(hospital.getId())
+                .actor(username)
+                .filename(file.getOriginalFilename() != null ? file.getOriginalFilename() : "equipment.csv")
+                .totalRows(totalRows)
+                .successCount(parsed.successCount)
+                .failureCount(parsed.failureCount)
+                .failures(failuresToJson(parsed.failures))
+                .importedAt(LocalDateTime.now())
+                .build());
+
+        logger.info("Equipment bulk import | User: {} | File: {} | Total: {} | Success: {} | Failed: {}",
+                username,
+                file.getOriginalFilename(),
+                totalRows,
+                parsed.successCount,
+                parsed.failureCount);
+
+        return EquipmentImportSummary.builder()
+                .successCount(parsed.successCount)
+                .failureCount(parsed.failureCount)
+                .failures(parsed.failures)
+                .build();
+    }
+
+    /**
+     * Dry-runs a bulk import: parses and validates every row exactly as
+     * {@link #importEquipmentFromCsv} would, but writes nothing.
+     *
+     * <p>Backs the two-step UI flow ("preview, then confirm") so staff can see which rows will
+     * import and which carry errors before anything is committed. The validation is the same code
+     * path the real import uses, so the preview cannot diverge from the outcome.</p>
+     *
+     * @param file     the CSV file to validate
+     * @param username authenticated user's username
+     * @return the rows that would be imported plus per-row failures
+     */
+    public EquipmentImportPreviewResponse previewEquipmentImport(MultipartFile file, String username) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("CSV file is empty or missing");
+        }
+
+        Hospital hospital = getHospitalForUser(username);
+        ParsedImport parsed = parseAndValidateImport(file, hospital);
+
+        return EquipmentImportPreviewResponse.builder()
+                .totalRows(parsed.successCount + parsed.failureCount)
+                .validCount(parsed.successCount)
+                .failureCount(parsed.failureCount)
+                .validRows(parsed.validRows)
+                .failures(parsed.failures)
+                .build();
+    }
+
+    /**
+     * Recent import batches for the caller's hospital, newest first.
+     *
+     * <p>The audit trail itself is append-only; this surfaces the latest batches so the UI can
+     * show what was uploaded and when.</p>
+     *
+     * @param username authenticated user's username
+     * @return up to the 20 most recent import audit entries
+     */
+    public List<EquipmentImportAuditLog> getImportAuditLogs(String username) {
+        Hospital hospital = getHospitalForUser(username);
+        return equipmentImportAuditLogRepository
+                .findTop20ByHospitalIdOrderByImportedAtDesc(hospital.getId());
+    }
+
+    /**
+     * Shared parse-and-validate pass used by both the real import and the dry-run preview.
+     *
+     * <p>Returns everything the two callers need - the entities to persist, per-row failures, and
+     * a human-readable preview of the valid rows - so the validation rules cannot drift between
+     * the preview and the commit.</p>
+     */
+    private ParsedImport parseAndValidateImport(MultipartFile file, Hospital hospital) {
         List<Equipment> equipmentToSave = new ArrayList<>();
         List<EquipmentImportSummary.RowFailure> failures = new ArrayList<>();
+        List<EquipmentImportPreviewResponse.PreviewRow> validRows = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
         // Serial numbers already claimed by an earlier row in this same file, so a
@@ -839,6 +1043,20 @@ public class EquipmentService {
                 // dropped the warranty date - the two columns were write-only.
                 String equipmentCode = getFieldValue(fields, headers, "Equipment Code");
                 String warrantyExpiryStr = getFieldValue(fields, headers, "Warranty Expiry");
+                // Depreciation & valuation columns (issue #702). Same write-only risk: the export
+                // wrote them, so the import must read them back or a round trip would silently
+                // drop the finance data.
+                String purchaseCostStr = getFieldValue(fields, headers, "Purchase Cost");
+                String usefulLifeStr = getFieldValue(fields, headers, "Useful Life (Years)");
+                String depreciationMethodStr = getFieldValue(fields, headers, "Depreciation Method");
+                // Warranty & service contract columns (issue #703). Same write-only risk as the
+                // finance columns: the export writes them, so the import must read them back or a
+                // round trip would silently drop the contract details.
+                String warrantyProviderStr = getFieldValue(fields, headers, "Warranty Provider");
+                String warrantyContractNumberStr = getFieldValue(fields, headers, "Warranty Contract Number");
+                String warrantyStartDateStr = getFieldValue(fields, headers, "Warranty Start Date");
+                String warrantyCoverageTypeStr = getFieldValue(fields, headers, "Warranty Coverage Type");
+                String warrantyTermsStr = getFieldValue(fields, headers, "Warranty Terms");
 
                 if (name == null || name.trim().isEmpty()) {
                     failures.add(new EquipmentImportSummary.RowFailure(rowNum, line, "Asset Name is required"));
@@ -936,12 +1154,102 @@ public class EquipmentService {
                     }
                 }
 
+                // Purchase cost: optional, but must be a non-negative number when supplied.
+                BigDecimal purchaseCost = null;
+                if (purchaseCostStr != null && !purchaseCostStr.trim().isEmpty()) {
+                    try {
+                        purchaseCost = new BigDecimal(purchaseCostStr.trim());
+                        if (purchaseCost.signum() < 0) {
+                            throw new NumberFormatException("negative");
+                        }
+                    } catch (NumberFormatException e) {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Purchase Cost. Expected a non-negative number, e.g. 250000.00"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                // Useful life: optional, but must be a whole number of years when supplied.
+                Integer usefulLifeYears = null;
+                if (usefulLifeStr != null && !usefulLifeStr.trim().isEmpty()) {
+                    try {
+                        usefulLifeYears = Integer.parseInt(usefulLifeStr.trim());
+                        if (usefulLifeYears <= 0) {
+                            throw new NumberFormatException("non-positive");
+                        }
+                    } catch (NumberFormatException e) {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Useful Life. Expected a positive whole number of years, e.g. 10"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                // Depreciation method: optional, defaults to straight line.
+                DepreciationMethod depreciationMethod = DepreciationMethod.STRAIGHT_LINE;
+                if (depreciationMethodStr != null && !depreciationMethodStr.trim().isEmpty()) {
+                    String method = depreciationMethodStr.trim();
+                    if (method.equalsIgnoreCase("DECLINING_BALANCE")
+                            || method.equalsIgnoreCase("declining balance")
+                            || method.equalsIgnoreCase("double declining")) {
+                        depreciationMethod = DepreciationMethod.DECLINING_BALANCE;
+                    } else if (method.equalsIgnoreCase("STRAIGHT_LINE")
+                            || method.equalsIgnoreCase("straight line")) {
+                        depreciationMethod = DepreciationMethod.STRAIGHT_LINE;
+                    } else {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Depreciation Method. Allowed: STRAIGHT_LINE, DECLINING_BALANCE"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
                 EquipmentStatus parsedStatus = EquipmentStatus.ACTIVE;
                 if ("Maintenance".equalsIgnoreCase(status) || "UNDER_MAINTENANCE".equalsIgnoreCase(status)) {
                     parsedStatus = EquipmentStatus.UNDER_MAINTENANCE;
                 } else if ("Retired".equalsIgnoreCase(status) || "RETIRED".equalsIgnoreCase(status)) {
                     parsedStatus = EquipmentStatus.RETIRED;
                 }
+
+                // Warranty contract details (issue #703). Coverage type is a closed vocabulary;
+                // everything else is free text or an ISO date.
+                WarrantyCoverageType warrantyCoverageType = null;
+                if (warrantyCoverageTypeStr != null && !warrantyCoverageTypeStr.trim().isEmpty()) {
+                    String coverage = warrantyCoverageTypeStr.trim();
+                    if (coverage.equalsIgnoreCase("FULL_PARTS_AND_LABOR")
+                            || coverage.equalsIgnoreCase("full parts and labor")
+                            || coverage.equalsIgnoreCase("full parts/labor")) {
+                        warrantyCoverageType = WarrantyCoverageType.FULL_PARTS_AND_LABOR;
+                    } else if (coverage.equalsIgnoreCase("PARTS_ONLY")
+                            || coverage.equalsIgnoreCase("parts only")) {
+                        warrantyCoverageType = WarrantyCoverageType.PARTS_ONLY;
+                    } else if (coverage.equalsIgnoreCase("LABOR_ONLY")
+                            || coverage.equalsIgnoreCase("labor only")) {
+                        warrantyCoverageType = WarrantyCoverageType.LABOR_ONLY;
+                    } else {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Warranty Coverage Type. Allowed: FULL_PARTS_AND_LABOR, PARTS_ONLY, LABOR_ONLY"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                LocalDate warrantyStartDate = null;
+                if (warrantyStartDateStr != null && !warrantyStartDateStr.trim().isEmpty()) {
+                    try {
+                        warrantyStartDate = LocalDate.parse(warrantyStartDateStr.trim());
+                    } catch (DateTimeParseException e) {
+                        failures.add(new EquipmentImportSummary.RowFailure(rowNum, line,
+                                "Invalid Warranty Start Date format. Expected YYYY-MM-DD"));
+                        failureCount++;
+                        continue;
+                    }
+                }
+
+                String warrantyProvider = blankToNull(warrantyProviderStr);
+                String warrantyContractNumber = blankToNull(warrantyContractNumberStr);
+                String warrantyTerms = blankToNull(warrantyTermsStr);
 
                 if (serialNumber != null && !serialNumber.trim().isEmpty()) {
                     String normalizedSerial = serialNumber.trim();
@@ -1016,6 +1324,14 @@ public class EquipmentService {
                     equipment.setStatus(parsedStatus);
                     equipment.setPurchaseDate(purchaseDate);
                     equipment.setWarrantyExpiry(warrantyExpiry);
+                    equipment.setPurchaseCost(purchaseCost);
+                    equipment.setUsefulLifeYears(usefulLifeYears);
+                    equipment.setDepreciationMethod(depreciationMethod);
+                    equipment.setWarrantyProvider(warrantyProvider);
+                    equipment.setWarrantyContractNumber(warrantyContractNumber);
+                    equipment.setWarrantyStartDate(warrantyStartDate);
+                    equipment.setWarrantyCoverageType(warrantyCoverageType);
+                    equipment.setWarrantyTerms(warrantyTerms);
                 } else {
                     equipment = Equipment.builder()
                             .name(name)
@@ -1030,15 +1346,25 @@ public class EquipmentService {
                             .warrantyExpiry(warrantyExpiry)
                             .equipmentCode(trimmedCode != null ? trimmedCode : "EQ-" + UUID.randomUUID())
                             .hospital(hospital)
+                            .purchaseCost(purchaseCost)
+                            .usefulLifeYears(usefulLifeYears)
+                            .depreciationMethod(depreciationMethod)
+                            .warrantyProvider(warrantyProvider)
+                            .warrantyContractNumber(warrantyContractNumber)
+                            .warrantyStartDate(warrantyStartDate)
+                            .warrantyCoverageType(warrantyCoverageType)
+                            .warrantyTerms(warrantyTerms)
                             .build();
                 }
 
                 equipmentToSave.add(equipment);
+                validRows.add(new EquipmentImportPreviewResponse.PreviewRow(
+                        rowNum, toPreviewRowData(equipment, name, model, serialNumber,
+                        department, equipmentCategory, status, purchaseDate, warrantyExpiry,
+                        purchaseCost, usefulLifeYears, depreciationMethod,
+                        warrantyProvider, warrantyContractNumber, warrantyStartDate,
+                        warrantyCoverageType, warrantyTerms)));
                 successCount++;
-            }
-
-            if (!equipmentToSave.isEmpty()) {
-                equipmentRepository.saveAll(equipmentToSave);
             }
 
         } catch (java.io.IOException e) {
@@ -1049,11 +1375,109 @@ public class EquipmentService {
             throw new RuntimeException("Error reading CSV file", e);
         }
 
-        return EquipmentImportSummary.builder()
-                .successCount(successCount)
-                .failureCount(failureCount)
-                .failures(failures)
-                .build();
+        return new ParsedImport(equipmentToSave, failures, validRows, successCount, failureCount);
+    }
+
+    /**
+     * Human-readable form of one validated row, keyed by the canonical CSV header, for the
+     * dry-run preview table.
+     */
+    private Map<String, String> toPreviewRowData(
+            Equipment equipment,
+            String name,
+            String model,
+            String serialNumber,
+            String department,
+            EquipmentCategory equipmentCategory,
+            String status,
+            LocalDate purchaseDate,
+            LocalDate warrantyExpiry,
+            BigDecimal purchaseCost,
+            Integer usefulLifeYears,
+            DepreciationMethod depreciationMethod,
+            String warrantyProvider,
+            String warrantyContractNumber,
+            LocalDate warrantyStartDate,
+            WarrantyCoverageType warrantyCoverageType,
+            String warrantyTerms) {
+
+        Map<String, String> data = new LinkedHashMap<>();
+        data.put("Equipment Code", equipment.getEquipmentCode());
+        data.put("Name", name);
+        data.put("Model", model);
+        data.put("Serial Number", serialNumber);
+        data.put("Department", department);
+        data.put("Category", equipmentCategory.name());
+        data.put("Status", status);
+        data.put("Purchase Date", purchaseDate != null ? purchaseDate.toString() : "");
+        data.put("Warranty Expiry", warrantyExpiry != null ? warrantyExpiry.toString() : "");
+        data.put("Purchase Cost", purchaseCost != null ? purchaseCost.toString() : "");
+        data.put("Useful Life (Years)", usefulLifeYears != null ? usefulLifeYears.toString() : "");
+        data.put("Depreciation Method", depreciationMethod != null ? depreciationMethod.name() : "");
+        data.put("Warranty Provider", warrantyProvider != null ? warrantyProvider : "");
+        data.put("Warranty Contract Number", warrantyContractNumber != null ? warrantyContractNumber : "");
+        data.put("Warranty Start Date", warrantyStartDate != null ? warrantyStartDate.toString() : "");
+        data.put("Warranty Coverage Type", warrantyCoverageType != null ? warrantyCoverageType.name() : "");
+        data.put("Warranty Terms", warrantyTerms != null ? warrantyTerms : "");
+        return data;
+    }
+
+    /**
+     * Serialises the per-row failures as a JSON array string for the audit log. Hand-rolled
+     * instead of a full ObjectMapper so the audit trail has no Jackson dependency.
+     */
+    private String failuresToJson(List<EquipmentImportSummary.RowFailure> failures) {
+        if (failures == null || failures.isEmpty()) {
+            return null;
+        }
+        StringBuilder json = new StringBuilder("[");
+        for (int index = 0; index < failures.size(); index++) {
+            EquipmentImportSummary.RowFailure failure = failures.get(index);
+            if (index > 0) {
+                json.append(',');
+            }
+            json.append('{')
+                    .append("\"rowNumber\":").append(failure.getRowNumber())
+                    .append(",\"reason\":\"").append(escapeJson(failure.getReason())).append('"')
+                    .append(",\"rowData\":\"").append(escapeJson(failure.getRowData())).append('"')
+                    .append('}');
+        }
+        return json.append(']').toString();
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+    }
+
+    /**
+     * Output of the shared parse-and-validate pass: what the import would persist, what it would
+     * reject, and a preview of the valid rows for the dry-run screen.
+     */
+    private static class ParsedImport {
+        final List<Equipment> equipmentToSave;
+        final List<EquipmentImportSummary.RowFailure> failures;
+        final List<EquipmentImportPreviewResponse.PreviewRow> validRows;
+        final int successCount;
+        final int failureCount;
+
+        ParsedImport(
+                List<Equipment> equipmentToSave,
+                List<EquipmentImportSummary.RowFailure> failures,
+                List<EquipmentImportPreviewResponse.PreviewRow> validRows,
+                int successCount,
+                int failureCount) {
+            this.equipmentToSave = equipmentToSave;
+            this.failures = failures;
+            this.validRows = validRows;
+            this.successCount = successCount;
+            this.failureCount = failureCount;
+        }
     }
 
     /**
@@ -1066,6 +1490,10 @@ public class EquipmentService {
      */
     private List<String> parseCsvLine(String line) {
         return CsvSupport.parseLine(line);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 
     private String getFieldValue(List<String> fields, List<String> headers, String columnName) {
@@ -1113,7 +1541,19 @@ public class EquipmentService {
                     equipment.getCategory(),
                     equipment.getStatus(),
                     equipment.getPurchaseDate(),
-                    equipment.getWarrantyExpiry()));
+                    equipment.getWarrantyExpiry(),
+                    // Depreciation & valuation columns, so an export can feed an accounting
+                    // package or round-trip through the import without losing the finance data.
+                    equipment.getPurchaseCost(),
+                    equipment.getUsefulLifeYears(),
+                    equipment.getDepreciationMethod(),
+                    // Warranty & service contract columns (issue #703), so the report export
+                    // carries the full coverage picture and round-trips through the import.
+                    equipment.getWarrantyProvider(),
+                    equipment.getWarrantyContractNumber(),
+                    equipment.getWarrantyStartDate(),
+                    equipment.getWarrantyCoverageType(),
+                    equipment.getWarrantyTerms()));
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);

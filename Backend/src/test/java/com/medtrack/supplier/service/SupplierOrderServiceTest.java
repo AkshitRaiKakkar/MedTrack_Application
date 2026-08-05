@@ -45,6 +45,9 @@ public class SupplierOrderServiceTest {
         private SupplierAccessGuard supplierAccessGuard;
 
         @Mock
+        private SupplierPerformanceService supplierPerformanceService;
+
+        @Mock
         private KafkaTemplate<String, Object> kafkaTemplate;
 
         private final Authentication authentication = mock(Authentication.class);
@@ -54,7 +57,7 @@ public class SupplierOrderServiceTest {
         @BeforeEach
         void setUp() {
                 supplierOrderService = new SupplierOrderService(orderRepository, shipmentTrackingRepository,
-                                supplierAccessGuard);
+                                supplierAccessGuard, supplierPerformanceService);
                 ReflectionTestUtils.setField(supplierOrderService, "kafkaTemplate", kafkaTemplate);
                 ReflectionTestUtils.setField(supplierOrderService, "orderEventsTopic", "order-events");
         }
@@ -64,47 +67,109 @@ public class SupplierOrderServiceTest {
                 EquipmentOrder order = EquipmentOrder.builder().id(1L).build();
                 Page<EquipmentOrder> page = new PageImpl<>(Collections.singletonList(order));
 
-                when(orderRepository.findSupplierOrders(
-                                eq("PENDING"), eq("Processing"), eq(123L), eq("test"), any(Pageable.class)))
+                when(orderRepository.findAdvancedSupplierOrders(
+                                eq("PENDING"), eq("Processing"), isNull(), isNull(), isNull(),
+                                isNull(), isNull(), eq(123L), eq("test"), eq(true), any(Pageable.class)))
                                 .thenReturn(page);
 
                 Page<EquipmentOrder> result = supplierOrderService.getSupplierOrders(
-                                0, 10, "orderDate", "desc", "PENDING", "Processing", 123L, "test");
+                                0, 10, "orderDate", "desc", "PENDING", "Processing", 123L, "test", null, null, null,
+                                null, null);
 
                 assertNotNull(result);
                 assertEquals(1, result.getTotalElements());
-                verify(orderRepository).findSupplierOrders(
-                                eq("PENDING"), eq("Processing"), eq(123L), eq("test"), any(Pageable.class));
+                verify(orderRepository).findAdvancedSupplierOrders(
+                                eq("PENDING"), eq("Processing"), isNull(), isNull(), isNull(),
+                                isNull(), isNull(), eq(123L), eq("test"), eq(true), any(Pageable.class));
         }
 
         @Test
         void getSupplierOrders_InvalidPage_ThrowsIllegalArgumentException() {
                 assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
-                                -1, 10, "orderDate", "desc", null, null, null, null));
+                                -1, 10, "orderDate", "desc", null, null, null, null, null, null, null, null, null));
         }
 
         @Test
         void getSupplierOrders_InvalidSize_ThrowsIllegalArgumentException() {
                 assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
-                                0, 0, "orderDate", "desc", null, null, null, null));
+                                0, 0, "orderDate", "desc", null, null, null, null, null, null, null, null, null));
         }
 
         @Test
         void getSupplierOrders_InvalidOrderStatus_ThrowsIllegalArgumentException() {
                 assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
-                                0, 10, "orderDate", "desc", "INVALID_STATUS", null, null, null));
+                                0, 10, "orderDate", "desc", "INVALID_STATUS", null, null, null, null, null, null, null,
+                                null));
         }
 
         @Test
         void getSupplierOrders_InvalidShippingStatus_ThrowsIllegalArgumentException() {
                 assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
-                                0, 10, "orderDate", "desc", null, "INVALID_SHIPPING", null, null));
+                                0, 10, "orderDate", "desc", null, "INVALID_SHIPPING", null, null, null, null, null,
+                                null, null));
         }
 
         @Test
         void getSupplierOrders_InvalidSupplierId_ThrowsIllegalArgumentException() {
                 assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
-                                0, 10, "orderDate", "desc", null, null, -5L, null));
+                                0, 10, "orderDate", "desc", null, null, -5L, null, null, null, null, null, null));
+        }
+
+        @Test
+        void getSupplierOrders_InvalidDeliveryStatus_ThrowsIllegalArgumentException() {
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                () -> supplierOrderService.getSupplierOrders(
+                                                0, 10, "orderDate", "desc", null, null, 5L, null,
+                                                "LOST", null, null, null, null));
+
+                assertEquals("Invalid delivery status: LOST", exception.getMessage());
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        void getSupplierOrders_ReversedDateRange_ThrowsIllegalArgumentException() {
+                LocalDateTime start = LocalDateTime.of(2026, 8, 2, 12, 0);
+                LocalDateTime end = start.minusDays(1);
+
+                IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                                () -> supplierOrderService.getSupplierOrders(
+                                                0, 10, "orderDate", "desc", null, null, 5L, null,
+                                                null, null, null, start, end));
+
+                assertEquals("Start date must not be after end date", exception.getMessage());
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        void getSupplierOrders_UnsupportedSortField_ThrowsIllegalArgumentException() {
+                assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
+                                0, 10, "supplierNotes.password", "desc", null, null, 5L, null,
+                                null, null, null, null, null));
+
+                verifyNoInteractions(orderRepository);
+        }
+
+        @Test
+        void getSupplierOrders_OversizedPage_ThrowsIllegalArgumentException() {
+                assertThrows(IllegalArgumentException.class, () -> supplierOrderService.getSupplierOrders(
+                                0, 101, "orderDate", "desc", null, null, 5L, null,
+                                null, null, null, null, null));
+        }
+
+        @Test
+        void getSupplierOrders_NormalizesOptionalTextFilters() {
+                when(orderRepository.findAdvancedSupplierOrders(
+                                isNull(), isNull(), eq(ShipmentStatus.SHIPPED), eq(true), eq("TRK-9"),
+                                isNull(), isNull(), eq(9L), isNull(), eq(true), any(Pageable.class)))
+                                .thenReturn(Page.empty());
+
+                supplierOrderService.getSupplierOrders(
+                                0, 20, "orderDate", "asc", " ", "  ", 9L, " ",
+                                " shipped ", true, " TRK-9 ", null, null);
+
+                verify(orderRepository).findAdvancedSupplierOrders(
+                                isNull(), isNull(), eq(ShipmentStatus.SHIPPED), eq(true), eq("TRK-9"),
+                                isNull(), isNull(), eq(9L), isNull(), eq(true), any(Pageable.class));
         }
 
         @Test
@@ -211,6 +276,7 @@ public class SupplierOrderServiceTest {
                 verify(shipmentTrackingRepository).save(shipment);
                 verify(orderRepository).save(order);
                 verify(kafkaTemplate).send(eq("order-events"), eq("1"), any());
+                verify(supplierPerformanceService).publishPerformanceUpdate(1L);
         }
 
         @Test

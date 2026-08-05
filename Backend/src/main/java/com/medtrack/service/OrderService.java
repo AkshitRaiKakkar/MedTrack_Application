@@ -4,6 +4,7 @@ import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentOrder;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.repository.EquipmentOrderRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
@@ -148,6 +149,9 @@ public class OrderService {
         Equipment equipment = equipmentRepository.findByEquipmentCode(request.getEquipmentId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Equipment not found with code: " + request.getEquipmentId()));
+        if (equipment.getStatus() == EquipmentStatus.RETIRED || equipment.getStatus() == EquipmentStatus.DISPOSED) {
+            throw new IllegalArgumentException("Retired or disposed equipment cannot be ordered as active stock");
+        }
 
         EquipmentOrder order = EquipmentOrder.builder()
                 .orderCode("ORD-" + java.util.UUID.randomUUID())

@@ -10,7 +10,7 @@ import {
   ThumbsUp, Clock, Activity, Calendar, ChevronDown, MoreHorizontal,
   Phone, Video, Paperclip, Smile, Mic, CheckCircle2, CircleDashed, Download,
   Box, ClipboardList, MessageSquare, LineChart, Mail, Workflow, Puzzle, MessageCircle, ChevronsUpDown, Diamond,
-  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown
+  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown, Award
 } from 'lucide-react';
 import MedTrackLogo from '../../components/common/MedTrackLogo';
 
@@ -96,6 +96,9 @@ export default function Dashboard({ onNavigate }) {
               </button>
               <button onClick={() => onNavigate && onNavigate("maintenance")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <ClipboardList size={18} /> Maintenance
+              </button>
+              <button onClick={() => onNavigate && onNavigate("calibration")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Award size={18} /> Calibration & Compliance
               </button>
               <button onClick={() => onNavigate && onNavigate("scim-provisioning")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Users size={18} /> Staff (SCIM)

@@ -32,6 +32,7 @@ const TermsPage = lazy(() => import("../pages/TermsPage"));
 const GuidesPage = lazy(() => import("../pages/GuidesPage"));
 const SecurityPage = lazy(() => import("../pages/SecurityPage"));
 const SystemStatusPage = lazy(() => import("../pages/SystemStatusPage"));
+const DualRangeSliderStudio = lazy(() => import("../components/common/DualRangeSliderStudio"));
 
 const LoginPage = lazy(() => import("../pages/auth/LoginPage"));
 const RegisterPage = lazy(() => import("../pages/auth/RegisterPage"));
@@ -47,6 +48,9 @@ const AddEquipmentForm = lazy(() => import("../pages/hospital/AddEquipmentForm")
 const EditEquipmentForm = lazy(() => import("../pages/hospital/EditEquipmentForm"));
 const ScheduleMaintenancePage = lazy(() => import("../pages/hospital/ScheduleMaintenancePage"));
 const RequestEquipmentPage = lazy(() => import("../pages/hospital/RequestEquipmentPage"));
+const PreventiveMaintenanceRules = lazy(() => import("../pages/hospital/PreventiveMaintenanceRules"));
+const MaintenanceSlaDashboard = lazy(() => import("../pages/hospital/MaintenanceSlaDashboard"));
+const EquipmentCalibrationHub = lazy(() => import("../pages/hospital/EquipmentCalibrationHub"));
 
 const TaskList = lazy(() => import("../pages/technician/TaskList"));
 const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
@@ -140,6 +144,7 @@ export const ROUTES = [
   { page: "guides", slugs: ["guides"], component: GuidesPage, access: PUBLIC },
   { page: "security", slugs: ["security"], component: SecurityPage, access: PUBLIC },
   { page: "status", slugs: ["status"], component: SystemStatusPage, access: PUBLIC },
+  { page: "dual-range-slider", slugs: ["dual-range-slider", "range-slider-studio"], component: DualRangeSliderStudio, access: PUBLIC },
 
   // --- authentication flows (no chrome: these are full-bleed layouts) --------
   { page: "login", slugs: ["login"], component: LoginPage, access: PUBLIC, chrome: false },
@@ -157,6 +162,9 @@ export const ROUTES = [
   { page: "edit-equipment", slugs: ["edit-equipment"], component: EditEquipmentForm, access: HOSPITAL_ONLY, param: "equipmentId" },
   { page: "schedule-maintenance", slugs: ["schedule-maintenance"], component: ScheduleMaintenancePage, access: HOSPITAL_ONLY },
   { page: "request-equipment", slugs: ["request-equipment"], component: RequestEquipmentPage, access: HOSPITAL_ONLY },
+  { page: "maintenance-rules", slugs: ["maintenance-rules"], component: PreventiveMaintenanceRules, access: HOSPITAL_ONLY },
+  { page: "sla-dashboard", slugs: ["sla-dashboard"], component: MaintenanceSlaDashboard, access: HOSPITAL_ONLY },
+  { page: "calibration", slugs: ["calibration", "equipment-calibration"], component: EquipmentCalibrationHub, access: HOSPITAL_ONLY },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },

@@ -23,4 +23,7 @@ public class ShipmentDelayedEvent {
     private String shipmentTrackingNumber;
     private LocalDateTime estimatedDeliveryDate;
     private LocalDateTime detectedAt;
+    private String hospital;
+    private String equipmentName;
+    private Integer quantity;
 }
