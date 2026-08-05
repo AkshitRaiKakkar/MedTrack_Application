@@ -12,11 +12,13 @@ import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentCategory;
 import com.medtrack.model.EquipmentStatus;
+import com.medtrack.model.Hospital;
 import com.medtrack.model.MaintenanceGenerationRun;
 import com.medtrack.model.MaintenancePolicyRule;
 import com.medtrack.model.MaintenanceRuleScope;
 import com.medtrack.model.MaintenanceStatus;
 import com.medtrack.model.MaintenanceTask;
+import com.medtrack.model.OperationsEvent;
 import com.medtrack.model.RecurrenceFrequency;
 import com.medtrack.model.SlaState;
 import com.medtrack.repository.EquipmentRepository;
@@ -67,6 +69,7 @@ public class PreventiveMaintenanceService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final MaintenanceActivityService activityService;
+    private final EventPublisherService eventPublisherService;
 
     // ------------------------------------------------------------------
     // Rule CRUD
@@ -298,15 +301,36 @@ public class PreventiveMaintenanceService {
      */
     @Transactional
     public SlaSummaryResponse refreshSla(Authentication authentication) {
-        Long hospitalId = getHospitalForUser(authentication).getId();
+        Hospital hospital = getHospitalForUser(authentication);
+        return refreshSlaForHospital(hospital);
+    }
+
+    /**
+     * Hospital-agnostic entry point for {@link MaintenanceSlaAlertScheduler}: recomputes SLA
+     * state and escalation for one hospital without an {@link Authentication}, so the scheduler
+     * can sweep every hospital on a timer instead of only when a user opens the SLA dashboard.
+     */
+    @Transactional
+    public SlaSummaryResponse refreshSlaForHospitalId(Long hospitalId) {
+        Hospital hospital = hospitalRepository.findById(hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+        return refreshSlaForHospital(hospital);
+    }
+
+    private SlaSummaryResponse refreshSlaForHospital(Hospital hospital) {
+        Long hospitalId = hospital.getId();
         List<MaintenanceTask> openTasks = taskRepository.findByHospitalId(hospitalId).stream()
                 .filter(task -> task.getStatus() != MaintenanceStatus.COMPLETED)
                 .toList();
 
         LocalDateTime now = LocalDateTime.now();
         for (MaintenanceTask task : openTasks) {
+            SlaState previousState = task.getSlaState();
             computeSlaState(task, now);
             taskRepository.save(task);
+            if (task.getSlaState() != previousState) {
+                publishSlaTransitionEvent(task);
+            }
         }
 
         // Escalate overdue critical tasks to the hospital account.
@@ -314,7 +338,7 @@ public class PreventiveMaintenanceService {
                 .findByHospitalIdAndSlaStateAndStatusNot(hospitalId, SlaState.BREACHED, MaintenanceStatus.COMPLETED).stream()
                 .filter(task -> "Critical".equalsIgnoreCase(task.getPriority()))
                 .toList();
-        User hospitalUser = getHospitalForUser(authentication).getUser();
+        User hospitalUser = hospital.getUser();
         for (MaintenanceTask task : breachedCritical) {
             if (task.getSlaState() != SlaState.ESCALATED) {
                 task.setSlaState(SlaState.ESCALATED);
@@ -336,6 +360,68 @@ public class PreventiveMaintenanceService {
         }
 
         return buildSlaSummary(hospitalId);
+    }
+
+    /**
+     * Publishes the SLA-category event for a task's new state, and mirrors a breach into the
+     * maintenance feed as {@code MAINTENANCE_OVERDUE} - the same underlying fact ("this task
+     * missed its deadline") matters to both the SLA and maintenance Activity Center tabs.
+     */
+    private void publishSlaTransitionEvent(MaintenanceTask task) {
+        if (task.getSlaState() == SlaState.WARNING) {
+            eventPublisherService.publishEvent(
+                    task.getHospitalId(),
+                    OperationsEvent.EventCategory.SLA,
+                    OperationsEvent.EventType.SLA_WARNING,
+                    "SLA warning: " + task.getEquipment(),
+                    slaEventDetail(task),
+                    task.getId(),
+                    OperationsEvent.EntityType.MAINTENANCE_TASK,
+                    "system",
+                    OperationsEvent.EventSeverity.WARNING);
+        } else if (task.getSlaState() == SlaState.BREACHED) {
+            eventPublisherService.publishEvent(
+                    task.getHospitalId(),
+                    OperationsEvent.EventCategory.SLA,
+                    OperationsEvent.EventType.SLA_BREACHED,
+                    "SLA breached: " + task.getEquipment(),
+                    slaEventDetail(task),
+                    task.getId(),
+                    OperationsEvent.EntityType.MAINTENANCE_TASK,
+                    "system",
+                    OperationsEvent.EventSeverity.CRITICAL);
+            eventPublisherService.publishEvent(
+                    task.getHospitalId(),
+                    OperationsEvent.EventCategory.MAINTENANCE,
+                    OperationsEvent.EventType.MAINTENANCE_OVERDUE,
+                    "Overdue: " + task.getEquipment(),
+                    slaEventDetail(task),
+                    task.getId(),
+                    OperationsEvent.EntityType.MAINTENANCE_TASK,
+                    "system",
+                    OperationsEvent.EventSeverity.WARNING);
+        }
+    }
+
+    private void publishSlaEscalatedEvent(MaintenanceTask task) {
+        eventPublisherService.publishEvent(
+                task.getHospitalId(),
+                OperationsEvent.EventCategory.SLA,
+                OperationsEvent.EventType.SLA_ESCALATED,
+                "SLA escalated: " + task.getEquipment(),
+                slaEventDetail(task),
+                task.getId(),
+                OperationsEvent.EntityType.MAINTENANCE_TASK,
+                "system",
+                OperationsEvent.EventSeverity.CRITICAL);
+    }
+
+    private String slaEventDetail(MaintenanceTask task) {
+        return "{"
+                + "\"taskCode\":\"" + (task.getTaskCode() != null ? task.getTaskCode() : "") + "\","
+                + "\"priority\":\"" + (task.getPriority() != null ? task.getPriority() : "") + "\","
+                + "\"deadline\":\"" + (task.getDeadline() != null ? task.getDeadline() : "") + "\""
+                + "}";
     }
 
     private void computeSlaState(MaintenanceTask task, LocalDateTime now) {
@@ -675,7 +761,7 @@ public class PreventiveMaintenanceService {
         }
     }
 
-    private com.medtrack.model.Hospital getHospitalForUser(Authentication authentication) {
+    private Hospital getHospitalForUser(Authentication authentication) {
         if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
             throw new AccessDeniedException("An active hospital account is required");
         }
