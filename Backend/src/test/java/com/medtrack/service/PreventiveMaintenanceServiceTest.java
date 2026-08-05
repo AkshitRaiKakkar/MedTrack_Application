@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -66,6 +67,9 @@ class PreventiveMaintenanceServiceTest {
 
     @Mock
     private MaintenanceActivityService activityService;
+
+    @Mock
+    private EventPublisherService eventPublisherService;
 
     @Mock
     private Authentication authentication;
@@ -274,6 +278,72 @@ class PreventiveMaintenanceServiceTest {
         assertSame(existingRun, result);
         verify(taskRepository, never()).saveAll(any());
         verify(runRepository, never()).save(any(MaintenanceGenerationRun.class));
+    }
+
+    @Test
+    void refreshSlaPublishesBreachedAndOverdueEventsOnTransition() {
+        MaintenanceTask task = MaintenanceTask.builder()
+                .id(500L)
+                .taskCode("MNT-1")
+                .equipment("MRI Scanner")
+                .hospitalId(hospital.getId())
+                .hospital(hospital.getName())
+                .status(MaintenanceStatus.SCHEDULED)
+                .priority("High")
+                .deadline(LocalDate.now().minusDays(10))
+                .slaState(com.medtrack.model.SlaState.UPCOMING)
+                .build();
+
+        when(taskRepository.findByHospitalId(hospital.getId())).thenReturn(List.of(task));
+        when(taskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.findByHospitalIdAndSlaStateAndStatusNot(
+                hospital.getId(), com.medtrack.model.SlaState.BREACHED, MaintenanceStatus.COMPLETED))
+                .thenReturn(List.of());
+        when(taskRepository.findUnassignedByPriority(any(), any(), any())).thenReturn(List.of());
+
+        service.refreshSla(authentication);
+
+        verify(eventPublisherService).publishEvent(
+                eq(hospital.getId()),
+                eq(com.medtrack.model.OperationsEvent.EventCategory.SLA),
+                eq(com.medtrack.model.OperationsEvent.EventType.SLA_BREACHED),
+                any(String.class), any(String.class), eq(500L),
+                eq(com.medtrack.model.OperationsEvent.EntityType.MAINTENANCE_TASK),
+                eq("system"), eq(com.medtrack.model.OperationsEvent.EventSeverity.CRITICAL));
+        verify(eventPublisherService).publishEvent(
+                eq(hospital.getId()),
+                eq(com.medtrack.model.OperationsEvent.EventCategory.MAINTENANCE),
+                eq(com.medtrack.model.OperationsEvent.EventType.MAINTENANCE_OVERDUE),
+                any(String.class), any(String.class), eq(500L),
+                eq(com.medtrack.model.OperationsEvent.EntityType.MAINTENANCE_TASK),
+                eq("system"), eq(com.medtrack.model.OperationsEvent.EventSeverity.WARNING));
+    }
+
+    @Test
+    void refreshSlaDoesNotRepublishWhenStateIsUnchanged() {
+        MaintenanceTask task = MaintenanceTask.builder()
+                .id(501L)
+                .taskCode("MNT-2")
+                .equipment("MRI Scanner")
+                .hospitalId(hospital.getId())
+                .hospital(hospital.getName())
+                .status(MaintenanceStatus.SCHEDULED)
+                .priority("Low")
+                .deadline(LocalDate.now().plusDays(30))
+                .slaState(com.medtrack.model.SlaState.UPCOMING)
+                .build();
+
+        when(taskRepository.findByHospitalId(hospital.getId())).thenReturn(List.of(task));
+        when(taskRepository.save(any(MaintenanceTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.findByHospitalIdAndSlaStateAndStatusNot(
+                hospital.getId(), com.medtrack.model.SlaState.BREACHED, MaintenanceStatus.COMPLETED))
+                .thenReturn(List.of());
+        when(taskRepository.findUnassignedByPriority(any(), any(), any())).thenReturn(List.of());
+
+        service.refreshSla(authentication);
+
+        verify(eventPublisherService, never()).publishEvent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     private MaintenanceTaskRepository.GeneratedOccurrence occurrence(

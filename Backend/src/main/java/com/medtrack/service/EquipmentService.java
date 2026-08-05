@@ -15,6 +15,7 @@ import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.OperationsEvent;
 import com.medtrack.model.WarrantyCoverageType;
 import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
@@ -69,6 +70,7 @@ public class EquipmentService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
+    private final EventPublisherService eventPublisherService;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
@@ -238,7 +240,14 @@ public class EquipmentService {
             equipment.setMinimumStock(request.getMinimumStock());
         }
 
+        int minimumStock = equipment.getMinimumStock() != null ? equipment.getMinimumStock() : 0;
+        boolean crossedIntoLowStock = currentQuantity > minimumStock && (int) adjusted <= minimumStock;
+
         Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        if (crossedIntoLowStock) {
+            publishLowStockEvent(savedEquipment, minimumStock);
+        }
 
         logger.info(
                 "Equipment stock adjusted | User: {} | Equipment ID: {} | Delta: {} | "
@@ -254,6 +263,38 @@ public class EquipmentService {
         return savedEquipment;
     }
 
+    /**
+     * Raises an {@code EQUIPMENT_LOW_STOCK} operations event the moment a stock adjustment
+     * drives quantity down to or below the minimum threshold. Fired only on the crossing
+     * (see the caller), so repeated adjustments while already low do not spam the feed.
+     */
+    private void publishLowStockEvent(Equipment equipment, int minimumStock) {
+        if (equipment.getHospital() == null) {
+            return;
+        }
+        String title = equipment.getQuantity() == 0
+                ? "Out of stock: " + equipment.getName()
+                : "Low stock: " + equipment.getName();
+        String detail = "{"
+                + "\"equipmentCode\":\"" + escapeJson(equipment.getEquipmentCode()) + "\","
+                + "\"quantity\":" + equipment.getQuantity() + ","
+                + "\"minimumStock\":" + minimumStock
+                + "}";
+        OperationsEvent.EventSeverity severity = equipment.getQuantity() == 0
+                ? OperationsEvent.EventSeverity.CRITICAL
+                : OperationsEvent.EventSeverity.WARNING;
+
+        eventPublisherService.publishEvent(
+                equipment.getHospital().getId(),
+                OperationsEvent.EventCategory.EQUIPMENT,
+                OperationsEvent.EventType.EQUIPMENT_LOW_STOCK,
+                title,
+                detail,
+                equipment.getId(),
+                OperationsEvent.EntityType.EQUIPMENT,
+                "system",
+                severity);
+    }
 
     public EquipmentUtilizationResponse getEquipmentUtilization(String username) {
 

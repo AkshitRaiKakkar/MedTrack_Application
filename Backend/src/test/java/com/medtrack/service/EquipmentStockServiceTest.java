@@ -51,6 +51,9 @@ class EquipmentStockServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private EventPublisherService eventPublisherService;
+
     @InjectMocks
     private EquipmentService equipmentService;
 
