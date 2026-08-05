@@ -10,9 +10,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -112,45 +115,79 @@ class FlywayMigrationConsistencyTest {
     }
 
     @Test
-    @DisplayName("both vendor directories carry the same migration versions")
-    void vendorDirectoriesAreInStep() {
-        Set<String> h2 = versionsIn(migrationRoot().resolve("h2"));
-        Set<String> mysql = versionsIn(migrationRoot().resolve("mysql"));
+    @DisplayName("every vendor directory assigns each version to exactly one migration")
+    void everyVendorDirectoryUsesUniqueVersions() {
+        List<String> offenders = new ArrayList<>();
 
-        Set<String> onlyH2 = new LinkedHashSet<>(h2);
+        for (String vendor : vendors()) {
+            Map<Integer, List<MigrationScript>> scriptsByVersion = migrationScriptsIn(vendor).stream()
+                    .collect(Collectors.groupingBy(MigrationScript::version));
+
+            scriptsByVersion.entrySet().stream()
+                    .filter(entry -> entry.getValue().size() > 1)
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> offenders.add("%s V%d: %s".formatted(vendor, entry.getKey(),
+                            entry.getValue().stream()
+                                    .map(MigrationScript::filename)
+                                    .sorted()
+                                    .collect(Collectors.joining(", ")))));
+        }
+
+        assertTrue(offenders.isEmpty(), () -> """
+                Flyway migration versions must be unique within each vendor directory.
+
+                Flyway cannot choose between two SQL scripts with the same version, so it aborts
+                startup before applying any schema change. Assign a new sequential version to the
+                later migration in each conflicting pair, and make the equivalent rename in the
+                other vendor directory.
+
+                Conflicting versions:
+                %s""".formatted(String.join("\n", offenders)));
+    }
+
+    @Test
+    @DisplayName("both vendor directories carry the same ordered migration identities")
+    void vendorDirectoriesAreInStep() {
+        List<MigrationIdentity> h2 = migrationIdentitiesIn("h2");
+        List<MigrationIdentity> mysql = migrationIdentitiesIn("mysql");
+
+        Set<MigrationIdentity> onlyH2 = new LinkedHashSet<>(h2);
         onlyH2.removeAll(mysql);
-        Set<String> onlyMysql = new LinkedHashSet<>(mysql);
+        Set<MigrationIdentity> onlyMysql = new LinkedHashSet<>(mysql);
         onlyMysql.removeAll(h2);
 
         assertTrue(onlyH2.isEmpty() && onlyMysql.isEmpty(), () -> """
                 The h2 and mysql migration directories have diverged.
 
-                Only in h2   : %s
-                Only in mysql: %s
+                spring.flyway.locations is classpath:db/migration/{vendor}, so a missing migration
+                or a different description at the same version makes the environments diverge.
+                Compare complete version-description identities rather than versions alone: a Set
+                of version numbers silently hides duplicate-version collisions.
 
-                spring.flyway.locations is classpath:db/migration/{vendor}, so a version present for
-                one vendor and absent for the other means the two environments end up with different
-                schemas and the difference only shows up in whichever one is not covered.""".formatted(
+                Only in h2   : %s
+                Only in mysql: %s""".formatted(
                 onlyH2, onlyMysql));
     }
 
     @Test
     @DisplayName("migration versions are contiguous from V1")
     void versionsAreContiguous() {
-        List<Integer> versions = versionsIn(migrationRoot().resolve("h2")).stream()
-                .map(Integer::parseInt)
-                .sorted()
-                .collect(Collectors.toList());
+        for (String vendor : vendors()) {
+            List<Integer> versions = migrationScriptsIn(vendor).stream()
+                    .map(MigrationScript::version)
+                    .sorted()
+                    .toList();
 
-        assertTrue(!versions.isEmpty(), "no migrations found; the path resolution in this test has drifted");
+            assertTrue(!versions.isEmpty(), "no " + vendor + " migrations found; the path resolution has drifted");
 
-        for (int index = 0; index < versions.size(); index++) {
-            assertEquals(index + 1, versions.get(index),
-                    "migration versions must run V1..Vn with no gaps, but found " + versions
-                            + ". Flyway rejects an out-of-order version unless "
-                            + "spring.flyway.out-of-order is enabled, so a gap left for a migration "
-                            + "that lands later will fail on deployments that already ran the "
-                            + "higher version.");
+            for (int index = 0; index < versions.size(); index++) {
+                assertEquals(index + 1, versions.get(index),
+                        vendor + " migration versions must run V1..Vn with no gaps, but found " + versions
+                                + ". Flyway rejects an out-of-order version unless "
+                                + "spring.flyway.out-of-order is enabled, so a gap left for a migration "
+                                + "that lands later will fail on deployments that already ran the "
+                                + "higher version.");
+            }
         }
     }
 
@@ -176,16 +213,27 @@ class FlywayMigrationConsistencyTest {
         return tables;
     }
 
-    /** Version prefix of each script, e.g. {@code V7__foo.sql} -> {@code 7}. */
-    private static Set<String> versionsIn(Path directory) {
+    private static List<MigrationScript> migrationScriptsIn(String vendor) {
+        Path directory = migrationRoot().resolve(vendor);
         try (Stream<Path> paths = Files.list(directory)) {
-            return paths.map(path -> path.getFileName().toString())
-                    .filter(name -> name.startsWith("V") && name.endsWith(".sql"))
-                    .map(name -> name.substring(1, name.indexOf("__")))
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            return paths.filter(Files::isRegularFile)
+                    .map(MigrationScript::from)
+                    .sorted(Comparator.comparingInt(MigrationScript::version)
+                            .thenComparing(MigrationScript::description))
+                    .toList();
         } catch (IOException e) {
-            throw new UncheckedIOException("Unable to list " + directory, e);
+            throw new UncheckedIOException("Unable to list migrations in " + directory, e);
         }
+    }
+
+    private static List<MigrationIdentity> migrationIdentitiesIn(String vendor) {
+        return migrationScriptsIn(vendor).stream()
+                .map(script -> new MigrationIdentity(script.version(), script.description()))
+                .toList();
+    }
+
+    private static Collection<String> vendors() {
+        return List.of("h2", "mysql");
     }
 
     /**
@@ -232,6 +280,24 @@ class FlywayMigrationConsistencyTest {
             return Files.readString(script, StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException("Unable to read " + script, e);
+        }
+    }
+
+    private record MigrationIdentity(int version, String description) {
+    }
+
+    private record MigrationScript(int version, String description, String filename) {
+        private static MigrationScript from(Path path) {
+            String filename = path.getFileName().toString();
+            int separator = filename.indexOf("__");
+            if (!filename.matches("V[1-9]\\d*__.+\\.sql") || separator < 2) {
+                throw new IllegalStateException("Invalid Flyway migration filename: " + path);
+            }
+
+            return new MigrationScript(
+                    Integer.parseInt(filename.substring(1, separator)),
+                    filename.substring(separator + 2, filename.length() - ".sql".length()),
+                    filename);
         }
     }
 }

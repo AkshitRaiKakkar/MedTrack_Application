@@ -29,8 +29,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import Pagination from "../../components/common/Pagination";
 import QrScannerModal from "../../components/common/QrScannerModal";
-import { getBreadcrumbPath } from "../../components/hospital/LocationPicker";
-
+import { computeEquipmentHealthScore } from "../../services/AnalyticsService";
 /* ===========================
    DEFAULT PUBLIC EQUIPMENT
    Visible to ALL users
@@ -886,6 +885,18 @@ export default function EquipmentList({ onNavigate }) {
 
               <div className="p-5 flex-grow flex flex-col">
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  {(() => {
+                    const health = computeEquipmentHealthScore(item);
+                    if (!health) return null;
+                    const healthBadgeClass = health.color === 'red' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                             health.color === 'amber' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                             'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+                    return (
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase inline-block w-fit ${healthBadgeClass}`}>
+                        Health: {health.score}
+                      </span>
+                    );
+                  })()}
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-semibold uppercase inline-block w-fit ${
                       item.status === "Operational" || item.status === "ACTIVE"
@@ -1263,6 +1274,40 @@ export default function EquipmentList({ onNavigate }) {
                     )}
                   </div>
                 )}
+
+                {/* Health Score Drill-Down (issue #747) */}
+                {(() => {
+                  const health = computeEquipmentHealthScore(equipmentDetails);
+                  if (!health) return null;
+                  const healthColorClass = health.color === 'red' ? 'text-red-500' : health.color === 'amber' ? 'text-amber-500' : 'text-emerald-500';
+                  return (
+                    <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle">
+                      <div className="flex items-center justify-between gap-3 mb-4">
+                        <h3 className="text-lg font-extrabold text-primary m-0">Equipment Health Score</h3>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-2xl font-black ${healthColorClass}`}>{health.score}</span>
+                          <span className="text-sm font-bold text-secondary uppercase tracking-widest">/ 100</span>
+                        </div>
+                      </div>
+                      <p className={`text-sm font-bold mb-4 ${healthColorClass}`}>
+                        Status: {health.label}
+                      </p>
+                      <div className="space-y-3">
+                        {health.factors.map((factor, idx) => (
+                          <div key={idx} className="p-3 bg-surface border border-subtle rounded-xl flex flex-col gap-1">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs font-bold text-primary uppercase tracking-wider">{factor.label}</span>
+                              <span className={`text-xs font-black ${parseInt(factor.impact) < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                {parseInt(factor.impact) > 0 ? '+' : ''}{factor.impact} pts
+                              </span>
+                            </div>
+                            <span className="text-xs text-secondary font-medium">{factor.recommendation}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Warranty & Contract Section (issue #703) */}
                 <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle">
