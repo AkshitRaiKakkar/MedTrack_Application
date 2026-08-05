@@ -59,7 +59,10 @@ import {
   RotateCw,
   SlidersHorizontal,
   Target,
-  Bot
+  Bot,
+  KeyRound,
+  HardDrive,
+  ClipboardCheck
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -106,6 +109,10 @@ import BiomedicalSecureEnclavePanel from "./BiomedicalSecureEnclavePanel";
 import BiomedicalDifferentialPrivacyPanel from "./BiomedicalDifferentialPrivacyPanel";
 import BiomedicalBasPenetrationTestingPanel from "./BiomedicalBasPenetrationTestingPanel";
 import BiomedicalAiAgentGovernancePanel from "./BiomedicalAiAgentGovernancePanel";
+import BiomedicalZkpVerifiableEhrPanel from "./BiomedicalZkpVerifiableEhrPanel";
+import BiomedicalHsmAttestationPanel from "./BiomedicalHsmAttestationPanel";
+import BiomedicalCtiStixTaxiiPanel from "./BiomedicalCtiStixTaxiiPanel";
+import BiomedicalContinuousCompliancePanel from "./BiomedicalContinuousCompliancePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -470,7 +477,11 @@ export default function EnterpriseSecurityCenter() {
           { id: "secureenclave", label: "Confidential Compute Enclaves", icon: Cpu },
           { id: "diffprivacy", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal },
           { id: "baspentest", label: "Automated BAS & PenTesting", icon: Target },
-          { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot }
+          { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot },
+          { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound },
+          { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive },
+          { id: "ctistix", label: "CTI & STIX/TAXII Threat Sharing", icon: Radar },
+          { id: "contcompliance", label: "Continuous Compliance & Audit Trails", icon: ClipboardCheck }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1046,6 +1057,26 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 43: BIOMEDICAL AUTONOMOUS AI AGENT GOVERNANCE */}
       {selectedTab === "aiagent" && (
         <BiomedicalAiAgentGovernancePanel />
+      )}
+
+      {/* TAB 44: BIOMEDICAL ZKP VERIFIABLE EHR & CREDENTIALS */}
+      {selectedTab === "zkpehr" && (
+        <BiomedicalZkpVerifiableEhrPanel />
+      )}
+
+      {/* TAB 45: BIOMEDICAL HSM KEY MANAGEMENT & FIPS ATTESTATION */}
+      {selectedTab === "hsmattest" && (
+        <BiomedicalHsmAttestationPanel />
+      )}
+
+      {/* TAB 46: BIOMEDICAL CTI & STIX/TAXII THREAT SHARING */}
+      {selectedTab === "ctistix" && (
+        <BiomedicalCtiStixTaxiiPanel />
+      )}
+
+      {/* TAB 47: BIOMEDICAL CONTINUOUS COMPLIANCE & AUDIT TRAILS */}
+      {selectedTab === "contcompliance" && (
+        <BiomedicalContinuousCompliancePanel />
       )}
 
       {/* 4. MODALS */}
