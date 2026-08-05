@@ -100,69 +100,69 @@ export const completeEquipmentLifecycleAction = async (actionId) => {
 };
 
 // ---------------------------------------------------------------------------
-// Facility location tree & per-asset location history (issue #745)
+// Retirement / disposal workflow (issue #744)
 // ---------------------------------------------------------------------------
 
-// Flat list of the hospital's location tree (parentId links; built into a tree client-side)
-export const getLocationTree = async () => {
-  const response = await API.get("/api/locations");
+// Retired and disposed assets, paginated - the dedicated retired view.
+export const getRetiredEquipment = async (page = 0, size = 20) => {
+  const response = await API.get(`/api/equipment/retired?page=${page}&size=${size}`);
   return response.data;
 };
 
-// Create a location node: { name, locationType, parentId }
-export const createLocation = async (data) => {
-  const response = await API.post("/api/locations", data);
+// Open a decommissioning request for one asset.
+export const requestEquipmentDisposal = async (id, data) => {
+  const response = await API.post(`/api/equipment/${id}/disposal`, data);
   return response.data;
 };
 
-// Rename / retype a location node
-export const updateLocation = async (id, data) => {
-  const response = await API.put(`/api/locations/${id}`, data);
+// Disposal records for a single asset.
+export const getEquipmentDisposals = async (id) => {
+  const response = await API.get(`/api/equipment/${id}/disposals`);
   return response.data;
 };
 
-export const deleteLocation = async (id) => {
-  const response = await API.delete(`/api/locations/${id}`);
+// Disposals awaiting manager approval.
+export const getPendingDisposals = async () => {
+  const response = await API.get("/api/equipment/disposals/pending");
   return response.data;
 };
 
-// Assignment history for one asset, newest first
-export const getEquipmentLocationHistory = async (equipmentId) => {
-  const response = await API.get(`/api/locations/equipment/${equipmentId}/history`);
+// Full disposal history for the hospital.
+export const getDisposalHistory = async () => {
+  const response = await API.get("/api/equipment/disposals/history");
   return response.data;
 };
 
-// Assign an asset to a location: { locationId, effectiveDate, notes }
-export const assignEquipmentToLocation = async (equipmentId, data) => {
-  const response = await API.post(`/api/locations/equipment/${equipmentId}/assign`, data);
+export const approveDisposal = async (disposalId) => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/approve`);
   return response.data;
 };
 
-// ---------------------------------------------------------------------------
-// Duplicate detection & tag reconciliation (issue #746)
-// ---------------------------------------------------------------------------
-
-// Entry-time warning feed: does this asset closely match an existing one?
-// Params: name, model, serialNumber, equipmentCode, excludeId (while editing)
-export const checkForDuplicates = async (params = {}) => {
-  const query = Object.entries(params)
-    .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-    .join("&");
-  const response = await API.get(`/api/equipment/duplicates/check?${query}`);
+export const rejectDisposal = async (disposalId, reason = "") => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/reject`, { reason });
   return response.data;
 };
 
-// Reconciliation clusters of likely-duplicate records
-export const getDuplicateGroups = async () => {
-  const response = await API.get("/api/equipment/duplicates");
+export const cancelDisposal = async (disposalId) => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/cancel`);
   return response.data;
 };
 
-// Confirm a reviewed pair: archive the duplicate, keep the survivor
-export const mergeDuplicates = async (keepId, mergeId) => {
-  const response = await API.post(
-    `/api/equipment/duplicates/merge?keepId=${keepId}&mergeId=${mergeId}`
-  );
+// Data-sanitisation confirmation for devices that stored patient/operational data.
+export const recordDataSanitization = async (disposalId, details = "") => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/data-sanitization`, { details });
+  return response.data;
+};
+
+export const completeDisposal = async (disposalId) => {
+  const response = await API.post(`/api/equipment/disposals/${disposalId}/complete`);
+  return response.data;
+};
+
+// Certificate of disposal (PDF blob).
+export const downloadDisposalCertificate = async (disposalId) => {
+  const response = await API.get(`/api/equipment/disposals/${disposalId}/certificate`, {
+    responseType: "blob",
+  });
   return response.data;
 };

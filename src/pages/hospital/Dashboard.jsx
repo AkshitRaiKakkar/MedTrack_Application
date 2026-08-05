@@ -95,6 +95,9 @@ export default function Dashboard({ onNavigate }) {
               <button onClick={() => onNavigate && onNavigate("equipment")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <Box size={18} /> Equipment
               </button>
+              <button onClick={() => onNavigate && onNavigate("retired-assets")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Diamond size={18} /> Retired Assets
+              </button>
               <button onClick={() => onNavigate && onNavigate("maintenance")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
                 <ClipboardList size={18} /> Maintenance
               </button>

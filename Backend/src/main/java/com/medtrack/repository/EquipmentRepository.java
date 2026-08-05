@@ -75,14 +75,12 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
 
-    // Structured location filtering (issue #745): locationIds holds the selected node plus every
-    // descendant so choosing a floor in the filter matches assets anywhere beneath it.
-    @Query("SELECT e FROM Equipment e "
-            + "WHERE e.hospital.id = :hospitalId AND e.location.id IN :locationIds")
-    Page<Equipment> findByHospitalIdAndLocationIn(
-            @Param("hospitalId") Long hospitalId,
-            @Param("locationIds") Collection<Long> locationIds,
-            Pageable pageable);
+    // Retired view (issue #744): assets that have been decommissioned keep their full history and
+    // remain searchable instead of being deleted. The class-level @SQLRestriction("deleted = false")
+    // applies to these derived queries, which is exactly what the retired view wants.
+    List<Equipment> findByHospitalIdAndStatusIn(Long hospitalId, Collection<EquipmentStatus> statuses);
+
+    Page<Equipment> findByHospitalIdAndStatusIn(Long hospitalId, Collection<EquipmentStatus> statuses, Pageable pageable);
 
     // countByHospitalId and countByHospitalIdAndStatus are declared above as @Query methods.
     // They were also declared here as derived queries, which is a duplicate method signature
