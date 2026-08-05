@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { addEquipment } from '../../services/EquipmentService';
+import React, { useState, useEffect } from 'react';
+import { addEquipment, getLocationTree } from '../../services/EquipmentService';
+import LocationPicker from '../../components/hospital/LocationPicker';
 
 export default function AddEquipmentForm({ onNavigate }) {
   const [formData, setFormData] = useState({
@@ -22,6 +23,23 @@ export default function AddEquipmentForm({ onNavigate }) {
     warrantyTerms: ''
   });
   const [loading, setLoading] = useState(false);
+  // Facility location tree (issue #745)
+  const [locations, setLocations] = useState([]);
+  const [locationId, setLocationId] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getLocationTree()
+      .then((tree) => {
+        if (active) setLocations(tree || []);
+      })
+      .catch(() => {
+        if (active) setLocations([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const onChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -35,7 +53,8 @@ export default function AddEquipmentForm({ onNavigate }) {
         ...formData,
         deviceCode: `EQ-${Date.now().toString().slice(-4)}`,
         purchaseCost: formData.purchaseCost === '' ? null : Number(formData.purchaseCost),
-        usefulLifeYears: formData.usefulLifeYears === '' ? null : Number(formData.usefulLifeYears)
+        usefulLifeYears: formData.usefulLifeYears === '' ? null : Number(formData.usefulLifeYears),
+        locationId
       };
       
       await addEquipment(equipmentData);
@@ -119,6 +138,17 @@ export default function AddEquipmentForm({ onNavigate }) {
                 <option>Respiratory</option>
               </select>
             </div>
+          </div>
+
+          {/* Facility Location (issue #745) */}
+          <div className="pt-2">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Facility Location</h3>
+            <LocationPicker
+              locations={locations}
+              value={locationId}
+              onChange={setLocationId}
+              disabled={loading}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

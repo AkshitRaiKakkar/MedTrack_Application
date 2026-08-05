@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getEquipmentById, updateEquipment } from '../../services/EquipmentService';
+import { getEquipmentById, updateEquipment, getLocationTree } from '../../services/EquipmentService';
+import LocationPicker from '../../components/hospital/LocationPicker';
 
 export default function EditEquipmentForm({ equipmentId, onNavigate }) {
   const [formData, setFormData] = useState({
@@ -24,6 +25,23 @@ export default function EditEquipmentForm({ equipmentId, onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState(null);
+  // Facility location tree (issue #745)
+  const [locations, setLocations] = useState([]);
+  const [locationId, setLocationId] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getLocationTree()
+      .then((tree) => {
+        if (active) setLocations(tree || []);
+      })
+      .catch(() => {
+        if (active) setLocations([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!equipmentId) {
@@ -59,6 +77,7 @@ export default function EditEquipmentForm({ equipmentId, onNavigate }) {
         warrantyCoverageType: data.warrantyCoverageType || 'FULL_PARTS_AND_LABOR',
         warrantyTerms: data.warrantyTerms || ''
       });
+      setLocationId(data.location?.id ?? null);
     } catch (err) {
       console.error("Error loading equipment:", err);
       setError("Failed to load asset details. Please verify your access.");
@@ -84,6 +103,7 @@ export default function EditEquipmentForm({ equipmentId, onNavigate }) {
       };
       if (formData.purchaseCost === '') delete payload.purchaseCost;
       if (formData.usefulLifeYears === '') delete payload.usefulLifeYears;
+      if (locationId != null) payload.locationId = locationId;
       await updateEquipment(equipmentId, payload);
       alert('Equipment updated successfully!');
       onNavigate('equipment');
@@ -194,6 +214,17 @@ export default function EditEquipmentForm({ equipmentId, onNavigate }) {
                 <option>Respiratory</option>
               </select>
             </div>
+          </div>
+
+          {/* Facility Location (issue #745) */}
+          <div className="pt-2">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Facility Location</h3>
+            <LocationPicker
+              locations={locations}
+              value={locationId}
+              onChange={setLocationId}
+              disabled={loading}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

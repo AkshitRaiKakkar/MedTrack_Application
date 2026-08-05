@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -73,6 +74,15 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
+
+    // Structured location filtering (issue #745): locationIds holds the selected node plus every
+    // descendant so choosing a floor in the filter matches assets anywhere beneath it.
+    @Query("SELECT e FROM Equipment e "
+            + "WHERE e.hospital.id = :hospitalId AND e.location.id IN :locationIds")
+    Page<Equipment> findByHospitalIdAndLocationIn(
+            @Param("hospitalId") Long hospitalId,
+            @Param("locationIds") Collection<Long> locationIds,
+            Pageable pageable);
 
     // countByHospitalId and countByHospitalIdAndStatus are declared above as @Query methods.
     // They were also declared here as derived queries, which is a duplicate method signature
