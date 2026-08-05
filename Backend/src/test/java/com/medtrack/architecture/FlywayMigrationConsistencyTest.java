@@ -66,6 +66,7 @@ class FlywayMigrationConsistencyTest {
             "equipment_lifecycle_actions",
             "operations_events",
             "event_read_receipts",
+            "notification_preferences",
             "procurement_requests",
             "approval_policies",
             "approval_policy_steps",
