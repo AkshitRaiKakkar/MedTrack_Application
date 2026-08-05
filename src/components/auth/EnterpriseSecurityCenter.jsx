@@ -99,6 +99,7 @@ import BiomedicalSovereignIdentityPanel from "./BiomedicalSovereignIdentityPanel
 import BiomedicalIncidentCommandPanel from "./BiomedicalIncidentCommandPanel";
 import BiomedicalDataMeshPanel from "./BiomedicalDataMeshPanel";
 import BiomedicalKeyLifecyclePanel from "./BiomedicalKeyLifecyclePanel";
+import BiomedicalSecureEnclavePanel from "./BiomedicalSecureEnclavePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -459,7 +460,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "didvc", label: "Sovereign Identity (W3C DID/VC)", icon: IdCard },
           { id: "incidentcommand", label: "Incident Command & Air-Gap DR", icon: Power },
           { id: "datamesh", label: "Zero-Trust Data Mesh & ODRL", icon: Boxes },
-          { id: "keylifecycle", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw }
+          { id: "keylifecycle", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw },
+          { id: "secureenclave", label: "Confidential Compute Enclaves", icon: Cpu }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1015,6 +1017,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 39: BIOMEDICAL CRYPTOGRAPHIC KEY LIFECYCLE & PQC ZEROIZATION */}
       {selectedTab === "keylifecycle" && (
         <BiomedicalKeyLifecyclePanel />
+      )}
+
+      {/* TAB 40: BIOMEDICAL CONFIDENTIAL COMPUTE & HARDWARE ENCLAVES */}
+      {selectedTab === "secureenclave" && (
+        <BiomedicalSecureEnclavePanel />
       )}
 
       {/* 4. MODALS */}
