@@ -61,7 +61,8 @@ import {
   Target,
   Bot,
   KeyRound,
-  HardDrive
+  HardDrive,
+  ClipboardCheck
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -111,6 +112,7 @@ import BiomedicalAiAgentGovernancePanel from "./BiomedicalAiAgentGovernancePanel
 import BiomedicalZkpVerifiableEhrPanel from "./BiomedicalZkpVerifiableEhrPanel";
 import BiomedicalHsmAttestationPanel from "./BiomedicalHsmAttestationPanel";
 import BiomedicalCtiStixTaxiiPanel from "./BiomedicalCtiStixTaxiiPanel";
+import BiomedicalContinuousCompliancePanel from "./BiomedicalContinuousCompliancePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -478,7 +480,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot },
           { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound },
           { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive },
-          { id: "ctistix", label: "CTI & STIX/TAXII Threat Sharing", icon: Radar }
+          { id: "ctistix", label: "CTI & STIX/TAXII Threat Sharing", icon: Radar },
+          { id: "contcompliance", label: "Continuous Compliance & Audit Trails", icon: ClipboardCheck }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1069,6 +1072,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 46: BIOMEDICAL CTI & STIX/TAXII THREAT SHARING */}
       {selectedTab === "ctistix" && (
         <BiomedicalCtiStixTaxiiPanel />
+      )}
+
+      {/* TAB 47: BIOMEDICAL CONTINUOUS COMPLIANCE & AUDIT TRAILS */}
+      {selectedTab === "contcompliance" && (
+        <BiomedicalContinuousCompliancePanel />
       )}
 
       {/* 4. MODALS */}
