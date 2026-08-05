@@ -134,7 +134,8 @@ public class DuplicateDetectionService {
     /**
      * Groups the whole inventory into probable duplicate clusters by normalised serial number,
      * normalised asset code, or name+model. Buckets with a single member are not duplicates and
-     * are omitted.
+     * are omitted. Clusters that overlap (the same pair matching on serial *and* name+model) are
+     * unioned so each set of records appears exactly once.
      */
     @Transactional(readOnly = true)
     public List<DuplicateGroupResponse> findDuplicateGroups(String username) {
@@ -169,7 +170,7 @@ public class DuplicateDetectionService {
         collectGroups(groups, bySerial, "SERIAL_NUMBER");
         collectGroups(groups, byCode, "ASSET_CODE");
         collectGroups(groups, byNameModel, "NAME_MODEL");
-        return groups;
+        return unionOverlapping(groups);
     }
 
     private void collectGroups(List<DuplicateGroupResponse> groups,
@@ -183,6 +184,48 @@ public class DuplicateDetectionService {
                         .build());
             }
         }
+    }
+
+    /**
+     * Unions clusters that share at least one record, so the same duplicate pair never appears
+     * twice under different match reasons. The reason of the first cluster is kept.
+     */
+    private List<DuplicateGroupResponse> unionOverlapping(List<DuplicateGroupResponse> groups) {
+        List<DuplicateGroupResponse> merged = new ArrayList<>();
+        for (DuplicateGroupResponse group : groups) {
+            List<DuplicateGroupResponse> overlapping = merged.stream()
+                    .filter(existing -> sharesAsset(existing, group))
+                    .collect(java.util.stream.Collectors.toList());
+            if (overlapping.isEmpty()) {
+                merged.add(group);
+                continue;
+            }
+            DuplicateGroupResponse target = overlapping.get(0);
+            merged.removeAll(overlapping);
+            Map<Long, Equipment> byId = new LinkedHashMap<>();
+            for (DuplicateGroupResponse overlappingGroup : overlapping) {
+                for (Equipment equipment : overlappingGroup.getAssets()) {
+                    byId.put(equipment.getId(), equipment);
+                }
+            }
+            for (Equipment equipment : group.getAssets()) {
+                byId.putIfAbsent(equipment.getId(), equipment);
+            }
+            target.setAssets(new ArrayList<>(byId.values()));
+            merged.add(target);
+        }
+        return merged;
+    }
+
+    private boolean sharesAsset(DuplicateGroupResponse group, DuplicateGroupResponse other) {
+        for (Equipment asset : group.getAssets()) {
+            for (Equipment candidate : other.getAssets()) {
+                if (asset.getId().equals(candidate.getId())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
