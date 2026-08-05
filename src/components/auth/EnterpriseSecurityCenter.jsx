@@ -59,7 +59,8 @@ import {
   RotateCw,
   SlidersHorizontal,
   Target,
-  Bot
+  Bot,
+  KeyRound
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -106,6 +107,7 @@ import BiomedicalSecureEnclavePanel from "./BiomedicalSecureEnclavePanel";
 import BiomedicalDifferentialPrivacyPanel from "./BiomedicalDifferentialPrivacyPanel";
 import BiomedicalBasPenetrationTestingPanel from "./BiomedicalBasPenetrationTestingPanel";
 import BiomedicalAiAgentGovernancePanel from "./BiomedicalAiAgentGovernancePanel";
+import BiomedicalZkpVerifiableEhrPanel from "./BiomedicalZkpVerifiableEhrPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -470,7 +472,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "secureenclave", label: "Confidential Compute Enclaves", icon: Cpu },
           { id: "diffprivacy", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal },
           { id: "baspentest", label: "Automated BAS & PenTesting", icon: Target },
-          { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot }
+          { id: "aiagent", label: "Autonomous AI Agent Governance", icon: Bot },
+          { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1046,6 +1049,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 43: BIOMEDICAL AUTONOMOUS AI AGENT GOVERNANCE */}
       {selectedTab === "aiagent" && (
         <BiomedicalAiAgentGovernancePanel />
+      )}
+
+      {/* TAB 44: BIOMEDICAL ZKP VERIFIABLE EHR & CREDENTIALS */}
+      {selectedTab === "zkpehr" && (
+        <BiomedicalZkpVerifiableEhrPanel />
       )}
 
       {/* 4. MODALS */}
