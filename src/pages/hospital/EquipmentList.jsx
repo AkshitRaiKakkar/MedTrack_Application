@@ -34,7 +34,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import Pagination from "../../components/common/Pagination";
 import QrScannerModal from "../../components/common/QrScannerModal";
-import { computeEquipmentHealthScore } from "../../services/AnalyticsService";
+import { computeEquipmentHealthScore, getEquipmentFailureRisk } from "../../services/AnalyticsService";
 /* ===========================
    DEFAULT PUBLIC EQUIPMENT
    Visible to ALL users
@@ -246,6 +246,10 @@ export default function EquipmentList({ onNavigate }) {
   const [importHistory, setImportHistory] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
+  // Failure Risk
+  const [failureRisk, setFailureRisk] = useState(null);
+  const [failureRiskLoading, setFailureRiskLoading] = useState(false);
 
   // QR Code States
   const [qrCode, setQrCode] = useState(null);
@@ -491,6 +495,7 @@ export default function EquipmentList({ onNavigate }) {
         refreshLifecycle(id);
         refreshTimeline(id);
         refreshDisposalRecords(id);
+        refreshFailureRisk(id);
         setQrLoading(true);
         try {
           const qrData = await getEquipmentQrCode(id);
@@ -536,6 +541,18 @@ export default function EquipmentList({ onNavigate }) {
       setLifecycleError(error.response?.data?.message || "Failed to load lifecycle history.");
     } finally {
       setLifecycleLoading(false);
+    }
+  };
+
+  const refreshFailureRisk = async (id) => {
+    setFailureRiskLoading(true);
+    setFailureRisk(null);
+    try {
+      setFailureRisk(await getEquipmentFailureRisk(id));
+    } catch (err) {
+      console.error("Failed to load failure risk", err);
+    } finally {
+      setFailureRiskLoading(false);
     }
   };
 
@@ -1446,6 +1463,76 @@ export default function EquipmentList({ onNavigate }) {
                             <span className="text-xs text-secondary font-medium">{factor.recommendation}</span>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Predictive Maintenance / Failure Risk (issue #793) */}
+                {(() => {
+                  if (failureRiskLoading) {
+                    return (
+                      <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle flex justify-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      </div>
+                    );
+                  }
+                  if (!failureRisk) return null;
+                  
+                  const getRiskColor = (tier) => {
+                    switch(tier) {
+                      case 'CRITICAL': return 'text-red-600 bg-red-100';
+                      case 'HIGH': return 'text-amber-600 bg-amber-100';
+                      case 'MODERATE': return 'text-yellow-600 bg-yellow-100';
+                      default: return 'text-emerald-600 bg-emerald-100';
+                    }
+                  };
+
+                  const getRiskBarColor = (tier) => {
+                    switch(tier) {
+                      case 'CRITICAL': return 'bg-red-500';
+                      case 'HIGH': return 'bg-amber-500';
+                      case 'MODERATE': return 'bg-yellow-500';
+                      default: return 'bg-emerald-500';
+                    }
+                  };
+
+                  return (
+                    <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle">
+                      <div className="flex items-center justify-between gap-3 mb-4">
+                        <h3 className="text-lg font-extrabold text-primary m-0">Failure Prediction</h3>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getRiskColor(failureRisk.riskTier)}`}>
+                          {failureRisk.riskTier} RISK
+                        </span>
+                      </div>
+                      
+                      <div className="mb-4">
+                        <div className="flex justify-between text-xs font-bold text-secondary mb-1">
+                          <span>Failure Probability</span>
+                          <span>{failureRisk.failureProbability}%</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-2">
+                          <div className={`${getRiskBarColor(failureRisk.riskTier)} h-2 rounded-full`} style={{ width: `${failureRisk.failureProbability}%` }}></div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div className="p-4 bg-surface border border-subtle rounded-xl">
+                          <span className="text-[11px] text-secondary font-bold uppercase tracking-wider block mb-1">
+                            Predicted Failure Date
+                          </span>
+                          <span className="text-[15px] font-black text-primary">
+                            {formatTimelineDate(failureRisk.predictedFailureDate)}
+                          </span>
+                        </div>
+                        <div className="p-4 bg-surface border border-subtle rounded-xl">
+                          <span className="text-[11px] text-secondary font-bold uppercase tracking-wider block mb-1">
+                            Recommendation
+                          </span>
+                          <span className="text-[13px] font-bold text-slate-700">
+                            {failureRisk.recommendation}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );

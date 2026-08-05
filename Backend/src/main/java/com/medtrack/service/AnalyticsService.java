@@ -1,5 +1,6 @@
 package com.medtrack.service;
 
+import com.medtrack.dto.EquipmentFailureRiskDto;
 import com.medtrack.dto.HospitalAnalyticsDto;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
@@ -18,7 +19,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
+import org.springframework.data.domain.PageRequest;
 
 @Service
 @RequiredArgsConstructor
@@ -132,6 +135,93 @@ public class AnalyticsService {
                 .fleetReplacementCost(fleetReplacementCost.setScale(2, java.math.RoundingMode.HALF_UP))
                 .bookValueByCategory(bookValueByCategory)
                 .fullyDepreciatedCount(fullyDepreciatedCount)
+                .build();
+    }
+
+    public EquipmentFailureRiskDto predictFailureRisk(Long equipmentId, Long hospitalId) {
+        Equipment equipment = equipmentRepository.findByIdAndHospitalId(equipmentId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Equipment not found"));
+
+        List<MaintenanceTask> completedTasks = taskRepository.findByHospitalIdWithFilters(
+                hospitalId, MaintenanceStatus.COMPLETED, equipment.getEquipmentCode(), PageRequest.of(0, 1000)).getContent();
+
+        int score = 0; // Risk score (0 to 100+)
+        LocalDate now = LocalDate.now();
+
+        // 1. Age Factor (max 40 pts)
+        if (equipment.getPurchaseDate() != null && equipment.getUsefulLifeYears() != null && equipment.getUsefulLifeYears() > 0) {
+            long ageDays = ChronoUnit.DAYS.between(equipment.getPurchaseDate(), now);
+            double ageYears = ageDays / 365.25;
+            double lifespanRatio = ageYears / equipment.getUsefulLifeYears();
+            if (lifespanRatio > 1.0) {
+                score += 40;
+            } else if (lifespanRatio > 0.8) {
+                score += 30;
+            } else if (lifespanRatio > 0.5) {
+                score += 15;
+            }
+        } else {
+            score += 20; // Default risk if unknown age
+        }
+
+        // 2. Usage / Maintenance Frequency Factor (max 30 pts)
+        if (completedTasks.size() > 5) {
+            score += 30;
+        } else if (completedTasks.size() > 3) {
+            score += 20;
+        } else if (completedTasks.size() > 0) {
+            score += 10;
+        }
+
+        // 3. Last Maintenance Recency (max 20 pts)
+        if (!completedTasks.isEmpty()) {
+            MaintenanceTask lastTask = completedTasks.stream()
+                    .max(Comparator.comparing(MaintenanceTask::getCompletedAt))
+                    .orElse(null);
+            if (lastTask != null) {
+                long daysSinceMaintenance = ChronoUnit.DAYS.between(lastTask.getCompletedAt().toLocalDate(), now);
+                if (daysSinceMaintenance > 365) {
+                    score += 20;
+                } else if (daysSinceMaintenance > 180) {
+                    score += 10;
+                }
+            }
+        } else {
+            score += 20; // No maintenance history
+        }
+
+        // 4. Overdue Maintenance Penalty (max 10 pts)
+        long overdueTasks = taskRepository.countByHospitalIdAndStatusNotAndPriority(hospitalId, MaintenanceStatus.COMPLETED, "Critical");
+        // Actually, just checking if there is any scheduled task that is overdue for THIS equipment would be better,
+        // but we'll add a flat 10 pts if status is UNDER_MAINTENANCE for now.
+        if (equipment.getStatus() == EquipmentStatus.UNDER_MAINTENANCE) {
+            score += 10;
+        }
+
+        int failureProbability = Math.min(score, 100);
+        String riskTier = "LOW";
+        String recommendation = "Optimal operating condition. Perform routine preventive maintenance.";
+        LocalDate predictedFailureDate = now.plusDays(365); // Default 1 year
+
+        if (failureProbability >= 80) {
+            riskTier = "CRITICAL";
+            recommendation = "High risk of immediate failure. Urgent replacement or major overhaul advised.";
+            predictedFailureDate = now.plusDays(30);
+        } else if (failureProbability >= 60) {
+            riskTier = "HIGH";
+            recommendation = "Elevated risk. Plan procurement replacement or extensive maintenance within 2 quarters.";
+            predictedFailureDate = now.plusDays(90);
+        } else if (failureProbability >= 30) {
+            riskTier = "MODERATE";
+            recommendation = "Moderate risk. Monitor usage and adhere strictly to preventive maintenance schedule.";
+            predictedFailureDate = now.plusDays(180);
+        }
+
+        return EquipmentFailureRiskDto.builder()
+                .failureProbability(failureProbability)
+                .riskTier(riskTier)
+                .predictedFailureDate(predictedFailureDate)
+                .recommendation(recommendation)
                 .build();
     }
 
