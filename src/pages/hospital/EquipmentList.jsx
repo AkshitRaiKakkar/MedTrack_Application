@@ -255,8 +255,21 @@ export default function EquipmentList({ onNavigate }) {
   // Scanner States
   const [scannerOpen, setScannerOpen] = useState(false);
 
+  // Facility Location tree, filter and assignment (issue #745)
+  const [locationTree, setLocationTree] = useState([]);
+  const [locationFilter, setLocationFilter] = useState(null);
+  const [assignLocationId, setAssignLocationId] = useState("");
+  const [assignEffectiveDate, setAssignEffectiveDate] = useState("");
+  const [assignNotes, setAssignNotes] = useState("");
+  const [assignSaving, setAssignSaving] = useState(false);
+  const [assignMessage, setAssignMessage] = useState(null);
+  const [assignError, setAssignError] = useState(null);
+  const [locationHistory, setLocationHistory] = useState([]);
+  const [locationHistoryLoading, setLocationHistoryLoading] = useState(false);
+
   useEffect(() => {
     fetchEquipment();
+    loadLocationTree();
   }, []);
 
   const openImportModal = () => {
@@ -420,10 +433,19 @@ export default function EquipmentList({ onNavigate }) {
     return Array.from(equipmentMap.values());
   };
 
-  const fetchEquipment = async (pageNum = 0) => {
+  const loadLocationTree = async () => {
+    try {
+      setLocationTree(await getLocationTree());
+    } catch (error) {
+      console.error("Failed to load location tree", error);
+      setLocationTree([]);
+    }
+  };
+
+  const fetchEquipment = async (pageNum = 0, locationId = locationFilter) => {
     try {
       setLoading(true);
-      const response = await getAllEquipment(pageNum, pageSize);
+      const response = await getAllEquipment(pageNum, pageSize, locationId);
       const items = response?.content || response?.data || [];
       setEquipment(Array.isArray(items) ? mergeEquipment(items) : PUBLIC_EQUIPMENT);
       if (response?.totalPages) setTotalPages(response.totalPages);
@@ -514,6 +536,81 @@ export default function EquipmentList({ onNavigate }) {
       setLifecycleError(error.response?.data?.message || "Failed to load lifecycle history.");
     } finally {
       setLifecycleLoading(false);
+    }
+  };
+
+  // Location history (issue #745): every assignment to a facility node, newest first.
+  const refreshLocationHistory = async (id = selectedEquipmentId) => {
+    if (!id || String(id).startsWith("EQ-00")) return;
+    setLocationHistoryLoading(true);
+    setLocationHistory([]);
+    try {
+      setLocationHistory(await getEquipmentLocationHistory(id));
+    } catch (error) {
+      console.error("Failed to fetch location history", error);
+    } finally {
+      setLocationHistoryLoading(false);
+    }
+  };
+
+  // Flattened location options (indented by depth) for the assign + filter selects.
+  const flattenedLocations = () => {
+    const rows = [];
+    const byParent = new Map();
+    byParent.set("root", []);
+    locationTree.forEach((loc) => {
+      const key = loc.parentId == null ? "root" : loc.parentId;
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(loc);
+    });
+    const walk = (parent, depth) => {
+      (byParent.get(parent == null ? "root" : parent) || []).forEach((loc) => {
+        rows.push({ ...loc, depth });
+        walk(loc.id, depth + 1);
+      });
+    };
+    walk(null, 0);
+    return rows;
+  };
+
+  const handleLocationFilterChange = (e) => {
+    const value = e.target.value ? Number(e.target.value) : null;
+    setLocationFilter(value);
+    fetchEquipment(0, value);
+  };
+
+  const handleAssignLocation = async () => {
+    const equipmentId = selectedEquipmentId;
+    if (!equipmentId || String(equipmentId).startsWith("EQ-00")) return;
+    if (!assignLocationId) {
+      setAssignError("Please choose a location.");
+      setAssignMessage(null);
+      return;
+    }
+    setAssignSaving(true);
+    setAssignError(null);
+    setAssignMessage(null);
+    try {
+      await assignEquipmentToLocation(equipmentId, {
+        locationId: Number(assignLocationId),
+        effectiveDate: assignEffectiveDate || null,
+        notes: assignNotes || null,
+      });
+      setAssignMessage("Location updated.");
+      setAssignNotes("");
+      setAssignEffectiveDate("");
+      setAssignLocationId("");
+      refreshLocationHistory(equipmentId);
+      fetchEquipment(page, locationFilter);
+      const details = await getEquipmentById(equipmentId);
+      if (equipmentDetails && equipmentDetails.id === equipmentId) {
+        setEquipmentDetails(details);
+      }
+    } catch (error) {
+      console.error("Failed to assign location", error);
+      setAssignError(error.response?.data?.message || "Failed to update location.");
+    } finally {
+      setAssignSaving(false);
     }
   };
 
@@ -807,6 +904,22 @@ export default function EquipmentList({ onNavigate }) {
             ))}
           </select>
 
+          {/* Hierarchical facility-location filter (issue #745): choosing a floor or facility
+              also matches assets in every node beneath it. */}
+          <select
+            value={locationFilter ?? ""}
+            onChange={handleLocationFilterChange}
+            className="px-5 py-3 rounded-lg border border-subtle bg-surface text-primary text-base shadow-sm outline-none transition-colors focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+          >
+            <option value="">All Locations</option>
+            {flattenedLocations().map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {"\u00A0\u00A0".repeat(loc.depth)}
+                {loc.name}
+              </option>
+            ))}
+          </select>
+
           {user?.role === "hospital" && (
             <div className="flex gap-2 items-center">
               <div className="relative">
@@ -1096,6 +1209,148 @@ export default function EquipmentList({ onNavigate }) {
                     <p className="text-[15px] text-primary font-semibold m-1">
                       {equipmentDetails.department || "N/A"}
                     </p>
+                  </div>
+                </div>
+
+                {/* Facility Location (issue #745): breadcrumb, reassignment and history */}
+                <div className="mt-6 mb-6 p-5 bg-hover rounded-2xl border border-subtle">
+                  <h3 className="text-lg font-extrabold text-primary m-0 mb-4">Facility Location</h3>
+
+                  {/* Breadcrumb of the current location, walked up the parentId chain */}
+                  {(() => {
+                    const crumb = getBreadcrumbPath(locationTree, equipmentDetails.location?.id ?? null);
+                    if (!crumb.length) {
+                      return (
+                        <p className="text-sm text-secondary font-medium">
+                          No facility location assigned.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                        {crumb.map((node, index) => (
+                          <React.Fragment key={node.id}>
+                            {index > 0 && (
+                              <span className="text-slate-400 font-bold select-none">›</span>
+                            )}
+                            <span className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold border border-blue-100 dark:border-blue-900">
+                              {node.name}
+                            </span>
+                          </React.Fragment>
+                        ))}
+                        {equipmentDetails.locationEffectiveDate && (
+                          <span className="text-xs text-secondary font-medium">
+                            since {equipmentDetails.locationEffectiveDate}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <select
+                      value={assignLocationId}
+                      onChange={(e) => setAssignLocationId(e.target.value)}
+                      className="px-4 py-3 rounded-xl border border-subtle bg-surface text-primary text-sm shadow-sm outline-none transition-colors focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                    >
+                      <option value="">Reassign to location...</option>
+                      {flattenedLocations().map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {"\u00A0\u00A0".repeat(loc.depth)}
+                          {loc.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="date"
+                      value={assignEffectiveDate}
+                      onChange={(e) => setAssignEffectiveDate(e.target.value)}
+                      className="px-4 py-3 rounded-xl border border-subtle bg-surface text-primary text-sm shadow-sm outline-none transition-colors focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                    />
+                    <select
+                      value={assignNotes}
+                      onChange={(e) => setAssignNotes(e.target.value)}
+                      className="px-4 py-3 rounded-xl border border-subtle bg-surface text-primary text-sm shadow-sm outline-none transition-colors focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                    >
+                      <option value="">Note (optional)</option>
+                      <option value="Initial placement">Initial placement</option>
+                      <option value="Transferred between departments">Transferred between departments</option>
+                      <option value="Returned after maintenance">Returned after maintenance</option>
+                      <option value="Relocated for renovation">Relocated for renovation</option>
+                    </select>
+                  </div>
+
+                  {assignError && (
+                    <p className="mt-3 text-sm text-red-500 font-medium">{assignError}</p>
+                  )}
+                  {assignMessage && (
+                    <p className="mt-3 text-sm text-emerald-600 font-medium">{assignMessage}</p>
+                  )}
+
+                  <button
+                    onClick={handleAssignLocation}
+                    disabled={assignSaving}
+                    className="mt-3 bg-blue-600 hover:bg-blue-700 text-white border-none px-6 py-3 rounded-xl text-sm font-bold cursor-pointer shadow-sm transition-colors disabled:opacity-50"
+                  >
+                    {assignSaving ? "Updating..." : "Update Location"}
+                  </button>
+
+                  {/* Assignment history, newest first */}
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-bold text-primary m-0">Location History</h4>
+                      <button
+                        onClick={() => refreshLocationHistory(equipmentDetails.id)}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-transparent border-none cursor-pointer"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                    {locationHistoryLoading && (
+                      <p className="text-sm text-secondary font-medium">Loading history...</p>
+                    )}
+                    {!locationHistoryLoading && locationHistory.length === 0 && (
+                      <p className="text-sm text-secondary font-medium">
+                        No location changes recorded.
+                      </p>
+                    )}
+                    {!locationHistoryLoading &&
+                      locationHistory.length > 0 && (
+                        <ul className="space-y-2">
+                          {locationHistory.map((entry) => {
+                            const entryCrumb = getBreadcrumbPath(locationTree, entry.location?.id ?? null);
+                            return (
+                              <li
+                                key={entry.id}
+                                className="flex items-start gap-3 p-3 rounded-xl bg-surface border border-subtle"
+                              >
+                                <span className="mt-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-primary m-0">
+                                    {entry.location?.name || "Unknown location"}
+                                  </p>
+                                  {entryCrumb.length > 1 && (
+                                    <p className="text-xs text-secondary font-medium m-0 truncate">
+                                      {entryCrumb.slice(0, -1).map((node) => node.name).join(" / ")}
+                                    </p>
+                                  )}
+                                  {(entry.notes || entry.movedBy || entry.effectiveDate) && (
+                                    <p className="text-xs text-secondary font-medium m-0 mt-0.5">
+                                      {[
+                                        entry.effectiveDate,
+                                        entry.movedBy ? `by ${entry.movedBy}` : null,
+                                        entry.notes,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </p>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
                   </div>
                 </div>
 
