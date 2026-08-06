@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
@@ -74,6 +75,12 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
     List<Equipment> findByHospitalIdAndDepartmentIgnoreCase(Long hospitalId, String department);
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
+
+    Page<Equipment> findByHospitalIdAndLocationIn(
+            Long hospitalId,
+            Set<Long> locationIds,
+            Pageable pageable
+    );
 
     // Retired view (issue #744): assets that have been decommissioned keep their full history and
     // remain searchable instead of being deleted. The class-level @SQLRestriction("deleted = false")
