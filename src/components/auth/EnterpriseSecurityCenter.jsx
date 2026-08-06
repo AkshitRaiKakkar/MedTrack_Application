@@ -114,6 +114,7 @@ import BiomedicalHsmAttestationPanel from "./BiomedicalHsmAttestationPanel";
 import BiomedicalCtiStixTaxiiPanel from "./BiomedicalCtiStixTaxiiPanel";
 import BiomedicalContinuousCompliancePanel from "./BiomedicalContinuousCompliancePanel";
 import BiomedicalFheMpcTelemetryPanel from "./BiomedicalFheMpcTelemetryPanel";
+import BiomedicalAiWatermarkC2paPanel from "./BiomedicalAiWatermarkC2paPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -483,7 +484,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive },
           { id: "ctistix", label: "CTI & STIX/TAXII Threat Sharing", icon: Radar },
           { id: "contcompliance", label: "Continuous Compliance & Audit Trails", icon: ClipboardCheck },
-          { id: "fhempc", label: "FHE & Multi-Party Compute Telemetry", icon: Cpu }
+          { id: "fhempc", label: "FHE & Multi-Party Compute Telemetry", icon: Cpu },
+          { id: "aiwatermarkc2pa", label: "AI Watermark & C2PA Provenance", icon: Stamp }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1084,6 +1086,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 48: BIOMEDICAL FHE & MULTI-PARTY COMPUTE TELEMETRY */}
       {selectedTab === "fhempc" && (
         <BiomedicalFheMpcTelemetryPanel />
+      )}
+
+      {/* TAB 49: BIOMEDICAL CLINICAL AI WATERMARKING & C2PA PROVENANCE */}
+      {selectedTab === "aiwatermarkc2pa" && (
+        <BiomedicalAiWatermarkC2paPanel />
       )}
 
       {/* 4. MODALS */}
