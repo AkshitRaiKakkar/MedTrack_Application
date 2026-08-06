@@ -73,6 +73,7 @@ public class EquipmentService {
     private final UserRepository userRepository;
     private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
     private final FacilityLocationRepository facilityLocationRepository;
+    private final EventPublisherService eventPublisherService;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
@@ -193,6 +194,10 @@ public class EquipmentService {
      */
     private Set<Long> resolveLocationSubtree(Long rootId, Long hospitalId) {
         List<FacilityLocation> all = facilityLocationRepository.findByHospitalId(hospitalId);
+        boolean rootExists = all.stream().anyMatch(location -> rootId.equals(location.getId()));
+        if (!rootExists) {
+            throw new ResourceNotFoundException("Facility location not found with ID: " + rootId);
+        }
         Set<Long> ids = new HashSet<>();
         Set<Long> pending = new HashSet<>();
         pending.add(rootId);
