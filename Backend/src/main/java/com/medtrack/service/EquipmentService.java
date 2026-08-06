@@ -194,8 +194,8 @@ public class EquipmentService {
      */
     private Set<Long> resolveLocationSubtree(Long rootId, Long hospitalId) {
         List<FacilityLocation> all = facilityLocationRepository.findByHospitalId(hospitalId);
-        boolean rootExists = all.stream().anyMatch(location -> rootId.equals(location.getId()));
-        if (!rootExists) {
+        boolean rootExistsInHospital = all.stream().anyMatch(loc -> loc.getId().equals(rootId));
+        if (!rootExistsInHospital) {
             throw new ResourceNotFoundException("Facility location not found with ID: " + rootId);
         }
         Set<Long> ids = new HashSet<>();
