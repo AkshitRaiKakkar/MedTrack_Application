@@ -75,6 +75,18 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
 
     Page<Equipment> findByHospitalId(Long hospitalId, Pageable pageable);
 
+    @Query("""
+            SELECT e
+            FROM Equipment e
+            WHERE e.hospital.id = :hospitalId
+            AND e.location.id IN :locationIds
+            """)
+    Page<Equipment> findByHospitalIdAndLocationIn(
+            @Param("hospitalId") Long hospitalId,
+            @Param("locationIds") Collection<Long> locationIds,
+            Pageable pageable
+    );
+
     // Retired view (issue #744): assets that have been decommissioned keep their full history and
     // remain searchable instead of being deleted. The class-level @SQLRestriction("deleted = false")
     // applies to these derived queries, which is exactly what the retired view wants.
