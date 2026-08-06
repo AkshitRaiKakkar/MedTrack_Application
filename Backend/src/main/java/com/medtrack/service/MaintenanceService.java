@@ -115,6 +115,8 @@ public class MaintenanceService {
         Equipment equipment = resolveOwnedEquipment(request.getEquipmentId().trim(), hospital.getId());
         User assignedTechnician = resolveEligibleTechnician(request.getAssignedTechnician());
 
+        validateNoDuplicateActiveTask(hospital.getId(), equipment, request.getMaintenanceType().trim());
+
         MaintenanceTask task = MaintenanceTask.builder()
                 .taskCode("MNT-" + UUID.randomUUID())
                 .equipmentId(equipment.getEquipmentCode())
@@ -304,6 +306,26 @@ public class MaintenanceService {
         }
         if (request.getRecurrencePeriodDays() != null && request.getRecurrencePeriodDays() < 0) {
             throw new IllegalArgumentException("Recurrence period cannot be negative");
+        }
+    }
+
+    private void validateNoDuplicateActiveTask(Long hospitalId, Equipment equipment, String maintenanceType) {
+        List<MaintenanceStatus> activeStatuses = List.of(
+                MaintenanceStatus.SCHEDULED,
+                MaintenanceStatus.IN_PROGRESS,
+                MaintenanceStatus.NEEDS_PART,
+                MaintenanceStatus.ON_HOLD
+        );
+        boolean duplicateExists = taskRepository.existsActiveTaskForEquipment(
+                hospitalId,
+                equipment.getId(),
+                maintenanceType,
+                activeStatuses
+        );
+        if (duplicateExists) {
+            throw new IllegalArgumentException(
+                    "An active maintenance task of type '" + maintenanceType
+                            + "' already exists for equipment '" + equipment.getEquipmentCode() + "'");
         }
     }
 
