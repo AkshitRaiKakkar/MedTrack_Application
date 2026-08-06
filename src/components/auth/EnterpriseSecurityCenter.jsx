@@ -113,6 +113,7 @@ import BiomedicalZkpVerifiableEhrPanel from "./BiomedicalZkpVerifiableEhrPanel";
 import BiomedicalHsmAttestationPanel from "./BiomedicalHsmAttestationPanel";
 import BiomedicalCtiStixTaxiiPanel from "./BiomedicalCtiStixTaxiiPanel";
 import BiomedicalContinuousCompliancePanel from "./BiomedicalContinuousCompliancePanel";
+import BiomedicalFheMpcTelemetryPanel from "./BiomedicalFheMpcTelemetryPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -481,7 +482,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound },
           { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive },
           { id: "ctistix", label: "CTI & STIX/TAXII Threat Sharing", icon: Radar },
-          { id: "contcompliance", label: "Continuous Compliance & Audit Trails", icon: ClipboardCheck }
+          { id: "contcompliance", label: "Continuous Compliance & Audit Trails", icon: ClipboardCheck },
+          { id: "fhempc", label: "FHE & Multi-Party Compute Telemetry", icon: Cpu }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1077,6 +1079,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 47: BIOMEDICAL CONTINUOUS COMPLIANCE & AUDIT TRAILS */}
       {selectedTab === "contcompliance" && (
         <BiomedicalContinuousCompliancePanel />
+      )}
+
+      {/* TAB 48: BIOMEDICAL FHE & MULTI-PARTY COMPUTE TELEMETRY */}
+      {selectedTab === "fhempc" && (
+        <BiomedicalFheMpcTelemetryPanel />
       )}
 
       {/* 4. MODALS */}
