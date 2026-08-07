@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.MockitoAnnotations;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -39,12 +40,16 @@ public class DeliveryDelayDetectionServiceTest {
         @Mock
         private SupplierPerformanceService supplierPerformanceService;
 
+        @Mock
+        private SupplierAuditLogService auditLogService;
+
         private DeliveryDelayDetectionService service;
 
         @BeforeEach
         void setUp() {
+                MockitoAnnotations.openMocks(this);
                 service = new DeliveryDelayDetectionService(shipmentTrackingRepository, orderRepository,
-                                supplierPerformanceService);
+                                supplierPerformanceService, auditLogService);
                 ReflectionTestUtils.setField(service, "kafkaTemplate", kafkaTemplate);
                 ReflectionTestUtils.setField(service, "delayEventsTopic", "delay-events");
         }
@@ -158,7 +163,8 @@ public class DeliveryDelayDetectionServiceTest {
 
                 // No kafkaTemplate injected → simulates unavailability
                 DeliveryDelayDetectionService serviceNoKafka = new DeliveryDelayDetectionService(
-                                shipmentTrackingRepository, orderRepository, supplierPerformanceService);
+                                shipmentTrackingRepository, orderRepository, supplierPerformanceService,
+                                auditLogService);
                 ReflectionTestUtils.setField(serviceNoKafka, "kafkaTemplate", null);
                 ReflectionTestUtils.setField(serviceNoKafka, "delayEventsTopic", "delay-events");
 

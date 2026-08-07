@@ -38,6 +38,18 @@ public class ShipmentTrackingController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PostMapping("/bulk-create")
+    @Operation(summary = "Bulk create shipment tracking", description = "Creates multiple shipment tracking records simultaneously.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Shipments created successfully", content = @Content(schema = @Schema(implementation = List.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request or duplicate tracking data")
+    })
+    public ResponseEntity<List<ShipmentTrackingResponse>> bulkCreateShipments(
+            @Valid @RequestBody com.medtrack.supplier.dto.BulkShipmentConfirmationRequest request) {
+        List<ShipmentTrackingResponse> response = shipmentTrackingService.bulkConfirmShipments(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('HOSPITAL', 'SUPPLIER')")
     public ResponseEntity<ShipmentTrackingResponse> updateShipmentStatus(
@@ -45,6 +57,18 @@ public class ShipmentTrackingController {
             @Valid @RequestBody UpdateShipmentStatusRequest request,
             Authentication authentication) {
         ShipmentTrackingResponse response = shipmentTrackingService.updateShipmentStatus(id, request, authentication);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/bulk-delivery")
+    @Operation(summary = "Bulk update delivery status", description = "Updates delivery status to DELIVERED for multiple shipments.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Shipments updated successfully", content = @Content(schema = @Schema(implementation = List.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid status transition")
+    })
+    public ResponseEntity<List<ShipmentTrackingResponse>> bulkConfirmDeliveries(
+            @Valid @RequestBody com.medtrack.supplier.dto.BulkDeliveryConfirmationRequest request) {
+        List<ShipmentTrackingResponse> response = shipmentTrackingService.bulkConfirmDeliveries(request);
         return ResponseEntity.ok(response);
     }
 

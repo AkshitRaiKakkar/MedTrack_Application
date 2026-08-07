@@ -39,6 +39,7 @@ public class DeliveryDelayDetectionService {
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final EquipmentOrderRepository orderRepository;
     private final SupplierPerformanceService supplierPerformanceService;
+    private final SupplierAuditLogService auditLogService;
 
     @Autowired(required = false)
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -100,6 +101,9 @@ public class DeliveryDelayDetectionService {
 
         publishDelayEvent(saved, detectedAt);
         supplierPerformanceService.publishPerformanceUpdate(saved.getSupplierId());
+
+        auditLogService.logAction(saved.getOrderId(), saved.getSupplierId(), "DELAY_DETECTED",
+                "System detected delivery delay for shipment " + saved.getShipmentTrackingNumber(), "SYSTEM");
     }
 
     private void publishDelayEvent(ShipmentTracking shipment, LocalDateTime detectedAt) {
