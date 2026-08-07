@@ -42,6 +42,22 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long>,
             LocalDate endDate
     );
 
+    List<Equipment> findByHospitalIdAndStatus(
+            Long hospitalId,
+            EquipmentStatus status
+    );
+    List<Equipment> findByHospitalIdAndWarrantyExpiryBetween(
+            Long hospitalId,
+            LocalDate start,
+            LocalDate end
+    );
+    List<Equipment> findByHospitalId(Long hospitalId);
+
+    List<Equipment> findByHospitalIdAndStatus(
+            Long hospitalId,
+            EquipmentStatus status
+    );
+
     // Low stock inventory
     @Query("""
             SELECT e

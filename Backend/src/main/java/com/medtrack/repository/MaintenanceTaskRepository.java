@@ -153,6 +153,24 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             @Param("equipmentId") Long equipmentId,
             @Param("hospitalId") Long hospitalId);
 
+    List<MaintenanceTask> findByEquipmentHospitalId(Long hospitalId);
+
+    List<MaintenanceTask> findByEquipmentHospitalIdAndStatus(
+            Long hospitalId,
+            MaintenanceStatus status
+    );
+
+    List<MaintenanceTask> findByEquipmentHospitalIdAndScheduledDateBetween(
+            Long hospitalId,
+            LocalDate start,
+            LocalDate end
+    );
+
+    List<MaintenanceTask> findByEquipmentHospitalIdAndScheduledDateBefore(
+            Long hospitalId,
+            LocalDate date
+    );
+
     @Query("SELECT CASE WHEN COUNT(mt) > 0 THEN TRUE ELSE FALSE END FROM MaintenanceTask mt "
             + "WHERE mt.deleted = FALSE "
             + "AND mt.hospitalId = :hospitalId "
