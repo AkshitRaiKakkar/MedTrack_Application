@@ -119,6 +119,7 @@ import BiomedicalQkdPqcVpnPanel from "./BiomedicalQkdPqcVpnPanel";
 import BiomedicalZeroTrustEbpfPanel from "./BiomedicalZeroTrustEbpfPanel";
 import BiomedicalIncidentCommandDrPanel from "./BiomedicalIncidentCommandDrPanel";
 import BiomedicalZeroTrustDataMeshPanel from "./BiomedicalZeroTrustDataMeshPanel";
+import BiomedicalKeyLifecyclePqcPanel from "./BiomedicalKeyLifecyclePqcPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -493,7 +494,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "qkdppcvpn", label: "QKD & Post-Quantum VPN Tunnels", icon: Radio },
           { id: "ztebpf", label: "Zero-Trust & eBPF Perimeter Defense", icon: Network },
           { id: "icdr", label: "Incident Command & Air-Gap DR Vaults", icon: Power },
-          { id: "ztdatamesh", label: "Zero-Trust Data Mesh & ODRL Policies", icon: Boxes }
+          { id: "ztdatamesh", label: "Zero-Trust Data Mesh & ODRL Policies", icon: Boxes },
+          { id: "keylifecyclepqc", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1119,6 +1121,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 53: BIOMEDICAL ZERO-TRUST DATA MESH & ODRL POLICIES */}
       {selectedTab === "ztdatamesh" && (
         <BiomedicalZeroTrustDataMeshPanel />
+      )}
+
+      {/* TAB 54: BIOMEDICAL KEY LIFECYCLE & PQC ZEROIZATION */}
+      {selectedTab === "keylifecyclepqc" && (
+        <BiomedicalKeyLifecyclePqcPanel />
       )}
 
       {/* 4. MODALS */}
