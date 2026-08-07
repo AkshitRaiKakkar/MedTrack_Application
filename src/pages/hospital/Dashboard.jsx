@@ -18,59 +18,143 @@ import MedTrackLogo from '../../components/common/MedTrackLogo';
 export default function Dashboard({ onNavigate }) {
   const { user, logout } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [equipmentList, setEquipmentList] = useState([]);
   const [tasksList, setTasksList] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dashboardNotice, setDashboardNotice] = useState("");
+  const [lastUpdatedLabel, setLastUpdatedLabel] = useState("Just now");
   const [isBotOpen, setIsBotOpen] = useState(false);
-  
-  const data = [
-    { name: '01', operational: 3500, maintenance: 2000 },
-    { name: '02', operational: 3000, maintenance: 1500 },
-    { name: '03', operational: 2000, maintenance: 9800 },
-    { name: '04', operational: 8000, maintenance: 3908 },
-    { name: '05', operational: 6000, maintenance: 4800 },
-    { name: '06', operational: 5000, maintenance: 3800 },
-    { name: '07', operational: 6500, maintenance: 4300 },
-  ];
+
+  const deferredSearch = useDeferredValue(searchQuery);
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
-  const fetchDashboardData = async () => {
-    try {
+  const fetchDashboardData = async ({ silent = false } = {}) => {
+    if (silent) {
+      setRefreshing(true);
+    } else {
       setLoading(true);
-      if (user?.id?.startsWith('demo-')) {
-        setEquipmentList([
-          { id: 1, name: 'MRI Machine', status: 'OPERATIONAL' },
-          { id: 2, name: 'X-Ray Scanner', status: 'OPERATIONAL' },
-          { id: 3, name: 'CT Scanner', status: 'NEEDS_MAINTENANCE' },
-        ]);
-        setTasksList([
-          { id: 1, title: 'Product Review for UI8 Market', status: 'In progress', time: '4h', icon: <CheckCircle2 size={18} /> },
-          { id: 2, title: 'UX Research for Product', status: 'On hold', time: '8h', icon: <CircleDashed size={18} /> },
-          { id: 3, title: 'App design and development', status: 'Done', time: '32h', icon: <CheckSquare size={18} /> }
-        ]);
-        setLoading(false);
+    }
+
+    try {
+      if (user?.id?.startsWith("demo-")) {
+        setEquipmentList(DASHBOARD_DEMO_EQUIPMENT.map(normalizeEquipmentItem).filter(Boolean));
+        setTasksList(DASHBOARD_DEMO_TASKS.map(normalizeTaskItem).filter(Boolean));
+        setDashboardNotice("Demo workspace is showing seeded operational data.");
+        setLastUpdatedLabel("Moments ago");
         return;
       }
 
-      const [equipmentData, tasksData] = await Promise.all([
-        getAllEquipment().catch(() => []),
-        getAllTasks().catch(() => [])
+      const [equipmentResult, tasksResult] = await Promise.allSettled([
+        getAllEquipment(0, 50),
+        getAllTasks({ page: 0, size: 12 }),
       ]);
-      setEquipmentList(equipmentData);
-      setTasksList(tasksData.map(t => ({ id: t.id, title: t.description || 'Task', status: t.status, time: '2h', icon: <CheckCircle2 size={18}/> })));
-    } catch (err) {
-      console.error(err);
+
+      const nextEquipment =
+        equipmentResult.status === "fulfilled"
+          ? unwrapCollection(equipmentResult.value).map(normalizeEquipmentItem).filter(Boolean)
+          : [];
+      const nextTasks =
+        tasksResult.status === "fulfilled"
+          ? unwrapCollection(tasksResult.value).map(normalizeTaskItem).filter(Boolean)
+          : [];
+
+      setEquipmentList(nextEquipment);
+      setTasksList(nextTasks);
+
+      if (equipmentResult.status === "rejected" && tasksResult.status === "rejected") {
+        setDashboardNotice("Live dashboard data is temporarily unavailable. The screen is ready, but upstream data sources failed to respond.");
+      } else if (equipmentResult.status === "rejected") {
+        setDashboardNotice("Equipment inventory could not be refreshed, but maintenance data is still available.");
+      } else if (tasksResult.status === "rejected") {
+        setDashboardNotice("Maintenance backlog could not be refreshed, but inventory data is still available.");
+      } else {
+        setDashboardNotice("");
+      }
+
+      setLastUpdatedLabel(new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      }));
+    } catch (error) {
+      console.error("Dashboard data fetch failed:", error);
+      setDashboardNotice("Dashboard refresh failed. Please try again in a moment.");
+      setEquipmentList([]);
+      setTasksList([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  const filteredEquipment = useMemo(() => {
+    const query = deferredSearch.trim().toLowerCase();
+    return equipmentList.filter((item) => {
+      const matchesFilter = statusFilter === "all" || item.statusKey === statusFilter;
+      const matchesSearch =
+        !query ||
+        item.name.toLowerCase().includes(query) ||
+        item.code.toLowerCase().includes(query) ||
+        item.model.toLowerCase().includes(query) ||
+        item.department.toLowerCase().includes(query);
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [deferredSearch, equipmentList, statusFilter]);
+
+  const featuredEquipment = useMemo(
+    () =>
+      [...filteredEquipment].sort((left, right) => {
+        const priorityRank = { attention: 0, maintenance: 1, operational: 2, retired: 3 };
+        return (priorityRank[left.statusKey] ?? 99) - (priorityRank[right.statusKey] ?? 99);
+      }).slice(0, 6),
+    [filteredEquipment],
+  );
+
+  const prioritizedTasks = useMemo(
+    () =>
+      [...tasksList].sort((left, right) => {
+        const rank = { overdue: 0, soon: 1, normal: 2 };
+        const dueRank = (rank[left.dueState] ?? 9) - (rank[right.dueState] ?? 9);
+        if (dueRank !== 0) return dueRank;
+        return new Date(left.dueDate || "2100-01-01") - new Date(right.dueDate || "2100-01-01");
+      }),
+    [tasksList],
+  );
+
+  const overview = useMemo(() => {
+    const operational = equipmentList.filter((item) => item.statusKey === "operational").length;
+    const attention = equipmentList.filter((item) => item.statusKey === "attention").length;
+    const maintenance = equipmentList.filter((item) => item.statusKey === "maintenance").length;
+    const overdueTasks = tasksList.filter((item) => item.dueState === "overdue").length;
+    const completionRate = tasksList.length
+      ? Math.round((tasksList.filter((item) => item.statusKey === "completed").length / tasksList.length) * 100)
+      : 0;
+
+    return {
+      operational,
+      attention,
+      maintenance,
+      overdueTasks,
+      completionRate,
+    };
+  }, [equipmentList, tasksList]);
+
+  const departmentChartData = useMemo(() => buildDepartmentChartData(equipmentList), [equipmentList]);
+
+  const topAttentionAssets = useMemo(
+    () => equipmentList.filter((item) => item.statusKey !== "operational").slice(0, 4),
+    [equipmentList],
+  );
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#e5e5e5] flex items-center justify-center font-sans">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="min-h-screen bg-[#f5f7fb] flex items-center justify-center font-sans">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-900"></div>
       </div>
     );
   }
@@ -120,210 +204,178 @@ export default function Dashboard({ onNavigate }) {
                 <Award size={18} /> Tenders &amp; E-Auction
               </button>
 
-              <div className="my-4 border-t border-gray-100"></div>
+          <nav className="space-y-1">
+            <SidebarNavButton active icon={LayoutGrid} label="Dashboard" onClick={() => onNavigate?.("dashboard")} />
+            <SidebarNavButton icon={Box} label="Equipment" onClick={() => onNavigate?.("equipment")} />
+            <SidebarNavButton icon={ClipboardList} label="Maintenance" onClick={() => onNavigate?.("maintenance")} />
+            <SidebarNavButton icon={Award} label="Calibration & Compliance" onClick={() => onNavigate?.("calibration")} />
+            <SidebarNavButton icon={Users} label="Staff (SCIM)" onClick={() => onNavigate?.("scim-provisioning")} />
+            <SidebarNavButton icon={LineChart} label="Analytics" onClick={() => onNavigate?.("analytics")} />
 
-              {/* Secondary Menu */}
-              <button onClick={() => onNavigate && onNavigate("security-commandcenter")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Mail size={18} /> Notifications
-              </button>
-              <button onClick={() => onNavigate && onNavigate("soar-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Workflow size={18} /> Workflows (SOAR)
-              </button>
-              <button onClick={() => onNavigate && onNavigate("sso-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Puzzle size={18} /> Integrations (SSO)
-              </button>
+            <div className="my-4 border-t border-gray-100"></div>
 
-              <div className="my-4 border-t border-gray-100"></div>
+            <SidebarNavButton icon={Mail} label="Notifications" onClick={() => onNavigate?.("security-commandcenter")} />
+            <SidebarNavButton icon={Workflow} label="Workflows (SOAR)" onClick={() => onNavigate?.("soar-security")} />
+            <SidebarNavButton icon={Puzzle} label="Integrations (SSO)" onClick={() => onNavigate?.("sso-security")} />
 
-              {/* Bottom Menu */}
-              <button onClick={() => onNavigate && onNavigate("help")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <HelpCircle size={18} /> Help Center
-              </button>
-              <button onClick={() => onNavigate && onNavigate("help")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <MessageCircle size={18} /> Feedback
-              </button>
-              <button onClick={() => onNavigate && onNavigate("authority-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
-                <Settings size={18} /> Settings
-              </button>
-            </nav>
-          </div>
+            <div className="my-4 border-t border-gray-100"></div>
 
-          {/* User Profile Widget */}
-          <div className="mt-6">
-            <button onClick={logout} className="w-full p-3 bg-white border border-gray-100 rounded-2xl flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-3">
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || "Demo"}`} className="w-10 h-10 rounded-full bg-gray-50" alt="Avatar" />
-                <div className="text-left">
-                  <p className="text-xs font-bold text-gray-900">{user?.name || "Demo Admin"}</p>
-                  <p className="text-[10px] text-gray-400 font-medium">{user?.email || "admin@medtrack.com"}</p>
-                </div>
-              </div>
-              <ChevronsUpDown size={14} className="text-gray-400" />
-            </button>
-          </div>
-        </aside>
+            <SidebarNavButton icon={HelpCircle} label="Help Center" onClick={() => onNavigate?.("help")} />
+            <SidebarNavButton icon={MessageCircle} label="Feedback" onClick={() => onNavigate?.("help")} />
+            <SidebarNavButton icon={Settings} label="Settings" onClick={() => onNavigate?.("authority-security")} />
+          </nav>
+        </div>
 
-        {/* COLUMN 2: MAIN CONTENT */}
-        <main className="flex-1 flex flex-col overflow-y-auto px-10 py-10 min-w-0">
-          
-          <header className="mb-6 shrink-0">
-            {/* Top Row */}
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-              <div className="flex items-center gap-4">
-                <button className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-                  <Bell size={18} className="text-gray-600" />
-                </button>
-                <div className="relative">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" placeholder="Search something" className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-gray-200 w-64 placeholder-gray-400" />
-                </div>
-                <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors">
-                  <Share size={16} /> Share
-                </button>
+        <div className="mt-6">
+          <button
+            onClick={logout}
+            className="w-full p-3 bg-white border border-gray-100 rounded-2xl flex items-center justify-between shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center gap-3">
+              <img
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || "Demo"}`}
+                className="w-10 h-10 rounded-full bg-gray-50"
+                alt="Avatar"
+              />
+              <div className="text-left">
+                <p className="text-xs font-bold text-gray-900">{user?.name || "Demo Admin"}</p>
+                <p className="text-[10px] text-gray-400 font-medium">{user?.email || "admin@medtrack.com"}</p>
               </div>
             </div>
+            <ChevronsUpDown size={14} className="text-gray-400" />
+          </button>
+        </div>
+      </aside>
 
-            {/* Toolbar Row */}
-            <div className="flex justify-between items-center pb-6 border-b border-gray-100">
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors">
-                <LayoutGrid size={16} /> Customize Widget
+      <main className="flex-1 overflow-y-auto px-8 py-8 min-w-0">
+        <header className="mb-8">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500 border border-slate-200">
+                <Bell size={12} />
+                Operational command center
+              </div>
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900">Hospital operations dashboard</h1>
+              <p className="mt-2 text-sm text-slate-500 max-w-2xl">
+                Live inventory health, maintenance urgency, and department readiness in one place.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-500">
+                Last updated {lastUpdatedLabel}
+              </div>
+              <button
+                onClick={() => fetchDashboardData({ silent: true })}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing..." : "Refresh"}
               </button>
-              
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-                  <RefreshCw size={14} /> Last update 24 minutes ago
-                </div>
-                <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors">
-                  <Download size={16} /> Imports <ChevronDown size={14} />
-                </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-[#1a1c1e] text-white rounded-xl text-sm font-bold hover:bg-black transition-colors">
-                  <Upload size={16} /> Exports <ChevronDown size={14} />
-                </button>
-              </div>
-            </div>
-          </header>
-
-          {/* Stats Row */}
-          <div className="grid grid-cols-4 gap-4 mb-10 shrink-0">
-            {/* Card 1 */}
-            <div className="border border-gray-100 rounded-2xl p-5 shadow-sm bg-white">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-gray-900">Operational Equip</h3>
-                <button className="text-gray-400 hover:text-gray-600"><MoreHorizontal size={16}/></button>
-              </div>
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900 leading-none mb-2">18</p>
-                  <p className="text-[11px] font-medium text-gray-400">Than last week</p>
-                </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold">
-                  <TrendingUp size={12} /> 2.8%
-                </div>
-              </div>
-            </div>
-            
-            {/* Card 2 */}
-            <div className="border border-gray-100 rounded-2xl p-5 shadow-sm bg-white">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-gray-900">Maintenance Tasks</h3>
-                <button className="text-gray-400 hover:text-gray-600"><MoreHorizontal size={16}/></button>
-              </div>
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900 leading-none mb-2">5</p>
-                  <p className="text-[11px] font-medium text-gray-400">Than last week</p>
-                </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold">
-                  <TrendingUp size={12} /> 1.2%
-                </div>
-              </div>
-            </div>
-
-            {/* Card 3 */}
-            <div className="border border-gray-100 rounded-2xl p-5 shadow-sm bg-white">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-gray-900">Total Hours</h3>
-                <button className="text-gray-400 hover:text-gray-600"><MoreHorizontal size={16}/></button>
-              </div>
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900 leading-none mb-2">31h</p>
-                  <p className="text-[11px] font-medium text-gray-400">Than last week</p>
-                </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-red-50 text-red-600 rounded-lg text-xs font-bold">
-                  <TrendingDown size={12} /> 2.9%
-                </div>
-              </div>
-            </div>
-
-            {/* Card 4 */}
-            <div className="border border-gray-100 rounded-2xl p-5 shadow-sm bg-white">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-gray-900">Total Staff</h3>
-                <button className="text-gray-400 hover:text-gray-600"><MoreHorizontal size={16}/></button>
-              </div>
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900 leading-none mb-2">1,273</p>
-                  <p className="text-[11px] font-medium text-gray-400">Than last week</p>
-                </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold">
-                  <TrendingUp size={12} /> 2.1%
-                </div>
-              </div>
+              <button className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                <Share2 size={16} />
+                Share
+              </button>
+              <button className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-black transition-colors">
+                <Download size={16} />
+                Export snapshot
+              </button>
             </div>
           </div>
 
-          {/* Chart Area */}
-          <div className="mb-10 shrink-0">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="font-bold text-xl tracking-tight">Performance</h3>
-              <button className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-100 transition-colors">
-                01-07 May <ChevronDown size={14}/>
-              </button>
+          {dashboardNotice ? (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 flex items-start gap-3">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+              <span>{dashboardNotice}</span>
             </div>
-            
-            <div className="h-[240px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorOp" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorMn" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 500 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 500 }} tickFormatter={(val) => `${val / 1000}h`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff' }}
-                    itemStyle={{ color: '#fff', fontSize: '12px' }}
-                    labelStyle={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}
-                  />
-                  <Area type="monotone" dataKey="operational" stroke="#0ea5e9" strokeWidth={2} fillOpacity={1} fill="url(#colorOp)" />
-                  <Area type="monotone" dataKey="maintenance" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorMn)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          ) : null}
+        </header>
 
-          {/* Current Tasks List */}
-          <div className="shrink-0 mb-8">
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-4">
-                <h3 className="font-bold text-xl tracking-tight">Recent Equipment</h3>
-                <div className="h-4 w-[1px] bg-gray-200"></div>
-                <span className="text-xs text-gray-500 font-bold">Done 30%</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+          <StatCard
+            title="Tracked assets"
+            value={equipmentList.length}
+            subtitle={`${overview.operational} operating normally right now`}
+            delta={equipmentList.length ? "Live inventory synced" : null}
+            tone="blue"
+            icon={Box}
+          />
+          <StatCard
+            title="Needs attention"
+            value={overview.attention}
+            subtitle="Assets likely to require near-term intervention"
+            delta={overview.attention ? "Immediate review recommended" : null}
+            tone={overview.attention ? "amber" : "emerald"}
+            icon={AlertTriangle}
+          />
+          <StatCard
+            title="In maintenance"
+            value={overview.maintenance}
+            subtitle={`${tasksList.length} maintenance tasks currently tracked`}
+            delta={overview.maintenance ? "Workorders active" : null}
+            tone="blue"
+            icon={Wrench}
+          />
+          <StatCard
+            title="Task completion"
+            value={`${overview.completionRate}%`}
+            subtitle={`${overview.overdueTasks} overdue task${overview.overdueTasks === 1 ? "" : "s"} need follow-up`}
+            delta={tasksList.length ? "Based on live backlog" : null}
+            tone={overview.overdueTasks ? "rose" : "emerald"}
+            icon={CheckCircle2}
+          />
+        </div>
+
+        <Panel
+          title="Equipment watchlist"
+          subtitle="The equipment panel now renders inventory data directly instead of accidentally reusing task rows."
+          actions={
+            <>
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search by name, code, model, or department"
+                  className="w-[280px] max-w-full rounded-2xl border border-slate-200 bg-slate-50 pl-9 pr-4 py-2 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                />
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors">
-                Week <ChevronDown size={14}/>
+              {EQUIPMENT_FILTERS.map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => setStatusFilter(filter.id)}
+                  className={`rounded-full px-3 py-2 text-xs font-bold transition-colors ${
+                    statusFilter === filter.id
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </>
+          }
+        >
+          {featuredEquipment.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+              <p className="text-lg font-bold text-slate-900">No equipment matches the current watchlist filters.</p>
+              <p className="mt-2 text-sm text-slate-500">Try clearing the search or switching back to All Assets.</p>
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setStatusFilter("all");
+                }}
+                className="mt-4 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"
+              >
+                Reset watchlist
               </button>
             </div>
+          ) : (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {featuredEquipment.map((item) => {
+                const statusMeta = EQUIPMENT_STATUS_META[item.statusKey] || EQUIPMENT_STATUS_META.operational;
+                const warrantyMeta = WARRANTY_META[item.warrantyKey] || WARRANTY_META.none;
 
             <div className="space-y-3">
               {equipmentList.slice(0, 5).map((equipment, idx) => {
@@ -382,92 +434,208 @@ export default function Dashboard({ onNavigate }) {
               <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-700 hover:bg-gray-50 transition-colors"><Video size={16}/></button>
               <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-700 hover:bg-gray-50 transition-colors"><MoreHorizontal size={16}/></button>
             </div>
-          </div>
+          )}
+        </Panel>
 
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <h3 className="text-center font-bold text-sm text-gray-900 mb-6 pb-4 border-b border-gray-100 shrink-0">Activity</h3>
-            
-            <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-              
-              {/* Activity Item 1 */}
-              <div className="flex gap-4">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Floyd" className="w-8 h-8 rounded-full bg-blue-100" alt="Floyd" />
-                <div className="flex-1">
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-sm font-bold text-gray-900">Floyd Miles</p>
-                    <span className="text-[10px] font-medium text-gray-400">10:15 AM</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">Commented on <span className="text-[#0ea5e9] font-bold cursor-pointer">Stark Project</span></p>
-                  
-                  <div className="bg-[#f0f7ff] p-3 rounded-2xl rounded-tl-none relative border border-blue-50">
-                    <p className="text-xs text-gray-600 font-medium leading-relaxed">
-                      Hi! Next week we'll start a new project. I'll tell you all the details later
-                    </p>
-                    <div className="absolute -bottom-2 right-2 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-sm text-[10px]">👍</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Activity Item 2 */}
-              <div className="flex gap-4">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Guy" className="w-8 h-8 rounded-full bg-green-100" alt="Guy" />
-                <div className="flex-1">
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">Guy Hawkins <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div></p>
-                    <span className="text-[10px] font-medium text-gray-400">10:15 AM</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">Added a file to <span className="text-[#0ea5e9] font-bold cursor-pointer">7Heros Project</span></p>
-                  
-                  <div className="bg-[#f4f3ef] p-3 rounded-2xl flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-900 rounded-xl flex items-center justify-center">
-                      <span className="text-white font-bold text-[10px]">fig</span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-bold text-gray-900 mb-0.5">Homepage.fig</p>
-                      <p className="text-[10px] text-gray-500 font-medium">13.4 Mb</p>
-                    </div>
-                    <button className="text-gray-400 p-1 hover:bg-gray-200 rounded-full transition-colors"><Download size={14}/></button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Activity Item 3 */}
-              <div className="flex gap-4">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Kristin" className="w-8 h-8 rounded-full bg-red-100" alt="Kristin" />
-                <div className="flex-1">
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-sm font-bold text-gray-900">Kristin Watson</p>
-                    <span className="text-[10px] font-medium text-gray-400">10:15 AM</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">Commented on <span className="text-[#0ea5e9] font-bold cursor-pointer">7Heros Project</span></p>
-                </div>
-              </div>
-
-            </div>
-            
-            {/* Chat Input */}
-            <div className="mt-6 shrink-0 flex items-center gap-3 bg-[#f8f9fa] px-4 py-3.5 rounded-[20px] border border-gray-100">
-              <button className="text-gray-400 hover:text-gray-600 transition-colors"><Paperclip size={16} /></button>
-              <input type="text" placeholder="Write a message" className="flex-1 bg-transparent text-xs font-bold text-gray-900 focus:outline-none placeholder-gray-400" />
-              <button className="text-gray-400 hover:text-gray-600 transition-colors"><Smile size={16} /></button>
-              <button className="text-gray-400 hover:text-gray-600 transition-colors"><Mic size={16} /></button>
-            </div>
-
-          </div>
-
-          </aside>
-        )}
-
-        {/* FLOATING BOT BUTTON */}
-        {!isBotOpen && (
-          <button 
-            onClick={() => setIsBotOpen(true)}
-            className="absolute bottom-8 right-8 w-14 h-14 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-700 hover:scale-105 transition-all z-50 animate-in fade-in"
+        <div className="grid grid-cols-1 2xl:grid-cols-[1.5fr_1fr] gap-6 mt-8">
+          <Panel
+            title="Maintenance queue"
+            subtitle="Highest urgency work orders are prioritized first, even when the API returns paginated payloads."
+            actions={
+              <button
+                onClick={() => onNavigate?.("maintenance")}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Open maintenance board
+              </button>
+            }
           >
-            <Bot size={24} />
-          </button>
-        )}
+            {prioritizedTasks.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+                <p className="text-lg font-bold text-slate-900">No maintenance tasks are currently available.</p>
+                <p className="mt-2 text-sm text-slate-500">Create a task from the maintenance module to populate this queue.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {prioritizedTasks.map((task) => {
+                  const statusMeta = TASK_STATUS_META[task.statusKey] || TASK_STATUS_META.scheduled;
+                  const dueTone =
+                    task.dueState === "overdue"
+                      ? "text-rose-600"
+                      : task.dueState === "soon"
+                        ? "text-amber-600"
+                        : "text-slate-500";
 
+                  return (
+                    <div
+                      key={task.id}
+                      className="rounded-3xl border border-slate-100 bg-slate-50/70 px-4 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{task.taskCode}</span>
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.className}`}>
+                            {task.statusLabel}
+                          </span>
+                        </div>
+                        <h3 className="mt-2 text-lg font-bold text-slate-900">{task.title}</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {task.equipmentName} • {task.assignedTechnician}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-6 flex-wrap">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Priority</p>
+                          <p className="mt-1 text-sm font-bold text-slate-900">{task.priority}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Due date</p>
+                          <p className={`mt-1 text-sm font-bold ${dueTone}`}>{formatRelativeLabel(task.dueDate)}</p>
+                        </div>
+                        <button
+                          onClick={() => onNavigate?.("maintenance")}
+                          className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-black transition-colors"
+                        >
+                          Review task
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
+
+          <div className="space-y-6">
+            <Panel title="Department readiness" subtitle="Operational versus disrupted equipment by department.">
+              {departmentChartData.length === 0 ? (
+                <div className="h-[280px] rounded-3xl border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-sm font-medium text-slate-500">
+                  Department readiness will appear once equipment data is available.
+                </div>
+              ) : (
+                <div className="h-[280px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={departmentChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="department" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <Tooltip
+                        cursor={{ fill: "#f8fafc" }}
+                        contentStyle={{ borderRadius: "16px", border: "1px solid #e2e8f0", backgroundColor: "#ffffff" }}
+                      />
+                      <Bar dataKey="operational" fill="#10b981" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="attention" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="maintenance" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="Intervention shortlist" subtitle="Assets that should be reviewed first based on current dashboard state.">
+              {topAttentionAssets.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-center">
+                  <p className="text-sm font-semibold text-slate-600">No high-risk assets in the current snapshot.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {topAttentionAssets.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{item.name}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {item.department} • {item.code}
+                          </p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${(EQUIPMENT_STATUS_META[item.statusKey] || EQUIPMENT_STATUS_META.operational).badgeClass}`}>
+                          {item.statusLabel}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-3 text-xs font-medium text-slate-500">
+                        <span>{item.warrantyLabel}</span>
+                        <span>{formatDateLabel(item.lastMaintenanceDate)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Panel>
+          </div>
+        </div>
+      </main>
+
+      {isBotOpen ? (
+        <aside className="w-[340px] flex flex-col p-7 border-l border-gray-100 shrink-0 bg-white relative">
+          <button
+            onClick={() => setIsBotOpen(false)}
+            className="absolute top-4 right-4 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+          >
+            Close
+          </button>
+
+          <div className="rounded-[32px] bg-slate-50 p-7 text-center border border-slate-100">
+            <div className="mx-auto w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center">
+              <Bot size={28} />
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-slate-900">MedTrack Assistant</h3>
+            <p className="mt-1 text-sm text-slate-500">Daily operational briefing for hospital admins.</p>
+          </div>
+
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-100">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-600 font-bold">Stable assets</p>
+              <p className="mt-2 text-2xl font-bold text-emerald-900">{overview.operational}</p>
+            </div>
+            <div className="rounded-2xl bg-amber-50 p-4 border border-amber-100">
+              <p className="text-xs uppercase tracking-[0.18em] text-amber-600 font-bold">Urgent tasks</p>
+              <p className="mt-2 text-2xl font-bold text-amber-900">{overview.overdueTasks}</p>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+            <h4 className="text-sm font-bold text-slate-900">Suggested next moves</h4>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                Route overdue tasks to the maintenance board and confirm technician ownership before end of day.
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                Review devices marked as Needs Attention and create a maintenance schedule for any unassigned asset.
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                Use the Equipment page to inspect warranties expiring within the next 60 days.
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+            <h4 className="text-sm font-bold text-slate-900">Live queue snapshot</h4>
+            <div className="mt-4 space-y-3">
+              {prioritizedTasks.slice(0, 3).map((task) => (
+                <div key={task.id} className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-bold text-slate-900">{task.equipmentName}</p>
+                  <p className="mt-1 text-xs text-slate-500">{task.title}</p>
+                  <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
+                    <Clock3 size={12} />
+                    {formatRelativeLabel(task.dueDate)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+      ) : null}
+
+      {!isBotOpen ? (
+        <button
+          onClick={() => setIsBotOpen(true)}
+          className="absolute bottom-8 right-8 w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-black hover:scale-105 transition-all z-50"
+          aria-label="Open dashboard assistant"
+        >
+          <Bot size={24} />
+        </button>
+      ) : null}
     </div>
   );
 }
