@@ -2,6 +2,8 @@ package com.medtrack.supplier.repository;
 
 import com.medtrack.supplier.model.ShipmentStatus;
 import com.medtrack.supplier.model.ShipmentTracking;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +22,8 @@ public interface ShipmentTrackingRepository extends JpaRepository<ShipmentTracki
     Optional<ShipmentTracking> findByOrderId(Long orderId);
 
     List<ShipmentTracking> findBySupplierId(Long supplierId);
+
+    Page<ShipmentTracking> findBySupplierId(Long supplierId, Pageable pageable);
 
     List<ShipmentTracking> findByEstimatedDeliveryDateBefore(LocalDateTime dateTime);
 
@@ -44,7 +48,11 @@ public interface ShipmentTrackingRepository extends JpaRepository<ShipmentTracki
     @Query("SELECT COUNT(s) FROM ShipmentTracking s WHERE s.supplierId = :supplierId AND s.shipmentStatus = 'DELIVERED'")
     long countDeliveredShipmentsBySupplierId(@Param("supplierId") Long supplierId);
 
-    @Query(value = "SELECT COALESCE(AVG(DATEDIFF(DAY, created_at, actual_delivery_date)), 0.0) FROM shipment_tracking WHERE supplier_id = :supplierId AND shipment_status = 'DELIVERED'", nativeQuery = true)
+    @Query("SELECT COALESCE(AVG(timestampdiff(day, s.createdAt, s.actualDeliveryDate)), 0.0) "
+            + "FROM ShipmentTracking s "
+            + "WHERE s.supplierId = :supplierId "
+            + "AND s.shipmentStatus = 'DELIVERED' "
+            + "AND s.actualDeliveryDate IS NOT NULL")
     Double getAverageDeliveryTimeDays(@Param("supplierId") Long supplierId);
 
     @Query("SELECT DISTINCT s.supplierId FROM ShipmentTracking s")

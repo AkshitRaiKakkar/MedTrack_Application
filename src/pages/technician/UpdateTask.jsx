@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { updateTask, getTaskById } from "../../services/MaintenanceService";
+import { getAllSpareParts } from "../../services/SparePartService";
 import { useAuth } from "../../context/AuthContext";
 
 export default function UpdateTask({ onNavigate, task: initialTask }) {
@@ -19,12 +20,23 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
     parts: initialTask?.partsUsed ? initialTask.partsUsed.split(", ") : [],
     hours: initialTask?.hoursWorked || "",
     image: null,
+    recurrencePeriodDays: initialTask?.recurrencePeriodDays || "0",
   });
+
+  const canvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const [part, setPart] = useState("");
   const [preview, setPreview] = useState(null);
 
   const isTechnician = user?.role?.toLowerCase() === "technician";
+  const [availableParts, setAvailableParts] = useState([]);
+
+  useEffect(() => {
+    getAllSpareParts()
+      .then((data) => setAvailableParts(data))
+      .catch((err) => console.error("Error fetching parts catalog:", err));
+  }, []);
 
   useEffect(() => {
     if (initialTask?.id) {
@@ -40,6 +52,7 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
         parts: task.partsUsed ? task.partsUsed.split(", ") : [],
         hours: task.hoursWorked || "",
         image: null,
+        recurrencePeriodDays: task.recurrencePeriodDays || "0",
       });
       setTaskIdInput(task.id || "");
     }
@@ -105,6 +118,179 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
     setPreview(URL.createObjectURL(file));
   };
 
+  const startDrawing = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.strokeStyle = "#0f172a"; // slate-900 line color
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = "round";
+
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const handleExportPdf = () => {
+    if (!task) return;
+
+    let signatureImgHtml = "";
+    const canvas = canvasRef.current;
+    let sigSrc = task.signature;
+    if (!sigSrc && canvas) {
+      const ctx = canvas.getContext("2d");
+      const buffer = new Uint32Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer);
+      if (buffer.some(color => color !== 0)) {
+        sigSrc = canvas.toDataURL("image/png");
+      }
+    }
+
+    if (sigSrc) {
+      signatureImgHtml = `<div style="margin-top: 20px;">
+        <p style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Technician Digital Signature Sign-Off</p>
+        <img src="${sigSrc}" style="max-width: 220px; max-height: 80px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px; background: #ffffff;" alt="Signature" />
+      </div>`;
+    }
+
+    const printWindow = window.open("", "_blank", "width=850,height=950");
+    if (!printWindow) {
+      alert("Please allow popups to export the PDF report.");
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Maintenance_Report_${task.id || "Document"}</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 0; padding: 40px; background: #ffffff; }
+          .header { border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-start; }
+          .logo { font-size: 24px; font-weight: 900; color: #2563eb; letter-spacing: -0.5px; }
+          .subtitle { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+          .report-meta { text-align: right; font-size: 12px; color: #475569; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+          .box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; }
+          .box-title { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 8px; }
+          .val { font-size: 15px; font-weight: 700; color: #0f172a; margin: 0; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 800; text-transform: uppercase; background: #dbeafe; color: #1e40af; }
+          .section { margin-bottom: 25px; }
+          .section-title { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; }
+          .parts-list { display: flex; flex-wrap: wrap; gap: 8px; }
+          .part-tag { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+          .notes { background: #f8fafc; border-left: 4px solid #2563eb; padding: 14px; font-size: 13px; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">MEDTRACK GLOBAL</div>
+            <div class="subtitle">Technician Maintenance & Compliance Inspection Log</div>
+          </div>
+          <div class="report-meta">
+            <div><strong>Report ID:</strong> RPT-${task.id || "000"}</div>
+            <div><strong>Date:</strong> ${new Date().toLocaleDateString()}</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="box">
+            <div class="box-title">Target Asset / Equipment</div>
+            <p class="val">${task.equipment || task.equipmentName || "N/A"}</p>
+            <p style="font-size: 12px; color: #64748b; margin-top: 4px;">Task ID: ${task.id}</p>
+          </div>
+          <div class="box">
+            <div class="box-title">Hospital / Facility</div>
+            <p class="val">${task.hospital || "N/A"}</p>
+            <p style="font-size: 12px; color: #64748b; margin-top: 4px;">Priority: ${task.priority || "Normal"}</p>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="box">
+            <div class="box-title">Current Status</div>
+            <span class="badge">${form.status || task.status || "In Progress"}</span>
+          </div>
+          <div class="box">
+            <div class="box-title">Invested Labor Time</div>
+            <p class="val">${form.hours ? `${form.hours} Hours` : task.hoursWorked ? `${task.hoursWorked} Hours` : "N/A"}</p>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Original Maintenance Description</div>
+          <p style="font-size: 13px; color: #475569; font-style: italic; margin: 0;">${task.description || "No description provided."}</p>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Technician Maintenance Notes</div>
+          <div class="notes">${form.notes || task.notes || "No maintenance notes recorded."}</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Replacement Parts Installed</div>
+          ${
+            form.parts && form.parts.length > 0
+              ? `<div class="parts-list">${form.parts.map(p => `<span class="part-tag">${p}</span>`).join("")}</div>`
+              : `<p style="font-size: 12px; color: #64748b; font-style: italic;">No parts required for this maintenance task.</p>`
+          }
+        </div>
+
+        ${signatureImgHtml}
+
+        <div class="footer">
+          Confidential Clinical Equipment Record &bull; Generated by MedTrack Technician Portal &bull; ISO 13485 Compliant Audit Trail
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -114,11 +300,29 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
       setSyncing(true);
       setError(null);
 
+      let signatureData = null;
+      if (form.status === "Completed") {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const ctx = canvas.getContext("2d");
+          const buffer = new Uint32Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data.buffer);
+          const isBlank = !buffer.some(color => color !== 0);
+          if (isBlank) {
+            setError("Technician signature is required to complete this task.");
+            setSyncing(false);
+            return;
+          }
+          signatureData = canvas.toDataURL("image/png");
+        }
+      }
+
       const payload = {
         status: form.status,
         notes: form.notes,
         partsUsed: form.parts.join(", "),
-        hoursWorked: form.hours,
+        hoursWorked: form.hours ? parseFloat(form.hours) : null,
+        signature: signatureData,
+        recurrencePeriodDays: parseInt(form.recurrencePeriodDays, 10) || 0,
       };
 
       await updateTask(task.id, payload);
@@ -228,7 +432,7 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
                     </select>
                   </div>
 
-                  <div>
+                   <div>
                     <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">
                       Time Invested Hours
                     </label>
@@ -246,6 +450,29 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
                       disabled={!isTechnician}
                       className="w-full p-4 bg-slate-50 border rounded-2xl text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 disabled:opacity-70"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">
+                      Preventive Maintenance Recurrence
+                    </label>
+                    <select
+                      value={form.recurrencePeriodDays}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          recurrencePeriodDays: e.target.value,
+                        }))
+                      }
+                      disabled={!isTechnician}
+                      className="w-full p-4 bg-slate-50 border rounded-2xl text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 disabled:opacity-70"
+                    >
+                      <option value="0">One-Time (No Recurrence)</option>
+                      <option value="30">Every 30 Days (Monthly)</option>
+                      <option value="90">Every 90 Days (Quarterly)</option>
+                      <option value="180">Every 180 Days (Bi-Annual)</option>
+                      <option value="365">Every 365 Days (Annual)</option>
+                    </select>
                   </div>
 
                   <div>
@@ -273,29 +500,27 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
                     </label>
 
                     <div className="flex gap-2">
-                      <input
+                      <select
                         value={part}
                         onChange={(e) => setPart(e.target.value)}
-                        placeholder="Enter part name / serial"
-                        disabled={!isTechnician}
-                        className="flex-1 p-4 bg-slate-50 border rounded-2xl text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 disabled:opacity-70"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addPart();
-                          }
-                        }}
-                      />
-
-                      {isTechnician && (
-                        <button
-                          type="button"
-                          onClick={addPart}
-                          className="px-6 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800"
-                        >
-                          Add
-                        </button>
-                      )}
+                        disabled={!isTechnician || task?.status === "COMPLETED"}
+                        className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:opacity-50"
+                      >
+                        <option value="">-- Select a part from catalog --</option>
+                        {availableParts.map(p => (
+                          <option key={p.id} value={p.partNumber} disabled={p.stockLevel <= 0}>
+                            {p.partNumber} - {p.description} (Stock: {p.stockLevel})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={addPart}
+                        disabled={!isTechnician || task?.status === "COMPLETED" || !part}
+                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50"
+                      >
+                        Add
+                      </button>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-3">
@@ -319,6 +544,39 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
                       ))}
                     </div>
                   </div>
+
+                  {form.status === "Completed" && (
+                    <div className="border border-slate-200 p-5 rounded-2xl bg-slate-50 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="block text-xs font-black uppercase tracking-widest text-slate-500">
+                          Technician Signature Sign-Off (Required)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={clearSignature}
+                          className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold border-none rounded-md cursor-pointer transition-colors"
+                        >
+                          Clear Pad
+                        </button>
+                      </div>
+                      <canvas
+                        ref={canvasRef}
+                        width={500}
+                        height={140}
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={stopDrawing}
+                        onTouchStart={startDrawing}
+                        onTouchMove={draw}
+                        onTouchEnd={stopDrawing}
+                        className="w-full bg-white border border-slate-300 rounded-xl cursor-crosshair shadow-inner"
+                      />
+                      <span className="text-[10px] text-slate-400 font-medium block">
+                        Sign inside the box using mouse pointer or touch screen.
+                      </span>
+                    </div>
+                  )}
 
                   {isTechnician ? (
                     <div className="pt-4 border-t border-slate-100 flex flex-col md:flex-row gap-4 items-center">
@@ -403,6 +661,29 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
                   <p className="text-sm text-slate-400 italic font-medium leading-relaxed">
                     {task.description || "No description provided."}
                   </p>
+                </div>
+
+                {task.signature && (
+                  <div>
+                    <span className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Technician Signature Sign-off
+                    </span>
+                    <img
+                      src={task.signature}
+                      alt="Technician Signature"
+                      className="w-full max-w-[200px] h-auto object-contain bg-white border border-slate-700 p-2 rounded-xl mt-1"
+                    />
+                  </div>
+                )}
+
+                <div className="pt-4 border-t border-slate-700">
+                  <button
+                    type="button"
+                    onClick={handleExportPdf}
+                    className="w-full px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
+                  >
+                    <span>📄</span> Export to PDF
+                  </button>
                 </div>
               </div>
             </div>

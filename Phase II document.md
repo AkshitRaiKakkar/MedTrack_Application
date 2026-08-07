@@ -183,41 +183,65 @@ Each member owns their microservice end-to-end: domain model, business logic, RE
 
 | Scope | FR Coverage | Core Entities / Files | Key Technologies |
 |---|---|---|---|
-| Backend | FR-03 | Maintenance.java, MaintenanceSchedule.java | Quartz Scheduler, Kafka producer, springdoc-openapi |
+| Backend | FR-03 | MaintenanceTask.java, MaintenanceStatus.java | Spring Data JPA, Bean Validation, Spring Security |
 
-*Owns the maintenance workflow, including recurring preventive-maintenance jobs and SLA-based escalation when tasks go overdue.*
+*Current repository implementation of the maintenance workflow, including hospital scheduling,
+technician-owned progress updates, completion evidence, and completion-driven recurrence.*
 
-**Deliverables & Tasks**
-- entity/Maintenance.java — id, scheduledDate, completedDate, priority, status, notes, Equipment equipment
-- service/MaintenanceService.java — scheduleMaintenance(), getAllMaintenance(), updateMaintenance()
-- Quartz Scheduler jobs for recurring preventive maintenance (e.g., every 90 days per equipment class)
-- Priority levels (LOW / MEDIUM / HIGH / CRITICAL) with SLA timers per priority tier
-- Status lifecycle: PENDING → IN_PROGRESS → COMPLETED → OVERDUE (auto-flagged by a scheduled job)
-- Escalation: publish MaintenanceOverdueEvent to Kafka so the Notification pipeline alerts the hospital admin
-- POST /api/hospital/maintenance/schedule?equipmentId= and paginated GET /api/hospital/maintenance
-- iCal export endpoint so hospital admins can sync maintenance schedules to external calendars
-- Unit tests covering scheduling edge cases (overlapping tasks, overdue detection)
-- Swagger docs, Dockerfile, Eureka client registration
+**Implemented Deliverables**
+- model/MaintenanceTask.java — equipment relationship, deadline, priority, typed status, technician report, completion timestamp, and recurrence period
+- service/MaintenanceService.java — hospital-scoped scheduling/reads/auditable soft deletion, technician-scoped updates, recurrence, and iCalendar export
+- Completion-driven recurrence using the hospital-configured interval; concurrent completion is serialized with a database write lock
+- Completion-driven recurrence revalidates equipment availability and is skipped for archived,
+  retired, or disposed equipment without rolling back valid completion evidence
+- Priority values: Normal / High / Critical
+- Status lifecycle: SCHEDULED → IN_PROGRESS → COMPLETED, with NEEDS_PART and ON_HOLD returning to IN_PROGRESS
+- Versioned H2/MySQL constraints keep persisted task statuses within the same closed enum set and
+  fail deployment when unsupported legacy status data remains
+- POST/GET/PUT/DELETE under `/api/maintenance`, plus ownership-safe status/equipment filters and opt-in pagination on the list endpoint
+- Hospital-only `POST /api/maintenance/{id}/assignment` for assigning or reassigning
+  scheduled work, including unassigned recurring tasks
+- Technician assignment is normalized to the authentication email format and requires an
+  active account with the technician role
+- Every Maintenance operation revalidates the caller's current database role and requires an
+  active account, so stale JWTs cannot preserve Maintenance access after lockout or disablement
+- `GET /api/maintenance/export/calendar.ics` for hospital calendar export
+- Calendar events use RFC 5545-valid `VEVENT` status values and expose the exact workflow state
+  through `X-MEDTRACK-STATUS`
+- Critical-pending Maintenance analytics use the documented canonical `Critical` value consistently
+  across persistence and repository aggregation
+- Focused unit/repository/migration tests for ownership, validation, lifecycle, recurrence, locking, and calendar generation
+- Archived equipment retains ownership-scoped Maintenance history and analytics; archiving the
+  Maintenance task itself remains the operation that hides it from normal Maintenance access
+
+Quartz-based overdue detection, Kafka maintenance events, automatic SLA escalation, and a separate
+deployable Maintenance microservice remain architecture-roadmap items; they are not implemented in
+the current Spring Boot module.
 
 ### 🔩 Member 5 — Technician Field Operations Service
 
 | Scope | FR Coverage | Core Entities / Files | Key Technologies |
 |---|---|---|---|
-| Backend | FR-04 | Maintenance.java (technician ops), ServiceRecord.java | Multipart file upload, object storage client, Kafka consumer, springdoc-openapi |
+| Backend | FR-04 | MaintenanceTask.java, MaintenanceUpdateRequest.java | Spring MVC, Bean Validation, Spring Security |
 
-*Provides the full technician workflow: viewing assigned tasks, capturing field evidence, and closing out work orders with a digital sign-off.*
+*Provides the currently implemented technician workflow for viewing assigned tasks, recording
+progress/report fields, and closing work orders with a digital sign-off.*
 
-**Deliverables & Tasks**
-- controller/TechnicianController.java exposing all technician-facing endpoints
-- GET /api/technician/maintenance — paginated task queue, filterable by priority and status
-- PUT /api/technician/maintenance/update/{id} — status, completedDate, and resolution notes
-- Digital sign-off capture: technician signature stored against the completed service record
-- Parts-used tracking on each service record, auto-deducting consumed parts from Equipment inventory
-- Photo/document upload for before/after maintenance evidence, stored via the File & Document service
-- Kafka consumer listening for MaintenanceAssignedEvent to auto-populate the technician's queue
-- Only the TECHNICIAN role can access these endpoints, enforced by Spring Security method guards
-- updateMaintenanceRecord() in MaintenanceService.java with full unit test coverage
-- Swagger docs, Dockerfile, Eureka client registration
+**Implemented Deliverables**
+- `MaintenanceController` exposes technician reads through GET `/api/maintenance` and updates through PUT `/api/maintenance/{id}`
+- Assigned task lists can be filtered by status/equipment and optionally paged
+- Digital sign-off is stored on the task and is required for completion
+- Notes, hours worked, and parts used are stored as partial technician-report updates
+- Only the assigned TECHNICIAN can update a task, enforced by role guards and ownership-scoped repository queries
+- Technician list, read, and update operations also require the current technician account to
+  remain active and retain its technician role
+- Completed task evidence is immutable and records a server-controlled completion timestamp
+- Hospital deletion retains eligible non-completed tasks with a deletion timestamp and actor while
+  excluding them from normal Maintenance reads
+
+Automatic inventory deduction, multipart evidence upload/object storage, Kafka assignment
+consumption, and a separate Technician controller/service remain roadmap items and are not present
+in the current module.
 
 ### 📦 Member 6 — Equipment Procurement & Order Service
 
@@ -329,7 +353,7 @@ Services communicate asynchronously through Kafka so that no single service is e
 |---|---|---|---|
 | user-events | Auth Service (M1) | Notification pipeline (M8 logic), Audit Log | Registration, login, password-reset events |
 | inventory-events | Equipment Service (M3) | Notification pipeline, Analytics feed | Low-stock and warranty-expiry alerts |
-| maintenance-events | Maintenance Service (M4) | Technician Service (M5), Notification pipeline | Task assigned, task overdue/escalated |
+| maintenance-events *(planned; no current producer)* | Maintenance Service (M4) | Technician Service (M5), Notification pipeline | Task assigned, task overdue/escalated |
 | order-events | Order Service (M6) | Supplier Service (M7), Analytics feed | Order placed, order approved |
 | shipment-events | Supplier Service (M7) | Notification pipeline, Hospital Dashboard UI (M9) | Order shipped, delivered, delayed |
 

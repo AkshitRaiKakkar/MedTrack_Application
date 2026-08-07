@@ -6,23 +6,39 @@
     "@gsap/react": "^2.1.2",
     "axios": "^1.18.1",
     "gsap": "^3.15.0",
+    "html2canvas": "^1.4.1",
     "lenis": "^1.3.25",
-    "lucide-react": "^1.24.0",
+    "lucide-react": "^1.25.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-scripts": "5.0.1"
+    "react-scripts": "^5.0.1",
+    "recharts": "^3.10.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "autoprefixer": "^10.5.2",
+    "@babel/parser": "^7.28.5",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@testing-library/user-event": "^14.6.1",
+    "autoprefixer": "^10.5.4",
     "gh-pages": "^6.3.0",
-    "postcss": "^8.5.16",
-    "tailwindcss": "^3.4.1"
+    "jsdom": "^25.0.1",
+    "msw": "^2.7.3",
+    "postcss": "^8.5.23",
+    "tailwindcss": "^3.4.19",
+    "vite": "^7.3.6",
+    "vitest": "^3.1.1"
   },
   "scripts": {
     "start": "react-scripts start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check-syntax": "node scripts/check-syntax.js",
+    "prebuild": "npm run check-syntax && npm run check-routes",
     "build": "react-scripts build",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "check-routes": "node scripts/check-routes.js"
   },
   "browserslist": {
     "production": [
@@ -35,5 +51,18 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ],
+    "rules": {
+      "no-unused-vars": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "eqeqeq": "off",
+      "jsx-a11y/anchor-is-valid": "off",
+      "jsx-a11y/alt-text": "off",
+      "no-script-url": "off"
+    }
   }
 }

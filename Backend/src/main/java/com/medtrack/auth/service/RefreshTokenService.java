@@ -65,21 +65,31 @@ public class RefreshTokenService {
      * @throws BadCredentialsException if the token is invalid, revoked, or expired
      */
     public RefreshToken verifyToken(String token) {
-        // Retrieve the token from database or throw a BadCredentialsException if not found
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
                 .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
-
-        // Check if the token has been manually marked as revoked
-        if (refreshToken.isRevoked()) {
-            throw new BadCredentialsException("Refresh token has been revoked. Please log in again.");
-        }
-
-        // Check if the current timestamp is past the token's expiration date
-        if (refreshToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-            throw new BadCredentialsException("Refresh token has expired. Please log in again.");
-        }
-
+        validateActive(refreshToken);
         return refreshToken;
+    }
+
+    /**
+     * Atomically validates and consumes a refresh token for rotation.
+     *
+     * <p>The pessimistic repository lock is held by this transaction until the caller's
+     * transaction completes. A concurrent request therefore waits, reloads the committed
+     * revoked state, and is rejected instead of receiving a second replacement token.</p>
+     *
+     * @param token the refresh token to consume
+     * @return the consumed token, including the user ID needed to issue its replacement
+     * @throws BadCredentialsException if the token is missing, expired, or already consumed
+     */
+    @Transactional
+    public RefreshToken consumeToken(String token) {
+        RefreshToken refreshToken = refreshTokenRepository.findByTokenForUpdate(token)
+                .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
+
+        validateActive(refreshToken);
+        refreshToken.setRevoked(true);
+        return refreshTokenRepository.save(refreshToken);
     }
 
     /**
@@ -105,5 +115,15 @@ public class RefreshTokenService {
     public void revokeAllForUser(Long userId) {
         // Delete all tokens mapped to the user ID in a single database transaction
         refreshTokenRepository.deleteByUserId(userId);
+    }
+
+    private void validateActive(RefreshToken refreshToken) {
+        if (refreshToken.isRevoked()) {
+            throw new BadCredentialsException("Refresh token has been revoked. Please log in again.");
+        }
+
+        if (!refreshToken.getExpiryDate().isAfter(LocalDateTime.now())) {
+            throw new BadCredentialsException("Refresh token has expired. Please log in again.");
+        }
     }
 }

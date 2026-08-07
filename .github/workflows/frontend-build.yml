@@ -1,0 +1,78 @@
+# Builds the React bundle on every pull request and push to main.
+#
+# Why this exists
+# ---------------
+# Until now nothing in CI compiled the frontend, so an unbuildable bundle could reach `main` with
+# every check green:
+#
+#   - `lighthouse.yml` audits https://medtrack.vercel.app/, an already-deployed URL. It reports on
+#     the *last successful* deploy, so it stays green precisely when the new code fails to build.
+#   - `vercel.yml` guards every step on `secrets.VERCEL_TOKEN`. With the secret unset the job skips
+#     its way to a green tick without running `vercel build` at all.
+#   - the remaining workflows lint PR titles, label issues and manage stale threads. None of them
+#     runs `npm run build`.
+#
+# The result was three files on `main` that could not be parsed and two more that failed lint, none
+# of which had produced a single red check.
+#
+# `npm run build` runs `prebuild` first, which is `check-syntax` (every source file parses) followed
+# by `check-routes` (the route registry is internally consistent and every page is reachable). Those
+# two fail in about a second and name every offending file, so most breakage is reported long before
+# webpack starts.
+name: Frontend Build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - '.github/workflows/frontend-build.yml'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build React bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Run the two static guards on their own first. They finish in about a second and report every
+      # offending file in one pass, whereas webpack stops at the first couple of errors after ~30s.
+      - name: Check every source file parses
+        run: npm run check-syntax
+
+      - name: Check the route registry is consistent
+        run: npm run check-routes
+
+      # CI=true makes react-scripts treat ESLint warnings as errors, which is what catches an
+      # identifier that is referenced but never defined - a class of breakage that parses cleanly and
+      # only fails at runtime otherwise.
+      - name: Build
+        run: npm run build
+        env:
+          CI: true
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: build/
+          retention-days: 7
