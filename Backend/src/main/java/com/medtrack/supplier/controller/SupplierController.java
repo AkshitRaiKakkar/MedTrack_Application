@@ -2,6 +2,7 @@ package com.medtrack.supplier.controller;
 
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.supplier.dto.SupplierPerformanceResponse;
+import com.medtrack.supplier.dto.BulkStatusUpdateRequest;
 import com.medtrack.supplier.service.SupplierOrderService;
 import com.medtrack.supplier.service.SupplierPerformanceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -74,6 +75,19 @@ public class SupplierController {
 
                 EquipmentOrder updatedOrder = supplierOrderService.updateOrderStatus(orderId, newStatus);
                 return ResponseEntity.ok(updatedOrder);
+        }
+
+        @PutMapping("/orders/bulk-status")
+        @PreAuthorize("hasRole('SUPPLIER')")
+        @Operation(summary = "Bulk update supplier order status", description = "Updates order status for multiple orders simultaneously.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Successfully updated order statuses", content = @Content(schema = @Schema(implementation = java.util.List.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid request or status transitions")
+        })
+        public ResponseEntity<java.util.List<EquipmentOrder>> bulkUpdateOrderStatus(
+                        @jakarta.validation.Valid @RequestBody BulkStatusUpdateRequest request) {
+                java.util.List<EquipmentOrder> updatedOrders = supplierOrderService.bulkUpdateOrderStatus(request);
+                return ResponseEntity.ok(updatedOrders);
         }
 
         // -----------------------------------------------------------------------

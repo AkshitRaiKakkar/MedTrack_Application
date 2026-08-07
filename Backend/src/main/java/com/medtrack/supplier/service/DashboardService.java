@@ -7,6 +7,7 @@ import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
 
 import com.medtrack.supplier.mapper.DashboardMapper;
 
@@ -22,6 +23,7 @@ public class DashboardService {
     private final SupplierPerformanceService supplierPerformanceService;
     private final DashboardMapper dashboardMapper;
 
+    @Cacheable(value = "supplierDashboard", key = "#supplierId")
     @Transactional(readOnly = true)
     public DashboardResponse getDashboard(Long supplierId) {
         DashboardSummary summary = getSummary(supplierId);

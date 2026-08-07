@@ -5,6 +5,8 @@ import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
+import com.medtrack.supplier.dto.BulkDeliveryConfirmationRequest;
+import com.medtrack.supplier.dto.BulkShipmentConfirmationRequest;
 import com.medtrack.supplier.dto.CreateShipmentRequest;
 import com.medtrack.supplier.dto.ShipmentTrackingResponse;
 import com.medtrack.supplier.dto.UpdateShipmentStatusRequest;
@@ -34,15 +36,18 @@ public class ShipmentTrackingService {
 
         // 2. Prevent duplicate shipment creation for same order
         shipmentTrackingRepository.findByOrderId(request.getOrderId()).ifPresent(s -> {
-            throw new IllegalArgumentException("Shipment tracking already exists for Order ID: " + request.getOrderId());
+            throw new IllegalArgumentException(
+                    "Shipment tracking already exists for Order ID: " + request.getOrderId());
         });
 
         // 3. Ensure tracking number uniqueness
         shipmentTrackingRepository.findByShipmentTrackingNumber(request.getShipmentTrackingNumber()).ifPresent(s -> {
-            throw new DuplicateTrackingNumberException("Tracking number already in use: " + request.getShipmentTrackingNumber());
+            throw new DuplicateTrackingNumberException(
+                    "Tracking number already in use: " + request.getShipmentTrackingNumber());
         });
 
-        if (request.getEstimatedDeliveryDate() != null && request.getEstimatedDeliveryDate().isBefore(LocalDateTime.now())) {
+        if (request.getEstimatedDeliveryDate() != null
+                && request.getEstimatedDeliveryDate().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Estimated delivery date cannot be in the past");
         }
 
@@ -126,6 +131,25 @@ public class ShipmentTrackingService {
         return mapToResponse(updatedShipment);
     }
 
+    @Transactional
+    public List<ShipmentTrackingResponse> bulkConfirmShipments(BulkShipmentConfirmationRequest request) {
+        return request.getShipments().stream()
+                .map(this::createShipment)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<ShipmentTrackingResponse> bulkConfirmDeliveries(BulkDeliveryConfirmationRequest request) {
+        UpdateShipmentStatusRequest updateRequest = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("DELIVERED")
+                .supplierNotes("Bulk delivery confirmation")
+                .build();
+
+        return request.getShipmentIds().stream()
+                .map(id -> updateShipmentStatus(id, updateRequest))
+                .collect(Collectors.toList());
+    }
+
     @Transactional(readOnly = true)
     public ShipmentTrackingResponse getShipmentById(Long id) {
         ShipmentTracking shipment = shipmentTrackingRepository.findById(id)
@@ -136,14 +160,16 @@ public class ShipmentTrackingService {
     @Transactional(readOnly = true)
     public ShipmentTrackingResponse getShipmentByTrackingNumber(String trackingNumber) {
         ShipmentTracking shipment = shipmentTrackingRepository.findByShipmentTrackingNumber(trackingNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("Shipment tracking not found for tracking number: " + trackingNumber));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Shipment tracking not found for tracking number: " + trackingNumber));
         return mapToResponse(shipment);
     }
 
     @Transactional(readOnly = true)
     public ShipmentTrackingResponse getShipmentByOrderId(Long orderId) {
         ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Shipment tracking not found for Order ID: " + orderId));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Shipment tracking not found for Order ID: " + orderId));
         return mapToResponse(shipment);
     }
 

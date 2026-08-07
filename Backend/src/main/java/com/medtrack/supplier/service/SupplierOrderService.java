@@ -24,6 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -41,6 +42,7 @@ public class SupplierOrderService {
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final UserRepository userRepository;
     private final SupplierPerformanceService supplierPerformanceService;
+    private final SupplierAuditLogService auditLogService;
 
     @Autowired(required = false)
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -216,7 +218,17 @@ public class SupplierOrderService {
         order.setStatus(requestedStatus.name());
         order.setUpdatedAt(LocalDateTime.now());
 
+        auditLogService.logAction(orderId, resolveSupplierId(), "STATUS_UPDATE",
+                "Order status transitioned to " + requestedStatus.name(), resolveCurrentUsername());
+
         return orderRepository.save(order);
+    }
+
+    @Transactional
+    public List<EquipmentOrder> bulkUpdateOrderStatus(com.medtrack.supplier.dto.BulkStatusUpdateRequest request) {
+        return request.getOrderIds().stream()
+                .map(id -> updateOrderStatus(id, request.getStatus()))
+                .collect(Collectors.toList());
     }
 
     private Long resolveSupplierId() {
@@ -234,6 +246,20 @@ public class SupplierOrderService {
             log.warn("Failed to resolve supplierId from security context: {}", e.getMessage());
         }
         return 1L; // default fallback ID
+    }
+
+    private String resolveCurrentUsername() {
+        try {
+            org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()
+                    && !authentication.getName().equals("anonymousUser")) {
+                return authentication.getName();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve username from security context: {}", e.getMessage());
+        }
+        return "SYSTEM";
     }
 
     private String generateUniqueTrackingNumber() {

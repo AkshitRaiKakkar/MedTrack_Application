@@ -44,6 +44,9 @@ public interface ShipmentTrackingRepository extends JpaRepository<ShipmentTracki
     @Query("SELECT COUNT(s) FROM ShipmentTracking s WHERE s.supplierId = :supplierId AND s.shipmentStatus = 'DELIVERED'")
     long countDeliveredShipmentsBySupplierId(@Param("supplierId") Long supplierId);
 
-    @Query("SELECT COALESCE(AVG(FUNCTION('DATEDIFF', s.actualDeliveryDate, s.createdAt)), 0.0) FROM ShipmentTracking s WHERE s.supplierId = :supplierId AND s.shipmentStatus = 'DELIVERED'")
+    @Query(value = "SELECT COALESCE(AVG(DATEDIFF(DAY, created_at, actual_delivery_date)), 0.0) FROM shipment_tracking WHERE supplier_id = :supplierId AND shipment_status = 'DELIVERED'", nativeQuery = true)
     Double getAverageDeliveryTimeDays(@Param("supplierId") Long supplierId);
+
+    @Query("SELECT DISTINCT s.supplierId FROM ShipmentTracking s")
+    List<Long> findDistinctSupplierIds();
 }

@@ -63,7 +63,8 @@ public class SupplierControllerTest {
 
                 when(supplierOrderService.getSupplierOrders(
                                 eq(0), eq(10), eq("orderDate"), eq("desc"),
-                                eq("PENDING"), eq("Processing"), eq(100L), eq("Ventilator"))).thenReturn(page);
+                                eq("PENDING"), eq("Processing"), eq(100L), eq("Ventilator"),
+                                any(), any(), any(), any(), any())).thenReturn(page);
 
                 mockMvc.perform(get("/api/supplier/orders")
                                 .param("page", "0")
@@ -87,7 +88,7 @@ public class SupplierControllerTest {
 
                 when(supplierOrderService.getSupplierOrders(
                                 eq(0), eq(10), eq("orderDate"), eq("desc"),
-                                eq(null), eq(null), eq(null), eq(null))).thenReturn(emptyPage);
+                                any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(emptyPage);
 
                 mockMvc.perform(get("/api/supplier/orders"))
                                 .andExpect(status().isNoContent());
@@ -97,7 +98,7 @@ public class SupplierControllerTest {
         void getSupplierOrders_InvalidParams_Returns400() throws Exception {
                 when(supplierOrderService.getSupplierOrders(
                                 eq(-1), eq(10), eq("orderDate"), eq("desc"),
-                                eq(null), eq(null), eq(null), eq(null)))
+                                any(), any(), any(), any(), any(), any(), any(), any(), any()))
                                 .thenThrow(new IllegalArgumentException("Page index must not be less than zero"));
 
                 mockMvc.perform(get("/api/supplier/orders")
