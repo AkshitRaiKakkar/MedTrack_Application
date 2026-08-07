@@ -249,4 +249,324 @@ class FacilityLocationTest {
                 () -> locationService.assignEquipmentToLocation(asset.getId(), room.getId(), null, null, other.getUsername()),
                 "another tenant must not be able to assign equipment to this hospital's node");
     }
+
+    @Test
+    @DisplayName("location assignment is rejected when equipment status is RETIRED")
+    void locationAssignmentBlockedForRetiredEquipment() {
+        FacilityLocation facility = node("MedTrack General", LocationType.FACILITY, null);
+        FacilityLocation room = node("Room 101", LocationType.ROOM, facility.getId());
+
+        Equipment retiredAsset = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-RETIRED-1")
+                .name("Retired X-Ray Machine")
+                .department("Radiology")
+                .category(EquipmentCategory.IMAGING)
+                .status(EquipmentStatus.RETIRED)
+                .hospital(hospital)
+                .build());
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> locationService.assignEquipmentToLocation(
+                        retiredAsset.getId(),
+                        room.getId(),
+                        LocalDate.now(),
+                        "Attempting to reassign retired equipment",
+                        username),
+                "assigning a location to a retired asset must throw IllegalArgumentException");
+
+        assertEquals(
+                "Retired or disposed equipment cannot be assigned to a location",
+                ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("location assignment is rejected when equipment status is DISPOSED")
+    void locationAssignmentBlockedForDisposedEquipment() {
+        FacilityLocation facility = node("MedTrack General", LocationType.FACILITY, null);
+        FacilityLocation room = node("Room 102", LocationType.ROOM, facility.getId());
+
+        Equipment disposedAsset = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-DISPOSED-1")
+                .name("Disposed Ultrasound Scanner")
+                .department("Radiology")
+                .category(EquipmentCategory.IMAGING)
+                .status(EquipmentStatus.DISPOSED)
+                .hospital(hospital)
+                .build());
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> locationService.assignEquipmentToLocation(
+                        disposedAsset.getId(),
+                        room.getId(),
+                        LocalDate.now(),
+                        "Attempting to reassign disposed equipment",
+                        username),
+                "assigning a location to a disposed asset must throw IllegalArgumentException");
+
+        assertEquals(
+                "Retired or disposed equipment cannot be assigned to a location",
+                ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("location assignment is permitted for active or under-maintenance equipment")
+    void locationAssignmentAllowedForMaintenanceEquipment() {
+        FacilityLocation facility = node("MedTrack General", LocationType.FACILITY, null);
+        FacilityLocation workshop = node("Biomed Workshop", LocationType.ROOM, facility.getId());
+
+        Equipment maintenanceAsset = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-MNT-1")
+                .name("Defibrillator in Workshop")
+                .department("Emergency")
+                .category(EquipmentCategory.MONITORING)
+                .status(EquipmentStatus.UNDER_MAINTENANCE)
+                .hospital(hospital)
+                .build());
+
+        Equipment updated = locationService.assignEquipmentToLocation(
+                maintenanceAsset.getId(),
+                workshop.getId(),
+                LocalDate.now(),
+                "Moved to workshop for calibration",
+                username);
+
+        assertNotNull(updated.getLocation(), "assigned location must not be null");
+        assertEquals(workshop.getId(), updated.getLocation().getId(), "location id must match workshop");
+
+        List<EquipmentLocationHistory> history =
+                locationService.getEquipmentLocationHistory(maintenanceAsset.getId(), username);
+        assertEquals(1, history.size(), "one location history record should be created");
+        assertEquals("Moved to workshop for calibration", history.get(0).getNotes());
+    }
+
+    @Test
+    @DisplayName("location assignment with null effective date defaults to current date")
+    void locationAssignmentWithNullEffectiveDateDefaultsToToday() {
+        FacilityLocation facility = node("MedTrack West", LocationType.FACILITY, null);
+        FacilityLocation room = node("Storage Room", LocationType.ROOM, facility.getId());
+        Equipment asset = asset("EQ-NULL-DATE");
+
+        Equipment updated = locationService.assignEquipmentToLocation(
+                asset.getId(),
+                room.getId(),
+                null,
+                "Moved without explicit effective date",
+                username);
+
+        assertNotNull(updated.getLocation(), "location must be updated");
+        List<EquipmentLocationHistory> history =
+                locationService.getEquipmentLocationHistory(asset.getId(), username);
+        assertEquals(1, history.size(), "history entry should be persisted");
+        assertEquals(LocalDate.now(), history.get(0).getEffectiveDate(), "effective date should default to today");
+        assertEquals("Moved without explicit effective date", history.get(0).getNotes());
+    }
+
+    @Test
+    @DisplayName("location history preserves chronological audit entries across multiple moves")
+    void locationHistoryPreservesAuditEntries() {
+        FacilityLocation facility = node("MedTrack Central", LocationType.FACILITY, null);
+        FacilityLocation roomA = node("Room A", LocationType.ROOM, facility.getId());
+        FacilityLocation roomB = node("Room B", LocationType.ROOM, facility.getId());
+        Equipment asset = asset("EQ-MULTI-MOVE");
+
+        locationService.assignEquipmentToLocation(
+                asset.getId(),
+                roomA.getId(),
+                LocalDate.now().minusDays(10),
+                "Initial placement in Room A",
+                username);
+        locationService.assignEquipmentToLocation(
+                asset.getId(),
+                roomB.getId(),
+                LocalDate.now(),
+                "Relocated to Room B",
+                username);
+
+        List<EquipmentLocationHistory> history =
+                locationService.getEquipmentLocationHistory(asset.getId(), username);
+        assertEquals(2, history.size(), "both relocation history entries must be preserved");
+        assertEquals(roomB.getId(), history.get(0).getLocation().getId(), "latest move should be first");
+        assertEquals(roomA.getId(), history.get(1).getLocation().getId(), "earlier move should be second");
+    }
+
+    @Test
+    @DisplayName("resolveDescendantIds includes root node and all nested child nodes in hierarchy")
+    void resolveDescendantIdsIncludesAllSubtreeNodes() {
+        FacilityLocation building = node("Main Building", LocationType.FACILITY, null);
+        FacilityLocation floor1 = node("First Floor", LocationType.FLOOR, building.getId());
+        FacilityLocation room101 = node("Room 101", LocationType.ROOM, floor1.getId());
+
+        java.util.Set<Long> descendantIds = locationService.resolveDescendantIds(building.getId(), username);
+
+        assertEquals(3, descendantIds.size(), "descendant set should include building, floor, and room");
+        assertTrue(descendantIds.contains(building.getId()), "must contain root building id");
+        assertTrue(descendantIds.contains(floor1.getId()), "must contain child floor id");
+        assertTrue(descendantIds.contains(room101.getId()), "must contain grandchild room id");
+    }
+
+    @Test
+    @DisplayName("createLocation validates required fields and parent location ownership")
+    void createLocationValidatesNameTypeAndParentOwnership() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> locationService.createLocation(
+                        FacilityLocation.builder().name("   ").locationType(LocationType.ROOM).build(),
+                        username),
+                "blank name must be rejected");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> locationService.createLocation(
+                        FacilityLocation.builder().name("ICU Room 1").locationType(null).build(),
+                        username),
+                "null location type must be rejected");
+
+        User otherUser = userRepository.save(User.builder()
+                .name("Other Hospital User")
+                .username("other-user-" + UUID.randomUUID())
+                .email(UUID.randomUUID() + "@medtrack.test")
+                .password("password123")
+                .role("hospital")
+                .phone("+1 (555) 000-0099")
+                .organization("Other Hospital")
+                .accountStatus(AccountStatus.ACTIVE)
+                .build());
+        Hospital otherHosp = hospitalRepository.save(Hospital.builder()
+                .name("Other Hospital")
+                .location("North")
+                .user(otherUser)
+                .build());
+        FacilityLocation otherParent = locationRepository.save(FacilityLocation.builder()
+                .name("Other Facility")
+                .locationType(LocationType.FACILITY)
+                .hospital(otherHosp)
+                .createdBy(otherUser.getUsername())
+                .build());
+
+        assertThrows(
+                com.medtrack.exception.ResourceNotFoundException.class,
+                () -> locationService.createLocation(
+                        FacilityLocation.builder()
+                                .name("Cross Tenant Room")
+                                .locationType(LocationType.ROOM)
+                                .parentId(otherParent.getId())
+                                .build(),
+                        username),
+                "parent location belonging to another hospital must be rejected");
+    }
+
+    @Test
+    @DisplayName("updateLocation modifies location details while preserving unchanged fields")
+    void updateLocationModifiesDetailsAndPreservesUnchanged() {
+        FacilityLocation location = node("Old Name", LocationType.ROOM, null);
+
+        FacilityLocation updated = locationService.updateLocation(
+                location.getId(),
+                FacilityLocation.builder().name("New Name").build(),
+                username);
+
+        assertEquals("New Name", updated.getName(), "name should be updated");
+        assertEquals(LocationType.ROOM, updated.getLocationType(), "location type should be preserved");
+
+        FacilityLocation typeUpdated = locationService.updateLocation(
+                location.getId(),
+                FacilityLocation.builder().locationType(LocationType.FLOOR).build(),
+                username);
+
+        assertEquals("New Name", typeUpdated.getName(), "name should remain preserved");
+        assertEquals(LocationType.FLOOR, typeUpdated.getLocationType(), "location type should be updated");
+    }
+
+    @Test
+    @DisplayName("getEquipmentLocationHistory returns empty list when equipment has no location history")
+    void getEquipmentLocationHistoryReturnsEmptyListForUnmovedEquipment() {
+        Equipment unassignedAsset = asset("EQ-UNASSIGNED-1");
+
+        List<EquipmentLocationHistory> history =
+                locationService.getEquipmentLocationHistory(unassignedAsset.getId(), username);
+
+        assertNotNull(history, "returned history list must not be null");
+        assertTrue(history.isEmpty(), "history list must be empty for unassigned equipment");
+    }
+
+    @Test
+    @DisplayName("assignEquipmentToLocation rejects cross-tenant location assignment")
+    void assignEquipmentToLocationRejectsCrossTenantLocation() {
+        Equipment asset = asset("EQ-CROSS-LOC");
+
+        User otherUser = userRepository.save(User.builder()
+                .name("External Owner")
+                .username("external-user-" + UUID.randomUUID())
+                .email(UUID.randomUUID() + "@medtrack.test")
+                .password("password123")
+                .role("hospital")
+                .phone("+1 (555) 000-0099")
+                .organization("External Hospital")
+                .accountStatus(AccountStatus.ACTIVE)
+                .build());
+        Hospital externalHosp = hospitalRepository.save(Hospital.builder()
+                .name("External Hospital")
+                .location("East")
+                .user(otherUser)
+                .build());
+        FacilityLocation externalLocation = locationRepository.save(FacilityLocation.builder()
+                .name("External Ward")
+                .locationType(LocationType.WING)
+                .hospital(externalHosp)
+                .createdBy(otherUser.getUsername())
+                .build());
+
+        assertThrows(
+                com.medtrack.exception.ResourceNotFoundException.class,
+                () -> locationService.assignEquipmentToLocation(
+                        asset.getId(),
+                        externalLocation.getId(),
+                        LocalDate.now(),
+                        "Cross tenant move",
+                        username),
+                "assigning location belonging to another hospital must be rejected");
+    }
+
+    @Test
+    @DisplayName("assignEquipmentToLocation rejects cross-tenant equipment assignment")
+    void assignEquipmentToLocationRejectsCrossTenantEquipment() {
+        FacilityLocation location = node("Hospital Ward", LocationType.WING, null);
+
+        User otherUser = userRepository.save(User.builder()
+                .name("Other Hospital User")
+                .username("other-owner-" + UUID.randomUUID())
+                .email(UUID.randomUUID() + "@medtrack.test")
+                .password("password123")
+                .role("hospital")
+                .phone("+1 (555) 000-0099")
+                .organization("Other Health System")
+                .accountStatus(AccountStatus.ACTIVE)
+                .build());
+        Hospital otherHosp = hospitalRepository.save(Hospital.builder()
+                .name("Other Health System")
+                .location("West")
+                .user(otherUser)
+                .build());
+
+        Equipment otherEquipment = equipmentRepository.saveAndFlush(Equipment.builder()
+                .equipmentCode("EQ-OTHER-HOSP")
+                .name("Other Hospital Monitor")
+                .department("ICU")
+                .category(EquipmentCategory.MONITORING)
+                .status(EquipmentStatus.ACTIVE)
+                .hospital(otherHosp)
+                .build());
+
+        assertThrows(
+                com.medtrack.exception.ResourceNotFoundException.class,
+                () -> locationService.assignEquipmentToLocation(
+                        otherEquipment.getId(),
+                        location.getId(),
+                        LocalDate.now(),
+                        "Attempting cross-tenant equipment assignment",
+                        username),
+                "assigning location to equipment belonging to another hospital must be rejected");
+    }
 }
