@@ -17,7 +17,7 @@ afterAll(() => server.close());
 beforeEach(() => {
   sessionStorage.clear();
   vi.stubGlobal("alert", mockAlert);
-  vi.stubGlobal("location", { href: "" });
+  vi.stubGlobal("location", { href: "http://localhost:8081" });
 });
 
 afterEach(() => {

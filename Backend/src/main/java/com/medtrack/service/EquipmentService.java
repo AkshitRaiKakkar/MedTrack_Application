@@ -69,6 +69,7 @@ public class EquipmentService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
+    private final EquipmentAuditService equipmentAuditService;
 
     private static final Logger logger = LoggerFactory.getLogger(EquipmentService.class);
 
@@ -239,6 +240,16 @@ public class EquipmentService {
         }
 
         Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        equipmentAuditService.logAction(
+                equipment,
+                hospital,
+                username,
+                "CREATE",
+                "ALL",
+                null,
+                "Equipment Created"
+        );
 
         logger.info(
                 "Equipment stock adjusted | User: {} | Equipment ID: {} | Delta: {} | "
@@ -828,6 +839,16 @@ public class EquipmentService {
         if (equipmentDetails.getDepreciationMethod() != null) {
             equipment.setDepreciationMethod(equipmentDetails.getDepreciationMethod());
         }
+
+        equipmentAuditService.logAction(
+                existingEquipment,
+                hospital,
+                username,
+                "UPDATE",
+                "Equipment",
+                "Previous values",
+                "Updated values"
+        );
 
         Equipment updatedEquipment = equipmentRepository.save(equipment);
 
@@ -1637,6 +1658,16 @@ public class EquipmentService {
         if (equipment.getDeletedAt() != null && equipment.getDeletedAt().isAfter(LocalDateTime.now().minusDays(90))) {
             throw new IllegalStateException("Equipment cannot be permanently deleted until 90 days after archival");
         }
+
+        equipmentAuditService.logAction(
+                equipment,
+                hospital,
+                username,
+                "DELETE",
+                "ALL",
+                "Equipment existed",
+                "Deleted"
+        );
 
         equipmentRepository.delete(equipment);
 

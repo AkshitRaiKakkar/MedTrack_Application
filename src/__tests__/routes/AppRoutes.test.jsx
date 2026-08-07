@@ -14,6 +14,19 @@ vi.mock("../../services/AuthService", () => ({
   getAuthorityAuditLogs: vi.fn(),
 }));
 
+vi.mock("../../services/EquipmentService", () => ({
+  getAllEquipment: vi.fn().mockResolvedValue([]),
+  getEquipmentById: vi.fn(),
+  addEquipment: vi.fn(),
+  deleteEquipment: vi.fn(),
+}));
+
+vi.mock("../../services/MaintenanceService", () => ({
+  getAllTasks: vi.fn().mockResolvedValue([]),
+  getTaskById: vi.fn(),
+  scheduleTask: vi.fn(),
+}));
+
 beforeEach(() => {
   sessionStorage.clear();
 });
