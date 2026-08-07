@@ -27,7 +27,9 @@ public class SparePartService {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("Username is required");
         }
-        User user = userRepository.findByUsername(username.trim())
+        String identifier = username.trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
