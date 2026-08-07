@@ -1,5 +1,6 @@
 package com.medtrack.controller;
 
+import com.medtrack.dto.SparePartStockRequest;
 import com.medtrack.model.SparePart;
 import com.medtrack.service.SparePartService;
 import jakarta.validation.Valid;
@@ -47,6 +48,22 @@ public class SparePartController {
             @Valid @RequestBody SparePart sparePart,
             Authentication authentication) {
         return ResponseEntity.ok(sparePartService.updateSparePart(id, sparePart, authentication.getName()));
+    }
+
+    @PostMapping("/deduct")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
+    public ResponseEntity<SparePart> deductStock(
+            @Valid @RequestBody SparePartStockRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(sparePartService.deductStock(request, authentication.getName()));
+    }
+
+    @PostMapping("/restock")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<SparePart> restockSparePart(
+            @Valid @RequestBody SparePartStockRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(sparePartService.restockSparePart(request, authentication.getName()));
     }
 
     @DeleteMapping("/{id}")
