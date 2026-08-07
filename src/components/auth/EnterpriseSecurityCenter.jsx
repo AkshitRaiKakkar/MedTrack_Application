@@ -113,6 +113,11 @@ import BiomedicalZkpVerifiableEhrPanel from "./BiomedicalZkpVerifiableEhrPanel";
 import BiomedicalHsmAttestationPanel from "./BiomedicalHsmAttestationPanel";
 import BiomedicalCtiStixTaxiiPanel from "./BiomedicalCtiStixTaxiiPanel";
 import BiomedicalContinuousCompliancePanel from "./BiomedicalContinuousCompliancePanel";
+import BiomedicalFheMpcTelemetryPanel from "./BiomedicalFheMpcTelemetryPanel";
+import BiomedicalAiWatermarkC2paPanel from "./BiomedicalAiWatermarkC2paPanel";
+import BiomedicalQkdPqcVpnPanel from "./BiomedicalQkdPqcVpnPanel";
+import BiomedicalZeroTrustEbpfPanel from "./BiomedicalZeroTrustEbpfPanel";
+import BiomedicalIncidentCommandDrPanel from "./BiomedicalIncidentCommandDrPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -481,7 +486,12 @@ export default function EnterpriseSecurityCenter() {
           { id: "zkpehr", label: "ZKP Verifiable EHR & Credentials", icon: KeyRound },
           { id: "hsmattest", label: "HSM Key Management & FIPS Attestation", icon: HardDrive },
           { id: "ctistix", label: "CTI & STIX/TAXII Threat Sharing", icon: Radar },
-          { id: "contcompliance", label: "Continuous Compliance & Audit Trails", icon: ClipboardCheck }
+          { id: "contcompliance", label: "Continuous Compliance & Audit Trails", icon: ClipboardCheck },
+          { id: "fhempc", label: "FHE & Multi-Party Compute Telemetry", icon: Cpu },
+          { id: "aiwatermarkc2pa", label: "AI Watermark & C2PA Provenance", icon: Stamp },
+          { id: "qkdppcvpn", label: "QKD & Post-Quantum VPN Tunnels", icon: Radio },
+          { id: "ztebpf", label: "Zero-Trust & eBPF Perimeter Defense", icon: Network },
+          { id: "icdr", label: "Incident Command & Air-Gap DR Vaults", icon: Power }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1077,6 +1087,31 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 47: BIOMEDICAL CONTINUOUS COMPLIANCE & AUDIT TRAILS */}
       {selectedTab === "contcompliance" && (
         <BiomedicalContinuousCompliancePanel />
+      )}
+
+      {/* TAB 48: BIOMEDICAL FHE & MULTI-PARTY COMPUTE TELEMETRY */}
+      {selectedTab === "fhempc" && (
+        <BiomedicalFheMpcTelemetryPanel />
+      )}
+
+      {/* TAB 49: BIOMEDICAL CLINICAL AI WATERMARKING & C2PA PROVENANCE */}
+      {selectedTab === "aiwatermarkc2pa" && (
+        <BiomedicalAiWatermarkC2paPanel />
+      )}
+
+      {/* TAB 50: BIOMEDICAL QKD & POST-QUANTUM VPN TUNNELS */}
+      {selectedTab === "qkdppcvpn" && (
+        <BiomedicalQkdPqcVpnPanel />
+      )}
+
+      {/* TAB 51: BIOMEDICAL ZERO-TRUST & eBPF PERIMETER DEFENSE */}
+      {selectedTab === "ztebpf" && (
+        <BiomedicalZeroTrustEbpfPanel />
+      )}
+
+      {/* TAB 52: BIOMEDICAL INCIDENT COMMAND & AIR-GAP DR VAULTS */}
+      {selectedTab === "icdr" && (
+        <BiomedicalIncidentCommandDrPanel />
       )}
 
       {/* 4. MODALS */}
