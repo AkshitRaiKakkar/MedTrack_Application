@@ -5,8 +5,10 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.dto.StockAdjustmentRequest;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.FacilityLocation;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.LocationType;
 import com.medtrack.model.OperationsEvent;
 import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
@@ -30,18 +32,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
+/**
+ * Unit tests for location hierarchy resolution, location-filtered asset querying,
+ * tenant security boundaries, and low-stock event publishing in {@link EquipmentService}.
+ */
 @ExtendWith(MockitoExtension.class)
 class EquipmentServiceLocationTest {
 
@@ -71,60 +69,84 @@ class EquipmentServiceLocationTest {
     private FacilityLocation buildingLocation;
     private FacilityLocation floorLocation;
     private FacilityLocation roomLocation;
+    private Equipment mockEquipment;
 
     @BeforeEach
     void setUp() {
-        mockUser = User.builder()
-                .id(1L)
-                .username("hospital_admin")
-                .email("admin@generalhospital.org")
-                .build();
+        mockUser = new User();
+        mockUser.setId(1L);
+        mockUser.setUsername("hospital_admin");
+        mockUser.setRole("hospital");
 
-        mockHospital = Hospital.builder()
-                .id(10L)
-                .name("General Hospital")
-                .user(mockUser)
-                .build();
+        mockHospital = new Hospital();
+        mockHospital.setId(10L);
+        mockHospital.setName("St. Jude General Hospital");
 
         buildingLocation = FacilityLocation.builder()
                 .id(100L)
-                .name("Building A")
                 .hospital(mockHospital)
+                .name("Main Building")
+                .locationType(LocationType.FACILITY)
                 .parentId(null)
                 .build();
 
         floorLocation = FacilityLocation.builder()
                 .id(101L)
-                .name("Floor 2")
                 .hospital(mockHospital)
+                .name("2nd Floor")
+                .locationType(LocationType.FLOOR)
                 .parentId(100L)
                 .build();
 
         roomLocation = FacilityLocation.builder()
                 .id(102L)
-                .name("ICU Room 204")
                 .hospital(mockHospital)
+                .name("ICU Room 204")
+                .locationType(LocationType.ROOM)
                 .parentId(101L)
+                .build();
+
+        mockEquipment = Equipment.builder()
+                .id(50L)
+                .equipmentCode("EQ-500")
+                .name("Ventilator v2")
+                .department("ICU")
+                .status(EquipmentStatus.ACTIVE)
+                .hospital(mockHospital)
+                .location(roomLocation)
+                .quantity(2)
+                .minimumStock(5)
                 .build();
     }
 
     @Nested
-    @DisplayName("Location Hierarchy Subtree Resolution Tests")
-    class LocationHierarchyTests {
+    @DisplayName("GetAllEquipment Location Hierarchy Tests")
+    class LocationHierarchyFilteringTests {
 
         @Test
-        @DisplayName("Should fetch equipment filtering by location root and all descendant subtrees")
+        @DisplayName("Should return hospital equipment when location ID is null")
+        void getAllEquipment_withoutLocationFilter_returnsHospitalPage() {
+            Pageable pageable = PageRequest.of(0, 10);
+            Page<Equipment> page = new PageImpl<>(List.of(mockEquipment), pageable, 1);
+
+            when(userRepository.findByUsername("hospital_admin")).thenReturn(Optional.of(mockUser));
+            when(hospitalRepository.findByUserId(1L)).thenReturn(Optional.of(mockHospital));
+            when(equipmentRepository.findByHospitalId(10L, pageable)).thenReturn(page);
+
+            Page<Equipment> result = equipmentService.getAllEquipment("hospital_admin", null, pageable);
+
+            assertNotNull(result);
+            assertEquals(1, result.getTotalElements());
+            assertEquals("Ventilator v2", result.getContent().get(0).getName());
+            verify(equipmentRepository).findByHospitalId(10L, pageable);
+            verifyNoInteractions(facilityLocationRepository);
+        }
+
+        @Test
+        @DisplayName("Should resolve location subtree and query equipment matching subtree nodes")
         void getAllEquipment_withValidLocationId_resolvesSubtreeAndQueriesRepository() {
             Pageable pageable = PageRequest.of(0, 10);
-            Equipment assetInRoom = Equipment.builder()
-                    .id(50L)
-                    .equipmentCode("EQ-500")
-                    .name("Ventilator X1")
-                    .hospital(mockHospital)
-                    .location(roomLocation)
-                    .build();
-
-            Page<Equipment> page = new PageImpl<>(List.of(assetInRoom), pageable, 1);
+            Page<Equipment> page = new PageImpl<>(List.of(mockEquipment), pageable, 1);
             List<FacilityLocation> locations = List.of(buildingLocation, floorLocation, roomLocation);
 
             when(userRepository.findByUsername("hospital_admin")).thenReturn(Optional.of(mockUser));
