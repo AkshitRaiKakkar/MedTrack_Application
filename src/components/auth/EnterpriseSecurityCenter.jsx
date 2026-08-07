@@ -120,6 +120,7 @@ import BiomedicalZeroTrustEbpfPanel from "./BiomedicalZeroTrustEbpfPanel";
 import BiomedicalIncidentCommandDrPanel from "./BiomedicalIncidentCommandDrPanel";
 import BiomedicalZeroTrustDataMeshPanel from "./BiomedicalZeroTrustDataMeshPanel";
 import BiomedicalKeyLifecyclePqcPanel from "./BiomedicalKeyLifecyclePqcPanel";
+import BiomedicalConfidentialComputePanel from "./BiomedicalConfidentialComputePanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -495,7 +496,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "ztebpf", label: "Zero-Trust & eBPF Perimeter Defense", icon: Network },
           { id: "icdr", label: "Incident Command & Air-Gap DR Vaults", icon: Power },
           { id: "ztdatamesh", label: "Zero-Trust Data Mesh & ODRL Policies", icon: Boxes },
-          { id: "keylifecyclepqc", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw }
+          { id: "keylifecyclepqc", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw },
+          { id: "ccenclave", label: "Confidential Compute & Enclaves", icon: Cpu }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1126,6 +1128,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 54: BIOMEDICAL KEY LIFECYCLE & PQC ZEROIZATION */}
       {selectedTab === "keylifecyclepqc" && (
         <BiomedicalKeyLifecyclePqcPanel />
+      )}
+
+      {/* TAB 55: BIOMEDICAL CONFIDENTIAL COMPUTE & HARDWARE SECURE ENCLAVES */}
+      {selectedTab === "ccenclave" && (
+        <BiomedicalConfidentialComputePanel />
       )}
 
       {/* 4. MODALS */}
