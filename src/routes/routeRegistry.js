@@ -58,6 +58,11 @@ const UpdateTask = lazy(() => import("../pages/technician/UpdateTask"));
 
 const OrdersList = lazy(() => import("../pages/supplier/OrdersList"));
 const OrderStatus = lazy(() => import("../pages/supplier/OrderStatus"));
+const TenderBids = lazy(() => import("../pages/supplier/TenderBids"));
+
+const TenderList = lazy(() => import("../pages/hospital/TenderList"));
+const TenderCreate = lazy(() => import("../pages/hospital/TenderCreate"));
+const TenderDetail = lazy(() => import("../pages/hospital/TenderDetail"));
 
 const AuthoritySecurityPage = lazy(() => import("../pages/auth/AuthoritySecurityPage"));
 const MfaSecurityPage = lazy(() => import("../pages/auth/MfaSecurityPage"));
@@ -167,6 +172,9 @@ export const ROUTES = [
   { page: "sla-dashboard", slugs: ["sla-dashboard"], component: MaintenanceSlaDashboard, access: HOSPITAL_ONLY },
   { page: "calibration", slugs: ["calibration", "equipment-calibration"], component: EquipmentCalibrationHub, access: HOSPITAL_ONLY },
   { page: "retired-assets", slugs: ["retired-assets", "retired"], component: RetiredAssets, access: HOSPITAL_ONLY },
+  { page: "tenders", slugs: ["tenders"], component: TenderList, access: HOSPITAL_ONLY },
+  { page: "tender-create", slugs: ["tender-create", "new-tender"], component: TenderCreate, access: HOSPITAL_ONLY },
+  { page: "tender-detail", slugs: ["tender"], component: TenderDetail, access: HOSPITAL_ONLY, param: "tenderId" },
 
   // --- technician -------------------------------------------------------------
   { page: "tasks", slugs: ["tasks"], component: TaskList, access: AUTHENTICATED },
@@ -175,6 +183,7 @@ export const ROUTES = [
   // --- supplier ---------------------------------------------------------------
   { page: "orders", slugs: ["orders"], component: OrdersList, access: AUTHENTICATED },
   { page: "orderstatus", slugs: ["orderstatus"], component: OrderStatus, access: AUTHENTICATED, param: "order" },
+  { page: "tender-bids", slugs: ["tender-bids", "open-tenders"], component: TenderBids, access: AUTHENTICATED },
 
   // --- security consoles: tenant-wide policy, hospital admin only -------------
   { page: "authority-security", slugs: ["authority-security", "authority"], component: AuthoritySecurityPage, access: HOSPITAL_ONLY },
