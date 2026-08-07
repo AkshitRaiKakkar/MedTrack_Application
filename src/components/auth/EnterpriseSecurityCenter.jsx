@@ -118,6 +118,7 @@ import BiomedicalAiWatermarkC2paPanel from "./BiomedicalAiWatermarkC2paPanel";
 import BiomedicalQkdPqcVpnPanel from "./BiomedicalQkdPqcVpnPanel";
 import BiomedicalZeroTrustEbpfPanel from "./BiomedicalZeroTrustEbpfPanel";
 import BiomedicalIncidentCommandDrPanel from "./BiomedicalIncidentCommandDrPanel";
+import BiomedicalZeroTrustDataMeshPanel from "./BiomedicalZeroTrustDataMeshPanel";
 import "../../pages/auth/auth.css";
 
 /**
@@ -491,7 +492,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "aiwatermarkc2pa", label: "AI Watermark & C2PA Provenance", icon: Stamp },
           { id: "qkdppcvpn", label: "QKD & Post-Quantum VPN Tunnels", icon: Radio },
           { id: "ztebpf", label: "Zero-Trust & eBPF Perimeter Defense", icon: Network },
-          { id: "icdr", label: "Incident Command & Air-Gap DR Vaults", icon: Power }
+          { id: "icdr", label: "Incident Command & Air-Gap DR Vaults", icon: Power },
+          { id: "ztdatamesh", label: "Zero-Trust Data Mesh & ODRL Policies", icon: Boxes }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1112,6 +1114,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 52: BIOMEDICAL INCIDENT COMMAND & AIR-GAP DR VAULTS */}
       {selectedTab === "icdr" && (
         <BiomedicalIncidentCommandDrPanel />
+      )}
+
+      {/* TAB 53: BIOMEDICAL ZERO-TRUST DATA MESH & ODRL POLICIES */}
+      {selectedTab === "ztdatamesh" && (
+        <BiomedicalZeroTrustDataMeshPanel />
       )}
 
       {/* 4. MODALS */}
