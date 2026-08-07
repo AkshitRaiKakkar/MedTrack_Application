@@ -13,6 +13,7 @@ import com.medtrack.supplier.dto.UpdateShipmentStatusRequest;
 import com.medtrack.supplier.model.ShipmentStatus;
 import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
+import com.medtrack.supplier.workflow.ShipmentWorkflowOrchestrator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ public class ShipmentTrackingService {
 
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final EquipmentOrderRepository orderRepository;
+    private final ShipmentWorkflowOrchestrator orchestrator;
 
     @Transactional
     public ShipmentTrackingResponse createShipment(CreateShipmentRequest request) {
@@ -89,13 +91,7 @@ public class ShipmentTrackingService {
         }
 
         ShipmentStatus currentStatus = shipment.getShipmentStatus();
-        if (newStatus == currentStatus) {
-            throw new InvalidStatusTransitionException("Shipment is already in " + currentStatus + " status");
-        }
-        if (newStatus.ordinal() < currentStatus.ordinal()) {
-            throw new InvalidStatusTransitionException(
-                    "Cannot revert status from " + currentStatus + " to " + newStatus);
-        }
+        orchestrator.validateStateTransition(currentStatus, newStatus);
 
         // 3. Update shipment record
         shipment.setShipmentStatus(newStatus);
