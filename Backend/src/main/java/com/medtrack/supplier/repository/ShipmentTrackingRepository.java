@@ -49,4 +49,19 @@ public interface ShipmentTrackingRepository extends JpaRepository<ShipmentTracki
 
     @Query("SELECT DISTINCT s.supplierId FROM ShipmentTracking s")
     List<Long> findDistinctSupplierIds();
+
+    // Phase 15: Predictive Analytics Queries
+    List<ShipmentTracking> findBySupplierIdAndShipmentStatusIn(Long supplierId, List<ShipmentStatus> statuses);
+
+    @Query("SELECT COUNT(s) FROM ShipmentTracking s WHERE s.supplierId = :supplierId AND s.createdAt >= :startDate AND s.createdAt <= :endDate")
+    long countShipmentsBySupplierAndDateRange(@Param("supplierId") Long supplierId,
+            @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COUNT(s) FROM ShipmentTracking s WHERE s.supplierId = :supplierId AND s.delayDetected = true AND s.createdAt >= :startDate AND s.createdAt <= :endDate")
+    long countDelayedShipmentsBySupplierAndDateRange(@Param("supplierId") Long supplierId,
+            @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COUNT(s) FROM ShipmentTracking s WHERE s.supplierId = :supplierId AND s.shipmentStatus = 'DELIVERED' AND s.createdAt >= :startDate AND s.createdAt <= :endDate")
+    long countDeliveredShipmentsBySupplierAndDateRange(@Param("supplierId") Long supplierId,
+            @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 }
