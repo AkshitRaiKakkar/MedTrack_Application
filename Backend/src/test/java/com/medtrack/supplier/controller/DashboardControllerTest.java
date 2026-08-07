@@ -25,6 +25,12 @@ class DashboardControllerTest {
     private DashboardService dashboardService;
 
     @Mock
+    private com.medtrack.supplier.service.prediction.PredictionService predictionService;
+
+    @Mock
+    private com.medtrack.supplier.service.prediction.RecommendationService recommendationService;
+
+    @Mock
     private com.medtrack.auth.repository.UserRepository userRepository;
 
     @InjectMocks
@@ -56,6 +62,19 @@ class DashboardControllerTest {
         when(dashboardService.getSummary(anyLong())).thenReturn(mockSummary);
 
         ResponseEntity<DashboardSummary> response = dashboardController.getSummary();
+
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void testGetDailyForecast() {
+        com.medtrack.supplier.dto.PredictionDTO mockPrediction = com.medtrack.supplier.dto.PredictionDTO.builder()
+                .build();
+        when(predictionService.getDailyForecast(anyLong())).thenReturn(mockPrediction);
+
+        ResponseEntity<com.medtrack.supplier.dto.PredictionDTO> response = dashboardController.getDailyForecast();
 
         assertNotNull(response);
         assertEquals(200, response.getStatusCode().value());

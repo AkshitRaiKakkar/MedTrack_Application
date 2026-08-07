@@ -213,6 +213,91 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/auth/vulnerability/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/auth/vulnerability/**").hasRole("HOSPITAL")
 
+                // Security administration modules added after the original authorization matrix.
+                // Their policies, telemetry, cloud posture, playbooks and threat records affect
+                // the security posture of the full deployment. Read access remains available to
+                // signed-in users; every state-changing route requires a hospital administrator.
+                .requestMatchers(HttpMethod.GET,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).authenticated()
+                .requestMatchers(HttpMethod.POST,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PUT,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.PATCH,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).hasRole("HOSPITAL")
+                .requestMatchers(HttpMethod.DELETE,
+                    "/api/auth/compliance/**",
+                    "/api/auth/cspm/**",
+                    "/api/auth/evidence/**",
+                    "/api/auth/governance/**",
+                    "/api/auth/microsegmentation/**",
+                    "/api/auth/observability/**",
+                    "/api/auth/playbook/**",
+                    "/api/auth/posture/**",
+                    "/api/auth/reporting/**",
+                    "/api/auth/saml/**",
+                    "/api/auth/sbom/**",
+                    "/api/auth/soar/**",
+                    "/api/auth/threat/**",
+                    "/api/auth/threatintel/**"
+                ).hasRole("HOSPITAL")
+
                 // Equipment module boundaries:
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.
@@ -242,6 +327,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/procurement/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/procurement/**").hasRole("HOSPITAL")
 
+                // Multi-supplier tender / e-auction workflow boundaries:
+                // Reads (tenders, bids, audit): authorized users, with per-record visibility
+                // enforced in TenderService. Bid submission/withdrawal: suppliers only.
+                // Publish, rounds, award, and cancel: Hospital admins only.
+                .requestMatchers(HttpMethod.GET, "/api/tenders/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/tenders/*/bids").hasRole("SUPPLIER")
+                .requestMatchers(HttpMethod.POST, "/api/tenders/*/bids/*/withdraw").hasRole("SUPPLIER")
+                .requestMatchers(HttpMethod.POST, "/api/tenders/**").hasRole("HOSPITAL")
+
                 // Maintenance schedules boundaries:
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.
@@ -256,8 +350,14 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/maintenance/**").hasRole("TECHNICIAN")
                 .requestMatchers(HttpMethod.DELETE, "/api/maintenance/**").hasRole("HOSPITAL")
 
-                // Shipment tracking boundaries:
-                // GET requests: Any authenticated user.
+                // Supplier portal boundaries:
+                // All supplier-scoped endpoints require SUPPLIER authority to protect vendor isolation.
+                // Supplier orders, portal metrics, and supplier-specific shipment lookups:
+                .requestMatchers("/api/supplier/**").hasRole("SUPPLIER")
+                .requestMatchers("/api/shipments/supplier/**").hasRole("SUPPLIER")
+
+                // General shipment tracking boundaries:
+                // General GET requests: Any authenticated user.
                 // Write/Modify: Restricted to Suppliers.
                 .requestMatchers(HttpMethod.GET, "/api/shipments/**").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/shipments").hasRole("SUPPLIER")

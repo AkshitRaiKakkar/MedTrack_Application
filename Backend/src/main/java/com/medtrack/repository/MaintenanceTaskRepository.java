@@ -153,6 +153,36 @@ public interface MaintenanceTaskRepository extends JpaRepository<MaintenanceTask
             @Param("equipmentId") Long equipmentId,
             @Param("hospitalId") Long hospitalId);
 
+    List<MaintenanceTask> findByEquipmentHospitalId(Long hospitalId);
+
+    List<MaintenanceTask> findByEquipmentHospitalIdAndStatus(
+            Long hospitalId,
+            MaintenanceStatus status
+    );
+
+    List<MaintenanceTask> findByEquipmentHospitalIdAndScheduledDateBetween(
+            Long hospitalId,
+            LocalDate start,
+            LocalDate end
+    );
+
+    List<MaintenanceTask> findByEquipmentHospitalIdAndScheduledDateBefore(
+            Long hospitalId,
+            LocalDate date
+    );
+
+    @Query("SELECT CASE WHEN COUNT(mt) > 0 THEN TRUE ELSE FALSE END FROM MaintenanceTask mt "
+            + "WHERE mt.deleted = FALSE "
+            + "AND mt.hospitalId = :hospitalId "
+            + "AND mt.equipmentRecord.id = :equipmentRecordId "
+            + "AND LOWER(mt.maintenanceType) = LOWER(:maintenanceType) "
+            + "AND mt.status IN :activeStatuses")
+    boolean existsActiveTaskForEquipment(
+            @Param("hospitalId") Long hospitalId,
+            @Param("equipmentRecordId") Long equipmentRecordId,
+            @Param("maintenanceType") String maintenanceType,
+            @Param("activeStatuses") List<MaintenanceStatus> activeStatuses);
+
     // Analytics aggregation queries
     @Query(value = "SELECT COUNT(*) FROM maintenance_tasks mt "
             + "JOIN equipment e ON e.id = mt.equipment_record_id "

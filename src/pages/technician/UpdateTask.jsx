@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { updateTask, getTaskById } from "../../services/MaintenanceService";
+import { getAllSpareParts } from "../../services/SparePartService";
 import { useAuth } from "../../context/AuthContext";
 
 export default function UpdateTask({ onNavigate, task: initialTask }) {
@@ -29,6 +30,13 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
   const [preview, setPreview] = useState(null);
 
   const isTechnician = user?.role?.toLowerCase() === "technician";
+  const [availableParts, setAvailableParts] = useState([]);
+
+  useEffect(() => {
+    getAllSpareParts()
+      .then((data) => setAvailableParts(data))
+      .catch((err) => console.error("Error fetching parts catalog:", err));
+  }, []);
 
   useEffect(() => {
     if (initialTask?.id) {
@@ -492,29 +500,27 @@ export default function UpdateTask({ onNavigate, task: initialTask }) {
                     </label>
 
                     <div className="flex gap-2">
-                      <input
+                      <select
                         value={part}
                         onChange={(e) => setPart(e.target.value)}
-                        placeholder="Enter part name / serial"
-                        disabled={!isTechnician}
-                        className="flex-1 p-4 bg-slate-50 border rounded-2xl text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 disabled:opacity-70"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addPart();
-                          }
-                        }}
-                      />
-
-                      {isTechnician && (
-                        <button
-                          type="button"
-                          onClick={addPart}
-                          className="px-6 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800"
-                        >
-                          Add
-                        </button>
-                      )}
+                        disabled={!isTechnician || task?.status === "COMPLETED"}
+                        className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:opacity-50"
+                      >
+                        <option value="">-- Select a part from catalog --</option>
+                        {availableParts.map(p => (
+                          <option key={p.id} value={p.partNumber} disabled={p.stockLevel <= 0}>
+                            {p.partNumber} - {p.description} (Stock: {p.stockLevel})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={addPart}
+                        disabled={!isTechnician || task?.status === "COMPLETED" || !part}
+                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50"
+                      >
+                        Add
+                      </button>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-3">

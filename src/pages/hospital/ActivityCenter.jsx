@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { eventStream, getEvents, getUnreadCounts, markEventsAsRead, markAllEventsAsRead } from '../../services/EventStreamService';
+import { getNotificationPreferences, setNotificationPreference } from '../../services/NotificationPreferenceService';
 import { useAuth } from '../../context/AuthContext';
 import { getLocalDemoEvents, saveLocalDemoEvents } from '../../components/hospital/ActivityCenterDemoEvents';
 import ActivityCenterEventDetailModal from '../../components/hospital/ActivityCenterEventDetailModal';
@@ -29,6 +30,7 @@ const ActivityCenter = ({ onClose, onNavigate }) => {
   const [filterCategory, setFilterCategory] = useState(null);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [mutedCategories, setMutedCategories] = useState({});
 
   // Selected event for detail modal
   const [selectedEventModal, setSelectedEventModal] = useState(null);
@@ -86,10 +88,35 @@ const ActivityCenter = ({ onClose, onNavigate }) => {
     }
   }, []);
 
+  const loadMutedCategories = useCallback(async () => {
+    try {
+      const data = await getNotificationPreferences();
+      setMutedCategories(data.muted || {});
+    } catch (err) {
+      console.warn('Backend API unavailable, notification preferences default to unmuted');
+    }
+  }, []);
+
   useEffect(() => {
     loadEvents(0, false);
     loadUnreadCounts();
-  }, [loadEvents, loadUnreadCounts]);
+    loadMutedCategories();
+  }, [loadEvents, loadUnreadCounts, loadMutedCategories]);
+
+  const handleToggleMute = async (category, event) => {
+    event.stopPropagation();
+    const nextMuted = !mutedCategories[category];
+    setMutedCategories(prev => ({ ...prev, [category]: nextMuted }));
+    try {
+      await setNotificationPreference(category, nextMuted);
+    } catch (err) {
+      console.warn('Backend API unavailable, mute preference not persisted');
+    }
+    loadUnreadCounts();
+    if (!filterCategory) {
+      loadEvents(0, false);
+    }
+  };
 
   useEffect(() => {
     if (!user?.token) return;
@@ -220,25 +247,39 @@ const ActivityCenter = ({ onClose, onNavigate }) => {
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
           <div className="flex flex-wrap gap-2 mb-3">
             {categories.map(cat => (
-              <button
+              <span
                 key={cat.value || 'all'}
-                onClick={() => {
-                  setFilterCategory(cat.value);
-                  loadEvents(0, false);
-                }}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all ${
+                className={`inline-flex items-center rounded-full transition-all ${
                   filterCategory === cat.value
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700'
-                }`}
+                } ${cat.value && mutedCategories[cat.value] ? 'opacity-50' : ''}`}
               >
-                {cat.label}
-                {cat.value && unreadCounts.byCategory[cat.value] > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                    {unreadCounts.byCategory[cat.value]}
-                  </span>
+                <button
+                  onClick={() => {
+                    setFilterCategory(cat.value);
+                    loadEvents(0, false);
+                  }}
+                  className="pl-3 pr-1.5 py-1.5 text-xs font-semibold"
+                >
+                  {cat.label}
+                  {cat.value && unreadCounts.byCategory[cat.value] > 0 && (
+                    <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                      {unreadCounts.byCategory[cat.value]}
+                    </span>
+                  )}
+                </button>
+                {cat.value && (
+                  <button
+                    onClick={(e) => handleToggleMute(cat.value, e)}
+                    className="px-1.5 py-1.5 text-[11px] opacity-80 hover:opacity-100"
+                    aria-label={mutedCategories[cat.value] ? `Unmute ${cat.label}` : `Mute ${cat.label}`}
+                    title={mutedCategories[cat.value] ? `Unmute ${cat.label}` : `Mute ${cat.label}`}
+                  >
+                    {mutedCategories[cat.value] ? '🔕' : '🔔'}
+                  </button>
                 )}
-              </button>
+              </span>
             ))}
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 font-medium">

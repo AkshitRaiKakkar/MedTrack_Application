@@ -3,9 +3,13 @@ package com.medtrack.supplier.security;
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+
+import java.util.Objects;
 
 /**
  * Shared authorization guard for supplier-facing order and shipment endpoints that accept
@@ -19,6 +23,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SupplierAccessGuard {
 
+    private static final Logger log = LoggerFactory.getLogger(SupplierAccessGuard.class);
     private final UserRepository userRepository;
 
     /**
@@ -31,8 +36,15 @@ public class SupplierAccessGuard {
      * @throws AccessDeniedException if the authenticated user cannot be resolved
      */
     public Long resolveCallerId(Authentication authentication) {
-        User caller = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new AccessDeniedException("Authenticated user could not be resolved"));
+        if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
+            log.warn("Attempted caller resolution with unauthenticated or null security context");
+            throw new AccessDeniedException("Authenticated user could not be resolved");
+        }
+        User caller = userRepository.findByEmail(authentication.getName().trim().toLowerCase())
+                .orElseThrow(() -> {
+                    log.warn("Failed to resolve user account for email principal: {}", authentication.getName());
+                    return new AccessDeniedException("Authenticated user could not be resolved");
+                });
         return caller.getId();
     }
 
@@ -47,7 +59,9 @@ public class SupplierAccessGuard {
         if (isHospitalAdmin(authentication)) {
             return;
         }
-        if (!resolveCallerId(authentication).equals(targetSupplierId)) {
+        Long callerId = resolveCallerId(authentication);
+        if (!Objects.equals(callerId, targetSupplierId)) {
+            log.warn("Access denied for caller {} attempting to access target supplier ID {}", callerId, targetSupplierId);
             throw new AccessDeniedException("You are not authorized to access this supplier's data");
         }
     }
@@ -60,16 +74,39 @@ public class SupplierAccessGuard {
         if (isHospitalAdmin(authentication) || assignedSupplierId == null) {
             return;
         }
-        if (!assignedSupplierId.equals(callerId)) {
+        if (!Objects.equals(assignedSupplierId, callerId)) {
+            log.warn("Access denied for caller ID {} matching assigned supplier ID {}", callerId, assignedSupplierId);
             throw new AccessDeniedException("You are not authorized to access this supplier's data");
         }
     }
 
+    /**
+     * Confirms the caller holds HOSPITAL administrator privileges.
+     *
+     * @param authentication active security context
+     * @return true if caller has ROLE_HOSPITAL
+     */
     public boolean isHospitalAdmin(Authentication authentication) {
         return hasRole(authentication, "HOSPITAL");
     }
 
+    /**
+     * Confirms the caller holds SUPPLIER privileges.
+     *
+     * @param authentication active security context
+     * @return true if caller has ROLE_SUPPLIER
+     */
+    public boolean isSupplier(Authentication authentication) {
+        return hasRole(authentication, "SUPPLIER");
+    }
+
+    /**
+     * Internal helper to verify if the authentication authorities contain the specified role.
+     */
     private boolean hasRole(Authentication authentication, String role) {
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
         String expected = "ROLE_" + role.toUpperCase();
         return authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equalsIgnoreCase(expected));

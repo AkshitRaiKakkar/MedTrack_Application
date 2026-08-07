@@ -25,6 +25,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -41,6 +42,8 @@ public class SupplierOrderService {
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final SupplierAccessGuard supplierAccessGuard;
     private final SupplierPerformanceService supplierPerformanceService;
+    private final SupplierAuditLogService auditLogService;
+    private final ShipmentWorkflowOrchestrator orchestrator;
 
     @Autowired(required = false)
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -170,24 +173,7 @@ public class SupplierOrderService {
                     "Legacy order status is not valid for transitions: " + currentStatusStr);
         }
 
-        if (currentStatus == requestedStatus) {
-            throw new InvalidStatusTransitionException("State transition from " + currentStatus + " to "
-                    + requestedStatus + " is same-state and not allowed.");
-        }
-
-        boolean isValidTransition = false;
-        if (currentStatus == ShipmentStatus.PENDING && requestedStatus == ShipmentStatus.CONFIRMED) {
-            isValidTransition = true;
-        } else if (currentStatus == ShipmentStatus.CONFIRMED && requestedStatus == ShipmentStatus.SHIPPED) {
-            isValidTransition = true;
-        } else if (currentStatus == ShipmentStatus.SHIPPED && requestedStatus == ShipmentStatus.DELIVERED) {
-            isValidTransition = true;
-        }
-
-        if (!isValidTransition) {
-            throw new InvalidStatusTransitionException(
-                    "Invalid status transition from " + currentStatus + " to " + requestedStatus);
-        }
+        orchestrator.validateStateTransition(currentStatus, requestedStatus);
 
         // Process Shipment state additions
         if (requestedStatus == ShipmentStatus.SHIPPED) {
@@ -247,6 +233,9 @@ public class SupplierOrderService {
 
         order.setStatus(requestedStatus.name());
         order.setUpdatedAt(LocalDateTime.now());
+
+        auditLogService.logAction(orderId, resolveSupplierId(), "STATUS_UPDATE",
+                "Order status transitioned to " + requestedStatus.name(), resolveCurrentUsername());
 
         return orderRepository.save(order);
     }
@@ -316,9 +305,11 @@ public class SupplierOrderService {
                 kafkaTemplate.send(orderEventsTopic, String.valueOf(orderId), event);
                 supplierPerformanceService.publishPerformanceUpdate(shipment.getSupplierId());
             }
+            orchestrator.markOperationSuccessful(orderId, "EVENT_PUBLISH");
         } catch (Exception e) {
             log.error("Failed to publish Kafka event for order ID: [{}], status: [{}] due to error: {}",
                     orderId, status, e.getMessage(), e);
+            orchestrator.registerPendingOperation(orderId, "EVENT_PUBLISH", "{}", e.getMessage());
         }
     }
 }

@@ -2,6 +2,7 @@ package com.medtrack.controller;
 
 import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
+import com.medtrack.dto.EquipmentFailureRiskDto;
 import com.medtrack.dto.HospitalAnalyticsDto;
 import com.medtrack.model.Hospital;
 import com.medtrack.repository.HospitalRepository;
@@ -32,5 +33,18 @@ public class AnalyticsController {
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
 
         return ResponseEntity.ok(analyticsService.getHospitalAnalytics(hospital.getId()));
+    }
+
+    @GetMapping("/equipment/{id}/failure-risk")
+    @PreAuthorize("hasRole('HOSPITAL')")
+    public ResponseEntity<EquipmentFailureRiskDto> getEquipmentFailureRisk(
+            @PathVariable Long id,
+            Authentication authentication) {
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        Hospital hospital = hospitalRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
+
+        return ResponseEntity.ok(analyticsService.predictFailureRisk(id, hospital.getId()));
     }
 }

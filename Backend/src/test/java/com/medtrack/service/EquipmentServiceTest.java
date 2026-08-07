@@ -12,6 +12,7 @@ import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentImportAuditLog;
 import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.Hospital;
+import com.medtrack.model.OperationsEvent;
 import com.medtrack.repository.EquipmentImportAuditLogRepository;
 import com.medtrack.repository.EquipmentRepository;
 import com.medtrack.repository.HospitalRepository;
@@ -49,6 +50,9 @@ public class EquipmentServiceTest {
 
     @Mock
     private EquipmentImportAuditLogRepository equipmentImportAuditLogRepository;
+
+    @Mock
+    private EventPublisherService eventPublisherService;
 
     @InjectMocks
     private EquipmentService equipmentService;
@@ -144,6 +148,55 @@ public class EquipmentServiceTest {
         assertFalse(base64Qr.isEmpty());
         // Verify it looks like Base64 (valid characters)
         assertTrue(base64Qr.matches("^[a-zA-Z0-9+/\\s=]+$"));
+    }
+
+    @Test
+    void adjustStock_CrossingIntoLowStock_PublishesEvent() {
+        mockEquipment.setQuantity(15);
+        mockEquipment.setMinimumStock(10);
+
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        when(equipmentRepository.findByIdAndHospitalId(100L, mockHospital.getId())).thenReturn(Optional.of(mockEquipment));
+        when(equipmentRepository.save(any(Equipment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        com.medtrack.dto.StockAdjustmentRequest request = com.medtrack.dto.StockAdjustmentRequest.builder()
+                .delta(-8)
+                .build();
+
+        Equipment result = equipmentService.adjustStock(100L, request, username);
+
+        assertEquals(7, result.getQuantity());
+        verify(eventPublisherService).publishEvent(
+                eq(mockHospital.getId()),
+                eq(OperationsEvent.EventCategory.EQUIPMENT),
+                eq(OperationsEvent.EventType.EQUIPMENT_LOW_STOCK),
+                any(String.class),
+                any(String.class),
+                eq(mockEquipment.getId()),
+                eq(OperationsEvent.EntityType.EQUIPMENT),
+                eq("system"),
+                eq(OperationsEvent.EventSeverity.WARNING));
+    }
+
+    @Test
+    void adjustStock_AlreadyLowStock_DoesNotRepublishEvent() {
+        mockEquipment.setQuantity(8);
+        mockEquipment.setMinimumStock(10);
+
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(mockUser));
+        when(hospitalRepository.findByUserId(mockUser.getId())).thenReturn(Optional.of(mockHospital));
+        when(equipmentRepository.findByIdAndHospitalId(100L, mockHospital.getId())).thenReturn(Optional.of(mockEquipment));
+        when(equipmentRepository.save(any(Equipment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        com.medtrack.dto.StockAdjustmentRequest request = com.medtrack.dto.StockAdjustmentRequest.builder()
+                .delta(2)
+                .build();
+
+        equipmentService.adjustStock(100L, request, username);
+
+        verify(eventPublisherService, never()).publishEvent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

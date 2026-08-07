@@ -5,6 +5,8 @@ import com.medtrack.exception.InvalidStatusTransitionException;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.EquipmentOrder;
 import com.medtrack.repository.EquipmentOrderRepository;
+import com.medtrack.supplier.dto.BulkDeliveryConfirmationRequest;
+import com.medtrack.supplier.dto.BulkShipmentConfirmationRequest;
 import com.medtrack.supplier.dto.CreateShipmentRequest;
 import com.medtrack.supplier.dto.ShipmentTrackingResponse;
 import com.medtrack.supplier.dto.UpdateShipmentStatusRequest;
@@ -12,6 +14,7 @@ import com.medtrack.supplier.model.ShipmentStatus;
 import com.medtrack.supplier.model.ShipmentTracking;
 import com.medtrack.supplier.repository.ShipmentTrackingRepository;
 import com.medtrack.supplier.security.SupplierAccessGuard;
+import com.medtrack.supplier.validation.ShipmentRequestValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,8 +23,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,20 +31,24 @@ public class ShipmentTrackingService {
     private final ShipmentTrackingRepository shipmentTrackingRepository;
     private final EquipmentOrderRepository orderRepository;
     private final SupplierAccessGuard supplierAccessGuard;
+    private final ShipmentRequestValidator validator;
 
     @Transactional
     public ShipmentTrackingResponse createShipment(CreateShipmentRequest request, Authentication authentication) {
+        validator.validateCreateShipmentRequest(request);
+
         // 1. Verify associated order exists
         EquipmentOrder order = orderRepository.findById(request.getOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + request.getOrderId()));
 
         // 2. Prevent duplicate shipment creation for same order
         shipmentTrackingRepository.findByOrderId(request.getOrderId()).ifPresent(s -> {
-            throw new IllegalArgumentException("Shipment tracking already exists for Order ID: " + request.getOrderId());
+            throw new IllegalArgumentException(
+                    "Shipment tracking already exists for Order ID: " + request.getOrderId());
         });
 
         // 3. Ensure tracking number uniqueness
-        shipmentTrackingRepository.findByShipmentTrackingNumber(request.getShipmentTrackingNumber()).ifPresent(s -> {
+        shipmentTrackingRepository.findByShipmentTrackingNumber(request.getShipmentTrackingNumber().trim()).ifPresent(s -> {
             throw new DuplicateTrackingNumberException("Tracking number already in use: " + request.getShipmentTrackingNumber());
         });
 
@@ -52,7 +57,7 @@ public class ShipmentTrackingService {
         // create a shipment claiming to be a different supplier.
         ShipmentTracking shipment = ShipmentTracking.builder()
                 .orderId(request.getOrderId())
-                .shipmentTrackingNumber(request.getShipmentTrackingNumber())
+                .shipmentTrackingNumber(request.getShipmentTrackingNumber().trim())
                 .estimatedDeliveryDate(request.getEstimatedDeliveryDate())
                 .shipmentStatus(ShipmentStatus.PENDING)
                 .supplierId(supplierAccessGuard.resolveCallerId(authentication))
@@ -62,8 +67,8 @@ public class ShipmentTrackingService {
         ShipmentTracking savedShipment = shipmentTrackingRepository.save(shipment);
 
         // 5. Update order details
-        order.setTrackingNo(request.getShipmentTrackingNumber());
-        order.setCarrier(request.getCarrier());
+        order.setTrackingNo(request.getShipmentTrackingNumber().trim());
+        order.setCarrier(request.getCarrier().trim());
         order.setStatus("CONFIRMED");
         order.setShippingStatus("Processing");
         order.setUpdatedAt(LocalDateTime.now());
@@ -75,6 +80,9 @@ public class ShipmentTrackingService {
     @Transactional
     public ShipmentTrackingResponse updateShipmentStatus(Long id, UpdateShipmentStatusRequest request,
             Authentication authentication) {
+        validator.validateEntityId(id, "Shipment");
+        validator.validateUpdateStatusRequest(request);
+
         // 1. Retrieve the tracking record
         ShipmentTracking shipment = shipmentTrackingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Shipment tracking not found with ID: " + id));
@@ -86,19 +94,13 @@ public class ShipmentTrackingService {
         // 2. Map and validate status transition
         ShipmentStatus newStatus;
         try {
-            newStatus = ShipmentStatus.valueOf(request.getShipmentStatus().toUpperCase());
+            newStatus = ShipmentStatus.valueOf(request.getShipmentStatus().trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid shipment status value: " + request.getShipmentStatus());
         }
 
         ShipmentStatus currentStatus = shipment.getShipmentStatus();
-        if (newStatus == currentStatus) {
-            throw new InvalidStatusTransitionException("Shipment is already in " + currentStatus + " status");
-        }
-        if (newStatus.ordinal() < currentStatus.ordinal()) {
-            throw new InvalidStatusTransitionException(
-                    "Cannot revert status from " + currentStatus + " to " + newStatus);
-        }
+        orchestrator.validateStateTransition(currentStatus, newStatus);
 
         // 3. Update shipment record
         shipment.setShipmentStatus(newStatus);
@@ -126,7 +128,7 @@ public class ShipmentTrackingService {
         }
 
         if (request.getSupplierNotes() != null) {
-            order.setSupplierNotes(request.getSupplierNotes());
+            order.setSupplierNotes(request.getSupplierNotes().trim());
         }
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
@@ -134,8 +136,28 @@ public class ShipmentTrackingService {
         return mapToResponse(updatedShipment);
     }
 
+    @Transactional
+    public List<ShipmentTrackingResponse> bulkConfirmShipments(BulkShipmentConfirmationRequest request) {
+        return request.getShipments().stream()
+                .map(this::createShipment)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<ShipmentTrackingResponse> bulkConfirmDeliveries(BulkDeliveryConfirmationRequest request) {
+        UpdateShipmentStatusRequest updateRequest = UpdateShipmentStatusRequest.builder()
+                .shipmentStatus("DELIVERED")
+                .supplierNotes("Bulk delivery confirmation")
+                .build();
+
+        return request.getShipmentIds().stream()
+                .map(id -> updateShipmentStatus(id, updateRequest))
+                .collect(Collectors.toList());
+    }
+
     @Transactional(readOnly = true)
     public ShipmentTrackingResponse getShipmentById(Long id, Authentication authentication) {
+        validator.validateEntityId(id, "Shipment");
         ShipmentTracking shipment = shipmentTrackingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Shipment tracking not found with ID: " + id));
         assertCanView(authentication, shipment);
@@ -144,7 +166,8 @@ public class ShipmentTrackingService {
 
     @Transactional(readOnly = true)
     public ShipmentTrackingResponse getShipmentByTrackingNumber(String trackingNumber, Authentication authentication) {
-        ShipmentTracking shipment = shipmentTrackingRepository.findByShipmentTrackingNumber(trackingNumber)
+        validator.validateTrackingNumber(trackingNumber);
+        ShipmentTracking shipment = shipmentTrackingRepository.findByShipmentTrackingNumber(trackingNumber.trim())
                 .orElseThrow(() -> new ResourceNotFoundException("Shipment tracking not found for tracking number: " + trackingNumber));
         assertCanView(authentication, shipment);
         return mapToResponse(shipment);
@@ -152,6 +175,7 @@ public class ShipmentTrackingService {
 
     @Transactional(readOnly = true)
     public ShipmentTrackingResponse getShipmentByOrderId(Long orderId, Authentication authentication) {
+        validator.validateEntityId(orderId, "Order");
         ShipmentTracking shipment = shipmentTrackingRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Shipment tracking not found for Order ID: " + orderId));
         assertCanView(authentication, shipment);
@@ -160,6 +184,7 @@ public class ShipmentTrackingService {
 
     @Transactional(readOnly = true)
     public Page<ShipmentTrackingResponse> getShipmentsBySupplier(Long supplierId, Pageable pageable, Authentication authentication) {
+        validator.validateEntityId(supplierId, "Supplier");
         supplierAccessGuard.assertSelfOrHospitalAdmin(authentication, supplierId);
         return shipmentTrackingRepository.findBySupplierId(supplierId, pageable)
                 .map(this::mapToResponse);

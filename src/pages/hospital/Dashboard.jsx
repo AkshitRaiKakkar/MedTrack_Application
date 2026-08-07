@@ -1,465 +1,19 @@
-import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
-import { getAllEquipment } from "../../services/EquipmentService";
-import { getAllTasks } from "../../services/MaintenanceService";
-import {
-  AlertTriangle,
-  Award,
-  Bell,
-  Bot,
-  Box,
-  CheckCircle2,
-  ChevronsUpDown,
-  ClipboardList,
-  Clock3,
-  Download,
-  HelpCircle,
-  LayoutGrid,
-  LineChart,
-  Mail,
-  MessageCircle,
-  Puzzle,
-  RefreshCw,
-  Search,
-  Settings,
-  Share2,
-  TrendingUp,
-  Users,
-  Wrench,
-  Workflow,
-} from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import MedTrackLogo from "../../components/common/MedTrackLogo";
-
-const DASHBOARD_DEMO_EQUIPMENT = [
-  {
-    id: "EQ-401",
-    code: "EQ-401",
-    name: "MRI Scanner",
-    model: "GE Signa Voyager",
-    department: "Radiology",
-    category: "Imaging",
-    status: "OPERATIONAL",
-    warrantyStatus: "ACTIVE",
-    warrantyExpiry: "2027-03-14",
-    lastMaintenanceDate: "2026-07-18",
-  },
-  {
-    id: "EQ-402",
-    code: "EQ-402",
-    name: "Ventilator Pro",
-    model: "Philips V680",
-    department: "ICU",
-    category: "Critical Care",
-    status: "NEEDS_MAINTENANCE",
-    warrantyStatus: "EXPIRING_SOON",
-    warrantyExpiry: "2026-09-01",
-    lastMaintenanceDate: "2026-06-02",
-  },
-  {
-    id: "EQ-403",
-    code: "EQ-403",
-    name: "Ultrasound Suite",
-    model: "SonoSite PX",
-    department: "Cardiology",
-    category: "Imaging",
-    status: "UNDER_MAINTENANCE",
-    warrantyStatus: "ACTIVE",
-    warrantyExpiry: "2027-01-19",
-    lastMaintenanceDate: "2026-08-02",
-  },
-  {
-    id: "EQ-404",
-    code: "EQ-404",
-    name: "Defibrillator",
-    model: "Zoll R Series",
-    department: "Emergency",
-    category: "Resuscitation",
-    status: "OPERATIONAL",
-    warrantyStatus: "ACTIVE",
-    warrantyExpiry: "2026-12-11",
-    lastMaintenanceDate: "2026-07-25",
-  },
-  {
-    id: "EQ-405",
-    code: "EQ-405",
-    name: "Infusion Pump",
-    model: "Baxter Sigma Spectrum",
-    department: "General Ward",
-    category: "Infusion",
-    status: "OUT_OF_SERVICE",
-    warrantyStatus: "EXPIRED",
-    warrantyExpiry: "2026-05-20",
-    lastMaintenanceDate: "2026-05-09",
-  },
-  {
-    id: "EQ-406",
-    code: "EQ-406",
-    name: "ECG Monitor",
-    model: "GE MAC 5500",
-    department: "Cardiology",
-    category: "Monitoring",
-    status: "OPERATIONAL",
-    warrantyStatus: "ACTIVE",
-    warrantyExpiry: "2027-07-02",
-    lastMaintenanceDate: "2026-07-29",
-  },
-];
-
-const DASHBOARD_DEMO_TASKS = [
-  {
-    id: "MNT-2401",
-    taskCode: "MNT-2401",
-    description: "Cooling assembly inspection",
-    equipment: "MRI Scanner",
-    assignedTechnician: "Aarav Nair",
-    status: "Scheduled",
-    deadline: "2026-08-12",
-    priority: "High",
-  },
-  {
-    id: "MNT-2402",
-    taskCode: "MNT-2402",
-    description: "Ventilator airflow recalibration",
-    equipment: "Ventilator Pro",
-    assignedTechnician: "Nisha Kapoor",
-    status: "In Progress",
-    deadline: "2026-08-08",
-    priority: "Critical",
-  },
-  {
-    id: "MNT-2403",
-    taskCode: "MNT-2403",
-    description: "Battery replacement validation",
-    equipment: "Defibrillator",
-    assignedTechnician: "Rohan Mehta",
-    status: "Scheduled",
-    deadline: "2026-08-15",
-    priority: "Normal",
-  },
-  {
-    id: "MNT-2404",
-    taskCode: "MNT-2404",
-    description: "Infusion pump safety audit",
-    equipment: "Infusion Pump",
-    assignedTechnician: "",
-    status: "Needs Part",
-    deadline: "2026-08-06",
-    priority: "High",
-  },
-];
-
-const EQUIPMENT_FILTERS = [
-  { id: "all", label: "All Assets" },
-  { id: "operational", label: "Operational" },
-  { id: "attention", label: "Needs Attention" },
-  { id: "maintenance", label: "In Maintenance" },
-  { id: "retired", label: "Retired" },
-];
-
-const EQUIPMENT_STATUS_META = {
-  operational: {
-    label: "Operational",
-    badgeClass: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-    accentClass: "bg-emerald-500",
-  },
-  attention: {
-    label: "Needs Attention",
-    badgeClass: "bg-amber-50 text-amber-700 border border-amber-200",
-    accentClass: "bg-amber-500",
-  },
-  maintenance: {
-    label: "In Maintenance",
-    badgeClass: "bg-blue-50 text-blue-700 border border-blue-200",
-    accentClass: "bg-blue-500",
-  },
-  retired: {
-    label: "Retired",
-    badgeClass: "bg-slate-100 text-slate-600 border border-slate-200",
-    accentClass: "bg-slate-500",
-  },
-};
-
-const WARRANTY_META = {
-  active: {
-    label: "Warranty Active",
-    className: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  },
-  expiring: {
-    label: "Warranty Expiring Soon",
-    className: "bg-amber-50 text-amber-700 border border-amber-200",
-  },
-  expired: {
-    label: "Warranty Expired",
-    className: "bg-rose-50 text-rose-700 border border-rose-200",
-  },
-  none: {
-    label: "No Warranty",
-    className: "bg-slate-100 text-slate-600 border border-slate-200",
-  },
-};
-
-const TASK_STATUS_META = {
-  scheduled: {
-    label: "Scheduled",
-    className: "bg-blue-50 text-blue-700 border border-blue-200",
-  },
-  inProgress: {
-    label: "In Progress",
-    className: "bg-amber-50 text-amber-700 border border-amber-200",
-  },
-  blocked: {
-    label: "Blocked",
-    className: "bg-rose-50 text-rose-700 border border-rose-200",
-  },
-  completed: {
-    label: "Completed",
-    className: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  },
-};
-
-function SidebarNavButton({ active = false, icon: Icon, label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-4 px-4 py-3 text-sm rounded-xl transition-colors ${
-        active
-          ? "bg-white border border-gray-100 shadow-sm text-gray-900 font-bold"
-          : "text-gray-500 hover:text-gray-900 hover:bg-gray-50 font-medium"
-      }`}
-    >
-      <Icon size={18} />
-      {label}
-    </button>
-  );
-}
-
-function StatCard({ title, value, subtitle, delta, tone = "slate", icon: Icon }) {
-  const toneClasses = {
-    slate: "bg-slate-50 text-slate-700",
-    blue: "bg-blue-50 text-blue-700",
-    amber: "bg-amber-50 text-amber-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    rose: "bg-rose-50 text-rose-700",
-  };
-
-  return (
-    <div className="border border-gray-100 rounded-2xl p-5 shadow-sm bg-white">
-      <div className="flex justify-between items-start gap-3">
-        <div>
-          <p className="text-sm font-semibold text-gray-500">{title}</p>
-          <p className="mt-3 text-3xl font-bold text-gray-900">{value}</p>
-          <p className="mt-2 text-xs font-medium text-gray-400">{subtitle}</p>
-        </div>
-        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${toneClasses[tone]}`}>
-          <Icon size={20} />
-        </div>
-      </div>
-      {delta ? (
-        <div className={`mt-4 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${toneClasses[tone]}`}>
-          <TrendingUp size={12} />
-          {delta}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Panel({ title, subtitle, actions, children }) {
-  return (
-    <section className="bg-white border border-gray-100 rounded-[28px] shadow-sm overflow-hidden">
-      <div className="px-6 py-5 border-b border-gray-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
-        </div>
-        {actions ? <div className="flex items-center gap-2 flex-wrap">{actions}</div> : null}
-      </div>
-      <div className="p-6">{children}</div>
-    </section>
-  );
-}
-
-function formatDateLabel(value) {
-  if (!value) return "Not scheduled";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatRelativeLabel(value) {
-  if (!value) return "No due date";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const today = new Date("2026-08-07T00:00:00");
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.round((target - today) / 86400000);
-  if (diffDays === 0) return "Due today";
-  if (diffDays === 1) return "Due tomorrow";
-  if (diffDays > 1) return `Due in ${diffDays} days`;
-  if (diffDays === -1) return "Overdue by 1 day";
-  return `Overdue by ${Math.abs(diffDays)} days`;
-}
-
-function daysUntil(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  const today = new Date("2026-08-07T00:00:00");
-  return Math.round((date - today) / 86400000);
-}
-
-function unwrapCollection(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.content)) return payload.content;
-  if (Array.isArray(payload?.data)) return payload.data;
-  return [];
-}
-
-function titleFromEnum(value) {
-  if (!value) return "";
-  return String(value)
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function normalizeEquipmentStatus(status) {
-  const raw = String(status || "").toLowerCase();
-
-  if (raw.includes("retired") || raw.includes("disposed") || raw.includes("decommissioned")) {
-    return { key: "retired", label: EQUIPMENT_STATUS_META.retired.label };
-  }
-
-  if (raw.includes("maintenance") && !raw.includes("needs")) {
-    return { key: "maintenance", label: EQUIPMENT_STATUS_META.maintenance.label };
-  }
-
-  if (
-    raw.includes("attention") ||
-    raw.includes("needs") ||
-    raw.includes("out_of_service") ||
-    raw.includes("out of service") ||
-    raw.includes("critical") ||
-    raw.includes("fault")
-  ) {
-    return { key: "attention", label: EQUIPMENT_STATUS_META.attention.label };
-  }
-
-  return { key: "operational", label: EQUIPMENT_STATUS_META.operational.label };
-}
-
-function normalizeWarranty(item) {
-  const explicit = String(item?.warrantyStatus || "").toUpperCase();
-  if (explicit === "ACTIVE") return { key: "active", label: WARRANTY_META.active.label };
-  if (explicit === "EXPIRING_SOON") return { key: "expiring", label: WARRANTY_META.expiring.label };
-  if (explicit === "EXPIRED") return { key: "expired", label: WARRANTY_META.expired.label };
-
-  const expiry = item?.warrantyExpiry || item?.warrantyEndDate;
-  if (!expiry) return { key: "none", label: WARRANTY_META.none.label };
-
-  const remainingDays = daysUntil(expiry);
-  if (remainingDays === null) return { key: "none", label: WARRANTY_META.none.label };
-  if (remainingDays < 0) return { key: "expired", label: WARRANTY_META.expired.label };
-  if (remainingDays <= 60) return { key: "expiring", label: WARRANTY_META.expiring.label };
-  return { key: "active", label: WARRANTY_META.active.label };
-}
-
-function normalizeEquipmentItem(item, index) {
-  if (!item) return null;
-
-  const status = normalizeEquipmentStatus(item.status);
-  const warranty = normalizeWarranty(item);
-  const fallbackId = item.equipmentCode || item.assetCode || item.serialNumber || `EQ-${index + 1}`;
-
-  return {
-    id: String(item.id ?? fallbackId),
-    code: item.equipmentCode || item.assetCode || String(item.id ?? fallbackId),
-    name: item.name || item.equipmentName || item.assetName || "Unnamed equipment",
-    model: item.model || item.manufacturerModel || "Unknown model",
-    department: item.department || item.location || "Unassigned department",
-    category: titleFromEnum(item.category) || "General",
-    statusKey: status.key,
-    statusLabel: status.label,
-    warrantyKey: warranty.key,
-    warrantyLabel: warranty.label,
-    warrantyExpiry: item.warrantyExpiry || item.warrantyEndDate || "",
-    lastMaintenanceDate: item.lastMaintenanceDate || item.updatedAt || item.purchaseDate || "",
-  };
-}
-
-function normalizeTaskStatus(task) {
-  const raw = String(task?.status || "").toLowerCase();
-  if (raw.includes("complete") || raw.includes("done")) {
-    return { key: "completed", label: TASK_STATUS_META.completed.label };
-  }
-  if (raw.includes("progress")) {
-    return { key: "inProgress", label: TASK_STATUS_META.inProgress.label };
-  }
-  if (raw.includes("hold") || raw.includes("part") || raw.includes("block")) {
-    return { key: "blocked", label: TASK_STATUS_META.blocked.label };
-  }
-  return { key: "scheduled", label: TASK_STATUS_META.scheduled.label };
-}
-
-function normalizeTaskItem(task, index) {
-  if (!task) return null;
-
-  const status = normalizeTaskStatus(task);
-  const dueDate = task.deadline || task.scheduledDate || task.dueDate || "";
-  const dueDelta = daysUntil(dueDate);
-  const isCompleted = status.key === "completed";
-  const dueState =
-    isCompleted || dueDelta === null ? "normal" : dueDelta < 0 ? "overdue" : dueDelta <= 2 ? "soon" : "normal";
-
-  return {
-    id: String(task.id ?? task.taskCode ?? `TASK-${index + 1}`),
-    taskCode: task.taskCode || String(task.id ?? `TASK-${index + 1}`),
-    title: task.description || task.title || "Maintenance task",
-    equipmentName: task.equipment || task.equipmentName || "Unassigned equipment",
-    assignedTechnician: task.assignedTechnician || task.technician || "Unassigned",
-    priority: titleFromEnum(task.priority) || "Normal",
-    statusKey: status.key,
-    statusLabel: status.label,
-    dueDate,
-    dueState,
-  };
-}
-
-function buildDepartmentChartData(equipmentList) {
-  const grouped = equipmentList.reduce((accumulator, item) => {
-    const key = item.department || "Unassigned";
-    if (!accumulator.has(key)) {
-      accumulator.set(key, { department: key, operational: 0, attention: 0, maintenance: 0, total: 0 });
-    }
-
-    const current = accumulator.get(key);
-    current.total += 1;
-
-    if (item.statusKey === "operational") current.operational += 1;
-    if (item.statusKey === "attention") current.attention += 1;
-    if (item.statusKey === "maintenance") current.maintenance += 1;
-
-    return accumulator;
-  }, new Map());
-
-  return Array.from(grouped.values())
-    .sort((left, right) => right.total - left.total)
-    .slice(0, 6);
-}
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { getAllEquipment } from '../../services/EquipmentService';
+import { getAllTasks } from '../../services/MaintenanceService';
+import { computeEquipmentHealthScore } from '../../services/AnalyticsService';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+} from 'recharts';
+import { 
+  Home, LayoutGrid, CheckSquare, Users, Settings, HelpCircle, LogOut,
+  ThumbsUp, Clock, Activity, Calendar, ChevronDown, MoreHorizontal,
+  Phone, Video, Paperclip, Smile, Mic, CheckCircle2, CircleDashed, Download,
+  Box, ClipboardList, MessageSquare, LineChart, Mail, Workflow, Puzzle, MessageCircle, ChevronsUpDown, Diamond,
+  Bot, X, Bell, Search, Share, RefreshCw, Upload, TrendingUp, TrendingDown, Award, Package
+} from 'lucide-react';
+import MedTrackLogo from '../../components/common/MedTrackLogo';
 
 export default function Dashboard({ onNavigate }) {
   const { user, logout } = useAuth();
@@ -606,12 +160,49 @@ export default function Dashboard({ onNavigate }) {
   }
 
   return (
-    <div className="flex h-screen w-full bg-[#f5f7fb] font-sans text-gray-900 overflow-hidden">
-      <aside className="w-[260px] flex flex-col justify-between p-6 border-r border-gray-100 shrink-0 bg-[#fbfbfb]">
-        <div className="flex-1 overflow-y-auto pr-2">
-          <div className="mb-10 px-2 pt-2">
-            <MedTrackLogo size="text-2xl" />
-          </div>
+    <div className="flex h-screen w-full bg-white font-sans text-gray-900 overflow-hidden">
+        
+        {/* COLUMN 1: LEFT SIDEBAR */}
+        <aside className="w-[260px] flex flex-col justify-between p-6 border-r border-gray-100 shrink-0 bg-[#fbfbfb]">
+          <div className="flex-1 overflow-y-auto pr-2">
+            
+            {/* Logo */}
+            <div className="mb-10 px-2 pt-2">
+              <MedTrackLogo size="text-2xl" />
+            </div>
+
+            <nav className="space-y-1">
+              {/* Main Menu */}
+              <button onClick={() => onNavigate && onNavigate("dashboard")} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-bold text-gray-900 bg-white rounded-xl shadow-sm border border-gray-100 mb-1 hover:bg-gray-50 transition-colors">
+                <LayoutGrid size={18} className="text-gray-900" /> Dashboard
+              </button>
+              <button onClick={() => onNavigate && onNavigate("equipment")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Box size={18} /> Equipment
+              </button>
+              <button onClick={() => onNavigate && onNavigate("retired-assets")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Diamond size={18} /> Retired Assets
+              </button>
+              <button onClick={() => onNavigate && onNavigate("maintenance")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <ClipboardList size={18} /> Maintenance
+              </button>
+              <button onClick={() => onNavigate && onNavigate("calibration")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Award size={18} /> Calibration & Compliance
+              </button>
+              <button onClick={() => onNavigate && onNavigate("lifecycle-predictor")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <TrendingDown size={18} /> Lifecycle & EOL Risk
+              </button>
+              <button onClick={() => onNavigate && onNavigate("scim-provisioning")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Users size={18} /> Staff (SCIM)
+              </button>
+              <button onClick={() => onNavigate && onNavigate("siem-security")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <MessageSquare size={18} /> Messages (SIEM)
+              </button>
+              <button onClick={() => onNavigate && onNavigate("analytics")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <LineChart size={18} /> Analytics
+              </button>
+              <button onClick={() => onNavigate && onNavigate("tenders")} className="w-full flex items-center gap-4 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors">
+                <Award size={18} /> Tenders &amp; E-Auction
+              </button>
 
           <nav className="space-y-1">
             <SidebarNavButton active icon={LayoutGrid} label="Dashboard" onClick={() => onNavigate?.("dashboard")} />
@@ -786,58 +377,62 @@ export default function Dashboard({ onNavigate }) {
                 const statusMeta = EQUIPMENT_STATUS_META[item.statusKey] || EQUIPMENT_STATUS_META.operational;
                 const warrantyMeta = WARRANTY_META[item.warrantyKey] || WARRANTY_META.none;
 
+            <div className="space-y-3">
+              {equipmentList.slice(0, 5).map((equipment, idx) => {
+                const health = computeEquipmentHealthScore(equipment);
+                const healthColorClass = health?.color === 'red' ? 'bg-red-500' : health?.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500';
                 return (
-                  <article
-                    key={item.id}
-                    className="rounded-3xl border border-slate-100 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-bold ${statusMeta.badgeClass}`}>
-                            <span className={`w-2 h-2 rounded-full ${statusMeta.accentClass}`}></span>
-                            {item.statusLabel}
-                          </span>
-                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${warrantyMeta.className}`}>
-                            {item.warrantyLabel}
-                          </span>
-                        </div>
-                        <h3 className="mt-4 text-xl font-bold text-slate-900">{item.name}</h3>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {item.code} • {item.model}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => onNavigate?.("equipment")}
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
-                      >
-                        Open inventory
-                      </button>
+                <div key={idx} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-xl transition-colors group">
+                  <div className="flex items-center gap-4 w-1/2">
+                    <div className="w-10 h-10 rounded-full bg-[#f4f3ef] flex items-center justify-center text-gray-700">
+                      <Box size={18} />
                     </div>
+                    <span className="font-bold text-sm text-gray-900">{equipment.name}</span>
+                  </div>
+                  
+                  <div className="w-1/4 flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${equipment.status === 'OPERATIONAL' || equipment.status === 'ACTIVE' || equipment.status === 'Operational' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                    <span className="text-[11px] font-bold text-gray-700">{equipment.status}</span>
+                  </div>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3">
-                      <div className="rounded-2xl bg-white p-3 border border-slate-100">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Department</p>
-                        <p className="mt-2 text-sm font-bold text-slate-900">{item.department}</p>
+                  <div className="w-1/4 flex items-center justify-end gap-6 text-gray-400">
+                    {health && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Health:</span>
+                        <span className={`px-2 py-0.5 rounded-full text-white text-[10px] font-bold ${healthColorClass}`}>
+                          {health.score}
+                        </span>
                       </div>
-                      <div className="rounded-2xl bg-white p-3 border border-slate-100">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Category</p>
-                        <p className="mt-2 text-sm font-bold text-slate-900">{item.category}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white p-3 border border-slate-100">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Last service</p>
-                        <p className="mt-2 text-sm font-bold text-slate-900">{formatDateLabel(item.lastMaintenanceDate)}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white p-3 border border-slate-100">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Warranty expiry</p>
-                        <p className="mt-2 text-sm font-bold text-slate-900">
-                          {item.warrantyExpiry ? formatDateLabel(item.warrantyExpiry) : "Not recorded"}
-                        </p>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+                    )}
+                    <button className="p-1 hover:bg-gray-200 rounded-md transition-colors"><MoreHorizontal size={14} /></button>
+                  </div>
+                </div>
+              )})}
+            </div>
+          </div>
+        </main>
+
+        {/* COLUMN 3: RIGHT SIDEBAR */}
+        {isBotOpen && (
+          <aside className="w-[360px] flex flex-col p-8 border-l border-gray-100 shrink-0 bg-white relative animate-in slide-in-from-right duration-300">
+            
+            <button onClick={() => setIsBotOpen(false)} className="absolute top-4 left-4 p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors z-10">
+              <X size={16} />
+            </button>
+
+            <div className="bg-[#f4f3ef] rounded-[32px] p-8 flex flex-col items-center text-center mb-8 shrink-0 relative mt-4">
+              <div className="relative mb-4">
+                <div className="w-[72px] h-[72px] rounded-full flex items-center justify-center border-4 border-[#f4f3ef] bg-blue-600 text-white shadow-sm">
+                  <Bot size={36} />
+                </div>
+                <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-emerald-400 border-2 border-[#f4f3ef] rounded-full"></div>
+              </div>
+              <h3 className="font-bold text-lg mb-1">MedTrack Assistant</h3>
+              <p className="text-xs text-gray-500 font-medium mb-6">@medtrackbot</p>
+            <div className="flex gap-4">
+              <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-700 hover:bg-gray-50 transition-colors"><Phone size={16}/></button>
+              <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-700 hover:bg-gray-50 transition-colors"><Video size={16}/></button>
+              <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-700 hover:bg-gray-50 transition-colors"><MoreHorizontal size={16}/></button>
             </div>
           )}
         </Panel>
