@@ -497,7 +497,8 @@ export default function EnterpriseSecurityCenter() {
           { id: "icdr", label: "Incident Command & Air-Gap DR Vaults", icon: Power },
           { id: "ztdatamesh", label: "Zero-Trust Data Mesh & ODRL Policies", icon: Boxes },
           { id: "keylifecyclepqc", label: "Key Lifecycle & PQC Zeroization", icon: RotateCw },
-          { id: "ccenclave", label: "Confidential Compute & Enclaves", icon: Cpu }
+          { id: "ccenclave", label: "Confidential Compute & Enclaves", icon: Cpu },
+          { id: "dpsynthetic", label: "Differential Privacy & Synthetic Data", icon: SlidersHorizontal }
         ].map((tab) => {
           const IconComponent = tab.icon;
           const isActive = selectedTab === tab.id;
@@ -1133,6 +1134,11 @@ export default function EnterpriseSecurityCenter() {
       {/* TAB 55: BIOMEDICAL CONFIDENTIAL COMPUTE & HARDWARE SECURE ENCLAVES */}
       {selectedTab === "ccenclave" && (
         <BiomedicalConfidentialComputePanel />
+      )}
+
+      {/* TAB 56: BIOMEDICAL DIFFERENTIAL PRIVACY & SYNTHETIC DATA */}
+      {selectedTab === "dpsynthetic" && (
+        <BiomedicalDifferentialPrivacyPanel />
       )}
 
       {/* 4. MODALS */}
