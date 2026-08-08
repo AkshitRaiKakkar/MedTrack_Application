@@ -6,6 +6,7 @@ import com.medtrack.service.NotificationPreferenceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,11 +27,13 @@ public class NotificationPreferenceController {
     private final NotificationPreferenceService preferenceService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<NotificationPreferenceResponse> getPreferences(Authentication authentication) {
         return ResponseEntity.ok(preferenceService.getPreferences(authentication));
     }
 
     @PutMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<NotificationPreferenceResponse> updatePreference(
             @Valid @RequestBody NotificationPreferenceUpdateRequest request,
             Authentication authentication) {

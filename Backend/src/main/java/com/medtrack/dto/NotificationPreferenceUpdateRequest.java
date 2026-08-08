@@ -16,9 +16,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class NotificationPreferenceUpdateRequest {
 
-    @NotNull
+    @NotNull(message = "Event category is required")
     private OperationsEvent.EventCategory category;
 
-    @NotNull
+    @NotNull(message = "Muted status is required")
     private Boolean muted;
 }
