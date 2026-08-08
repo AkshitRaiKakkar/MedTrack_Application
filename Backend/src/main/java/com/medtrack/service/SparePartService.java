@@ -24,24 +24,53 @@ public class SparePartService {
     private final UserRepository userRepository;
 
     private Hospital getHospitalForUser(String username) {
-        User user = userRepository.findByUsername(username)
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username is required");
+        }
+        String identifier = username.trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found"));
     }
 
-    public List<SparePart> getAllSpareParts(String username) {
+    public List<SparePartResponse> getAllSpareParts(String username) {
         Hospital hospital = getHospitalForUser(username);
-        return sparePartRepository.findByHospitalId(hospital.getId());
+        return sparePartRepository.findByHospitalId(hospital.getId()).stream()
+                .map(SparePartResponse::from)
+                .toList();
     }
 
-    public List<SparePart> getLowStockAlerts(String username) {
+    public List<SparePartResponse> getLowStockAlerts(String username) {
         Hospital hospital = getHospitalForUser(username);
-        return sparePartRepository.findLowStockPartsByHospitalId(hospital.getId());
+        return sparePartRepository.findLowStockPartsByHospitalId(hospital.getId()).stream()
+                .map(SparePartResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    public SparePartResponse createSparePart(SparePartCreateRequest request, String username) {
+        Hospital hospital = getHospitalForUser(username);
+        validateCreate(request.getPartNumber(), request.getDescription(), request.getStockLevel(), request.getReorderPoint(), request.getUnitCost(), hospital.getId());
+
+        SparePart sparePart = SparePart.builder()
+                .hospitalId(hospital.getId())
+                .partNumber(request.getPartNumber().trim())
+                .description(request.getDescription().trim())
+                .compatibleModels(trimToNull(request.getCompatibleModels()))
+                .stockLevel(request.getStockLevel())
+                .reorderPoint(request.getReorderPoint())
+                .unitCost(request.getUnitCost())
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        return SparePartResponse.from(sparePartRepository.save(sparePart));
     }
 
     @Transactional
     public SparePart createSparePart(SparePart sparePart, String username) {
+        if (sparePart == null) throw new IllegalArgumentException("Spare part details are required");
         Hospital hospital = getHospitalForUser(username);
         validateSparePart(sparePart);
 
@@ -57,9 +86,28 @@ public class SparePartService {
     }
 
     @Transactional
-    public SparePart updateSparePart(Long id, SparePart updateRequest, String username) {
+    public SparePartResponse updateSparePart(Long id, SparePartUpdateRequest request, String username) {
         Hospital hospital = getHospitalForUser(username);
-        SparePart existing = sparePartRepository.findByIdAndHospitalId(id, hospital.getId())
+        SparePart existing = sparePartRepository.findByIdAndHospitalIdForUpdate(id, hospital.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Spare Part not found or access denied"));
+
+        validateUpdate(id, request.getPartNumber(), request.getDescription(), request.getStockLevel(), request.getReorderPoint(), request.getUnitCost(), hospital.getId());
+
+        existing.setPartNumber(request.getPartNumber().trim());
+        existing.setDescription(request.getDescription().trim());
+        existing.setCompatibleModels(trimToNull(request.getCompatibleModels()));
+        existing.setStockLevel(request.getStockLevel());
+        existing.setReorderPoint(request.getReorderPoint());
+        existing.setUnitCost(request.getUnitCost());
+
+        return SparePartResponse.from(sparePartRepository.save(existing));
+    }
+
+    @Transactional
+    public SparePart updateSparePart(Long id, SparePart updateRequest, String username) {
+        if (updateRequest == null) throw new IllegalArgumentException("Update details are required");
+        Hospital hospital = getHospitalForUser(username);
+        SparePart existing = sparePartRepository.findByIdAndHospitalIdForUpdate(id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Spare Part not found or access denied"));
 
         validateSparePart(updateRequest);
@@ -83,7 +131,7 @@ public class SparePartService {
     @Transactional
     public void deleteSparePart(Long id, String username) {
         Hospital hospital = getHospitalForUser(username);
-        SparePart existing = sparePartRepository.findByIdAndHospitalId(id, hospital.getId())
+        SparePart existing = sparePartRepository.findByIdAndHospitalIdForUpdate(id, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Spare Part not found or access denied"));
 
         existing.setDeleted(true);

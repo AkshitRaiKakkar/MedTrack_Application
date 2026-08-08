@@ -5,6 +5,7 @@ import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.exception.ResourceNotFoundException;
 import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentLocationHistory;
+import com.medtrack.model.EquipmentStatus;
 import com.medtrack.model.FacilityLocation;
 import com.medtrack.model.Hospital;
 import com.medtrack.repository.EquipmentLocationHistoryRepository;
@@ -37,7 +38,12 @@ public class LocationService {
     private final UserRepository userRepository;
 
     private Hospital getHospitalForUser(String username) {
-        User user = userRepository.findByUsername(username)
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username or email is required");
+        }
+        String identifier = username.trim();
+        User user = userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier.toLowerCase(java.util.Locale.ROOT)))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         return hospitalRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital profile not found for user"));
@@ -111,6 +117,8 @@ public class LocationService {
         Hospital hospital = getHospitalForUser(username);
         Equipment equipment = equipmentRepository.findByIdAndHospitalId(equipmentId, hospital.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Equipment not found or you don't have access"));
+        validateEquipmentActiveForLocationAssignment(equipment);
+
         FacilityLocation location = facilityLocationRepository.findById(locationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Location not found"));
         if (!location.getHospital().getId().equals(hospital.getId())) {
@@ -168,5 +176,13 @@ public class LocationService {
         }
         ids.add(rootId);
         return ids;
+    }
+
+    private void validateEquipmentActiveForLocationAssignment(Equipment equipment) {
+        if (equipment.getStatus() == EquipmentStatus.RETIRED
+                || equipment.getStatus() == EquipmentStatus.DISPOSED) {
+            throw new IllegalArgumentException(
+                    "Retired or disposed equipment cannot be assigned to a location");
+        }
     }
 }
