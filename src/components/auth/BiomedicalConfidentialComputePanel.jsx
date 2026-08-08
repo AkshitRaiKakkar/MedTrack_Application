@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  SlidersHorizontal,
+  Cpu,
   ShieldCheck,
   RefreshCw,
   CheckCircle2,
@@ -8,7 +8,6 @@ import {
   FileText,
   Sliders,
   Terminal,
-  Cpu,
   Lock,
   Search,
   PlusCircle,
@@ -29,59 +28,58 @@ import {
   Check,
   ShieldAlert,
   HardDrive,
-  BarChart2,
-  PieChart
+  Box,
+  KeyRound
 } from "lucide-react";
 import {
-  getDifferentialPrivacyInventory,
-  generateSyntheticDataset,
-  auditPrivacyBudget,
-  getDifferentialPrivacyStandards
-} from "../../services/BiomedicalDifferentialPrivacyService";
+  getConfidentialComputeInventory,
+  provisionSecureEnclave,
+  verifyEnclaveRemoteAttestation,
+  getConfidentialComputeStandards
+} from "../../services/BiomedicalConfidentialComputeService";
 import "../../pages/auth/auth.css";
 
 /**
- * BiomedicalDifferentialPrivacyPanel Component
+ * BiomedicalConfidentialComputePanel Component
  * 
- * Biomedical Differential Privacy & Synthetic Health Data Console.
+ * Biomedical Hardware Secure Enclaves & Confidential Computing Console.
  * Features:
- * 1. (ε, δ)-Differential Privacy Dataset Inventory & Privacy Budget Epsilon Meter
- * 2. Privacy Budget Audit & Re-identification Risk Inspection Sandbox
- * 3. ISO/IEC 27559 & NIST SP 800-188 Standards
- * 4. Synthetic Health Dataset Generator Modal
+ * 1. Hardware TEE Inventory (Intel SGX, AMD SEV-SNP, AWS Nitro) & MRENCLAVE Attestation Hashes
+ * 2. Hardware Remote Attestation (DCAP Quote Verification & TCB Check) Sandbox
+ * 3. Confidential Computing Consortium (CCC) & NIST SP 800-193 Standards
+ * 4. Secure Enclave Provisioning Modal
  */
-export default function BiomedicalDifferentialPrivacyPanel() {
+export default function BiomedicalConfidentialComputePanel() {
   // State
-  const [datasets, setDatasets] = useState([]);
+  const [enclaves, setEnclaves] = useState([]);
   const [standards, setStandards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
-  const [activeTab, setActiveTab] = useState("DATASETS"); // "DATASETS" | "SANDBOX" | "STANDARDS"
+  const [activeTab, setActiveTab] = useState("ENCLAVES"); // "ENCLAVES" | "SANDBOX" | "STANDARDS"
 
   // Sandbox State
-  const [selectedDatasetId, setSelectedDatasetId] = useState("DP-DATA-2001");
-  const [auditResult, setAuditResult] = useState(null);
+  const [selectedEnclaveId, setSelectedEnclaveId] = useState("ENC-NODE-1901");
+  const [attestResult, setAttestResult] = useState(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [datasetName, setDatasetName] = useState("");
-  const [epsilonValue, setEpsilonValue] = useState(0.5);
+  const [enclaveName, setEnclaveName] = useState("");
 
   // Load telemetry
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [dsList, stdList] = await Promise.all([
-        getDifferentialPrivacyInventory().catch(() => []),
-        getDifferentialPrivacyStandards().catch(() => [])
+      const [encList, stdList] = await Promise.all([
+        getConfidentialComputeInventory().catch(() => []),
+        getConfidentialComputeStandards().catch(() => [])
       ]);
 
-      setDatasets(dsList);
+      setEnclaves(encList);
       setStandards(stdList);
     } catch (err) {
-      console.error("Failed to load biomedical differential privacy data:", err);
-      setMessage({ type: "error", text: "Failed connecting to Differential Privacy service." });
+      console.error("Failed to load biomedical confidential compute data:", err);
+      setMessage({ type: "error", text: "Failed connecting to Confidential Compute service." });
     } finally {
       setLoading(false);
     }
@@ -91,41 +89,41 @@ export default function BiomedicalDifferentialPrivacyPanel() {
     loadData();
   }, [loadData]);
 
-  // Run Privacy Budget Audit
-  const handleAuditBudget = async (e) => {
+  // Run Remote Attestation
+  const handleAttestEnclave = async (e) => {
     e?.preventDefault();
     setActionLoading(true);
     setMessage({ type: "", text: "" });
 
     try {
-      const result = await auditPrivacyBudget(selectedDatasetId);
-      setAuditResult(result);
-      setMessage({ type: "success", text: `Privacy Budget Audit completed in ${result.auditLatencyMs}ms! Remaining Epsilon: ${result.epsilonRemaining}. Membership Risk: ${result.membershipInferenceRiskPercent}%. Fidelity: ${result.syntheticFidelityScore * 100}%.` });
+      const result = await verifyEnclaveRemoteAttestation(selectedEnclaveId);
+      setAttestResult(result);
+      setMessage({ type: "success", text: `Hardware Remote Attestation Quote verified in ${result.attestationLatencyMs}ms! Quote Valid: ${result.attestationQuoteValid ? "YES" : "NO"}. TCB Status: ${result.tcbStatus}.` });
       await loadData();
     } catch (err) {
-      setMessage({ type: "error", text: "Privacy budget audit failed." });
+      setMessage({ type: "error", text: "Hardware remote attestation failed." });
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Generate Synthetic Dataset
-  const handleGenerateSynthetic = async (e) => {
+  // Provision Secure Enclave
+  const handleProvisionEnclave = async (e) => {
     e.preventDefault();
-    if (!datasetName.trim()) return;
+    if (!enclaveName.trim()) return;
 
     setActionLoading(true);
     setMessage({ type: "", text: "" });
 
     try {
-      const newDs = await generateSyntheticDataset({ datasetName: datasetName.trim(), epsilon: parseFloat(epsilonValue) });
+      const newEnc = await provisionSecureEnclave({ enclaveName: enclaveName.trim() });
 
-      setDatasetName("");
+      setEnclaveName("");
       setIsModalOpen(false);
-      setMessage({ type: "success", text: `Synthetic Health Dataset ${newDs.datasetId} generated with formal (ε=${newDs.privacyBudgetEpsilon}) Differential Privacy guarantees!` });
+      setMessage({ type: "success", text: `Hardware Secure Enclave ${newEnc.enclaveId} provisioned with encrypted in-memory execution!` });
       await loadData();
     } catch (err) {
-      setMessage({ type: "error", text: "Failed to generate synthetic dataset." });
+      setMessage({ type: "error", text: "Failed to provision secure enclave." });
     } finally {
       setActionLoading(false);
     }
@@ -133,53 +131,53 @@ export default function BiomedicalDifferentialPrivacyPanel() {
 
   // Metrics
   const metrics = useMemo(() => {
-    const totalDatasets = datasets.length;
-    const avgEpsilon = (datasets.reduce((acc, curr) => acc + curr.privacyBudgetEpsilon, 0) / (totalDatasets || 1)).toFixed(2);
-    const totalModels = datasets.map((d) => d.syntheticModelType).join(", ");
+    const totalEnclaves = enclaves.length;
+    const attestedSecure = enclaves.filter((e) => e.enclaveStatus.includes("ATTESTED")).length;
+    const totalWorkloads = enclaves.reduce((acc, curr) => acc + curr.activeWorkloadCount, 0);
 
-    return { totalDatasets, avgEpsilon, totalModels };
-  }, [datasets]);
+    return { totalEnclaves, attestedSecure, totalWorkloads };
+  }, [enclaves]);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 font-sans">
       
       {/* 1. Header Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden text-slate-100">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-purple-400 bg-purple-500/10 border border-purple-500/20 rounded-full flex items-center gap-1.5 font-mono">
-                <SlidersHorizontal size={12} /> DIFFERENTIAL PRIVACY & SYNTHETIC DATA
+              <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-full flex items-center gap-1.5 font-mono">
+                <Cpu size={12} /> HARDWARE SECURE ENCLAVES
               </span>
               <span className="px-3 py-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center gap-1 font-mono">
-                <ShieldCheck size={12} /> ISO/IEC 27559 COMPLIANT
+                <ShieldCheck size={12} /> INTEL SGX DCAP / AMD SEV-SNP
               </span>
             </div>
 
             <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-              Biomedical Differential Privacy & Synthetic Data
+              Biomedical Confidential Compute & Enclaves
             </h2>
             <p className="text-slate-400 text-sm max-w-2xl leading-relaxed">
-              Formal (ε, δ)-differential privacy noise injection (Laplace & Gaussian mechanisms), GAN-driven synthetic EHR generation, privacy budget (epsilon) tracking, and zero re-identification risk.
+              Hardware-based Trusted Execution Environments (TEEs), Total Memory Encryption (TME-MK / AES-XTS-256), DCAP remote attestation quote validation, and protected data-in-use execution.
             </p>
           </div>
 
           {/* Telemetry Widget */}
           <div className="bg-slate-800/80 border border-slate-700/60 p-4 rounded-2xl w-full lg:w-auto text-xs space-y-2">
             <div className="flex items-center justify-between gap-6 font-mono">
-              <span className="text-slate-400 font-sans font-bold uppercase text-[10px]">Privacy Budget Telemetry</span>
-              <span className="text-purple-400 font-bold flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
-                NOISE GUARANTEE ACTIVE
+              <span className="text-slate-400 font-sans font-bold uppercase text-[10px]">TEE Hardware Telemetry</span>
+              <span className="text-indigo-400 font-bold flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+                HARDWARE ISOLATED
               </span>
             </div>
             <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-700/80 font-mono text-[11px]">
-              <div>Datasets: <strong className="text-white">{metrics.totalDatasets} Protected</strong></div>
-              <div>Mean Epsilon (ε): <strong className="text-purple-300">{metrics.avgEpsilon}</strong></div>
-              <div>Re-ID Risk: <strong className="text-emerald-400">0.002% (Mathematically Bounded)</strong></div>
-              <div>Fidelity Score: <strong className="text-emerald-400">94.0% Synthetic Match</strong></div>
+              <div>Secure Enclaves: <strong className="text-white">{metrics.totalEnclaves} Attested</strong></div>
+              <div>Isolated Workloads: <strong className="text-indigo-300">{metrics.totalWorkloads} Enclave Tasks</strong></div>
+              <div>Memory Encryption: <strong className="text-emerald-400">AES-XTS-256 (TME)</strong></div>
+              <div>Root of Trust: <strong className="text-emerald-400">HARDWARE TPM 2.0</strong></div>
             </div>
           </div>
         </div>
@@ -190,7 +188,7 @@ export default function BiomedicalDifferentialPrivacyPanel() {
             className={`mt-6 p-4 rounded-xl text-sm font-medium flex items-center justify-between border ${
               message.type === "error"
                 ? "bg-red-500/10 border-red-500/30 text-red-400"
-                : "bg-purple-500/10 border-purple-500/30 text-purple-400"
+                : "bg-indigo-500/10 border-indigo-500/30 text-indigo-400"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -213,14 +211,14 @@ export default function BiomedicalDifferentialPrivacyPanel() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab("DATASETS")}
+            onClick={() => setActiveTab("ENCLAVES")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              activeTab === "DATASETS"
-                ? "bg-purple-600 text-white font-black shadow-lg shadow-purple-600/20"
+              activeTab === "ENCLAVES"
+                ? "bg-indigo-600 text-white font-black shadow-lg shadow-indigo-600/20"
                 : "bg-slate-800 text-slate-400 hover:text-white"
             }`}
           >
-            <Database size={15} /> Protected Datasets ({datasets.length})
+            <Cpu size={15} /> Hardware TEE Enclaves ({enclaves.length})
           </button>
 
           <button
@@ -228,11 +226,11 @@ export default function BiomedicalDifferentialPrivacyPanel() {
             onClick={() => setActiveTab("SANDBOX")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
               activeTab === "SANDBOX"
-                ? "bg-purple-600 text-white font-black shadow-lg shadow-purple-600/20"
+                ? "bg-indigo-600 text-white font-black shadow-lg shadow-indigo-600/20"
                 : "bg-slate-800 text-slate-400 hover:text-white"
             }`}
           >
-            <Zap size={15} /> Privacy Budget & Re-ID Audit Sandbox
+            <Zap size={15} /> Remote Attestation Sandbox
           </button>
 
           <button
@@ -240,30 +238,30 @@ export default function BiomedicalDifferentialPrivacyPanel() {
             onClick={() => setActiveTab("STANDARDS")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
               activeTab === "STANDARDS"
-                ? "bg-purple-600 text-white font-black shadow-lg shadow-purple-600/20"
+                ? "bg-indigo-600 text-white font-black shadow-lg shadow-indigo-600/20"
                 : "bg-slate-800 text-slate-400 hover:text-white"
             }`}
           >
-            <ShieldCheck size={15} /> ISO/IEC 27559 & NIST Standards ({standards.length})
+            <ShieldCheck size={15} /> CCC & NIST Standards ({standards.length})
           </button>
         </div>
 
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-purple-600/20"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-indigo-600/20"
         >
-          <PlusCircle size={15} /> Synthesize Private Dataset
+          <PlusCircle size={15} /> Provision Secure Enclave
         </button>
       </div>
 
-      {/* 3. DATASETS TAB */}
-      {activeTab === "DATASETS" && (
+      {/* 3. ENCLAVES TAB */}
+      {activeTab === "ENCLAVES" && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div>
-              <h3 className="text-base font-bold text-white">Differentially Private Datasets & Synthetic Models</h3>
-              <p className="text-xs text-slate-400 font-mono">Dataset IDs, privacy budget (ε, δ) values, noise mechanisms, synthetic models, and budget consumption</p>
+              <h3 className="text-base font-bold text-white">Hardware Secure Enclaves & Attestation Telemetry</h3>
+              <p className="text-xs text-slate-400 font-mono">Enclave IDs, hardware architectures, memory encryption types, MRENCLAVE hashes, and active workload counts</p>
             </div>
           </div>
 
@@ -271,28 +269,28 @@ export default function BiomedicalDifferentialPrivacyPanel() {
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
                 <tr>
-                  <th className="p-3">Dataset ID</th>
-                  <th className="p-3">Dataset Name & Noise Mechanism</th>
-                  <th className="p-3">Epsilon (ε) / Delta (δ)</th>
-                  <th className="p-3">Synthetic Model Type</th>
-                  <th className="p-3 text-right">Privacy Budget Status</th>
+                  <th className="p-3">Enclave ID</th>
+                  <th className="p-3">Enclave Name & Hardware TEE</th>
+                  <th className="p-3">Memory Encryption Type</th>
+                  <th className="p-3">MRENCLAVE Hash</th>
+                  <th className="p-3 text-right">Attestation Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 font-mono">
-                {datasets.map((d, idx) => (
+                {enclaves.map((e, idx) => (
                   <tr key={idx} className="hover:bg-slate-900/60">
-                    <td className="p-3 font-bold text-purple-400">{d.datasetId}</td>
+                    <td className="p-3 font-bold text-indigo-400">{e.enclaveId}</td>
                     <td className="p-3 font-sans">
-                      <div className="font-semibold text-white">{d.datasetName}</div>
-                      <div className="text-[10px] text-purple-300 font-mono">{d.noiseMechanism}</div>
+                      <div className="font-semibold text-white">{e.enclaveName}</div>
+                      <div className="text-[10px] text-indigo-300 font-mono">{e.hardwareArchitecture}</div>
                     </td>
-                    <td className="p-3 text-slate-400 font-mono text-[10px]">
-                      ε = <strong className="text-white">{d.privacyBudgetEpsilon}</strong> | δ = <strong className="text-white">{d.deltaValue}</strong>
+                    <td className="p-3 text-slate-400 font-mono text-[10px]">{e.memoryEncryptionType}</td>
+                    <td className="p-3 text-slate-300 font-mono text-[10px]">
+                      {e.attestationMeasurementHash.slice(0, 22)}...
                     </td>
-                    <td className="p-3 text-purple-300 font-mono text-[10px]">{d.syntheticModelType}</td>
                     <td className="p-3 text-right font-sans">
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        {d.datasetStatus} ({d.epsilonExhaustedPercent}% Used)
+                        {e.enclaveStatus}
                       </span>
                     </td>
                   </tr>
@@ -309,21 +307,21 @@ export default function BiomedicalDifferentialPrivacyPanel() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Zap size={18} className="text-purple-400" /> Privacy Budget & Re-Identification Risk Inspector
+                <Zap size={18} className="text-indigo-400" /> Hardware Remote Attestation Quote Inspector
               </h3>
             </div>
 
-            <form onSubmit={handleAuditBudget} className="space-y-4 text-xs">
+            <form onSubmit={handleAttestEnclave} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Target Differentially Private Dataset:</label>
+                <label className="block text-slate-300 font-bold mb-1">Target Secure Enclave:</label>
                 <select
-                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-sans"
-                  value={selectedDatasetId}
-                  onChange={(e) => setSelectedDatasetId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans"
+                  value={selectedEnclaveId}
+                  onChange={(e) => setSelectedEnclaveId(e.target.value)}
                 >
-                  {datasets.map((d) => (
-                    <option key={d.datasetId} value={d.datasetId}>
-                      {d.datasetId} - {d.datasetName}
+                  {enclaves.map((e) => (
+                    <option key={e.enclaveId} value={e.enclaveId}>
+                      {e.enclaveId} - {e.enclaveName}
                     </option>
                   ))}
                 </select>
@@ -332,9 +330,9 @@ export default function BiomedicalDifferentialPrivacyPanel() {
               <button
                 type="submit"
                 disabled={actionLoading}
-                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 text-xs shadow-lg shadow-purple-600/20"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 text-xs shadow-lg shadow-indigo-600/20"
               >
-                <Zap size={16} /> Execute Privacy Budget & Re-ID Audit
+                <Zap size={16} /> Execute DCAP Hardware Remote Attestation
               </button>
             </form>
           </div>
@@ -342,25 +340,25 @@ export default function BiomedicalDifferentialPrivacyPanel() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <ShieldCheck size={18} className="text-emerald-400" /> Audit Output
+                <ShieldCheck size={18} className="text-emerald-400" /> Attestation Output
               </h3>
             </div>
 
-            {auditResult ? (
+            {attestResult ? (
               <div className="space-y-3 font-mono text-xs">
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-sans font-bold uppercase">Re-Identification Risk:</span>
-                  <div className="text-sm font-bold text-emerald-400">{auditResult.reidentificationRiskStatus}</div>
+                  <span className="text-[10px] text-slate-400 font-sans font-bold uppercase">Attestation Quote Integrity:</span>
+                  <div className="text-sm font-bold text-emerald-400">{attestResult.attestationQuoteValid ? "VALID & HARDWARE SIGNED" : "INVALID"}</div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-[11px] p-3 bg-slate-950/60 rounded-xl border border-slate-800 font-sans">
-                  <div>Epsilon Remaining: <strong className="text-emerald-400 font-mono text-[10px]">{auditResult.epsilonRemaining}</strong></div>
-                  <div>Membership Risk: <strong className="text-emerald-400">{auditResult.membershipInferenceRiskPercent}%</strong></div>
+                  <div>TCB Status: <strong className="text-emerald-400 font-mono text-[10px]">{attestResult.tcbStatus}</strong></div>
+                  <div>PCK Chain Valid: <strong className="text-emerald-400">{attestResult.pckCertificateChainValid ? "YES" : "NO"}</strong></div>
                 </div>
               </div>
             ) : (
               <div className="p-12 text-center text-slate-500 font-mono text-xs border border-dashed border-slate-800 rounded-2xl">
-                Click "Execute Privacy Budget & Re-ID Audit" to inspect noise guarantees.
+                Click "Execute DCAP Hardware Remote Attestation" to verify TEE quote validity.
               </div>
             )}
           </div>
@@ -372,8 +370,8 @@ export default function BiomedicalDifferentialPrivacyPanel() {
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div>
-              <h3 className="text-base font-bold text-white">ISO/IEC 27559 & Differential Privacy Standards</h3>
-              <p className="text-xs text-slate-400 font-mono">Frameworks for privacy-enhancing data de-identification, NIST noise injection, and HIPAA expert determination</p>
+              <h3 className="text-base font-bold text-white">Confidential Computing Consortium & NIST Standards</h3>
+              <p className="text-xs text-slate-400 font-mono">Frameworks for TEE architecture, Intel SGX DCAP remote attestation, and platform firmware resiliency</p>
             </div>
           </div>
 
@@ -381,7 +379,7 @@ export default function BiomedicalDifferentialPrivacyPanel() {
             {standards.map((s, idx) => (
               <div key={idx} className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono px-2 py-0.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded font-bold">
+                  <span className="text-[10px] font-mono px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded font-bold">
                     {s.standard}
                   </span>
                 </div>
@@ -399,36 +397,23 @@ export default function BiomedicalDifferentialPrivacyPanel() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full text-slate-100 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <SlidersHorizontal size={18} className="text-purple-400" /> Synthesize Private Dataset
+                <Cpu size={18} className="text-indigo-400" /> Provision Secure Enclave
               </h3>
               <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleGenerateSynthetic} className="space-y-4 text-xs">
+            <form onSubmit={handleProvisionEnclave} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Dataset Name:</label>
+                <label className="block text-slate-300 font-bold mb-1">Enclave Workload Name:</label>
                 <input
                   type="text"
-                  placeholder="e.g. Neurology Epilepsy EEG Synthetic Cohort"
-                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-sans"
-                  value={datasetName}
-                  onChange={(e) => setDatasetName(e.target.value)}
+                  placeholder="e.g. Cardiology Neural Network Inference Enclave"
+                  className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans"
+                  value={enclaveName}
+                  onChange={(e) => setEnclaveName(e.target.value)}
                   required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Privacy Budget Epsilon (ε): {epsilonValue}</label>
-                <input
-                  type="range"
-                  min="0.1"
-                  max="2.0"
-                  step="0.1"
-                  className="w-full"
-                  value={epsilonValue}
-                  onChange={(e) => setEpsilonValue(e.target.value)}
                 />
               </div>
 
@@ -443,9 +428,9 @@ export default function BiomedicalDifferentialPrivacyPanel() {
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition shadow-lg shadow-purple-600/20"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-600/20"
                 >
-                  Synthesize
+                  Launch Enclave
                 </button>
               </div>
             </form>
