@@ -4,6 +4,8 @@ import com.medtrack.auth.model.User;
 import com.medtrack.auth.repository.UserRepository;
 import com.medtrack.supplier.dto.*;
 import com.medtrack.supplier.service.DashboardService;
+import com.medtrack.supplier.service.prediction.PredictionService;
+import com.medtrack.supplier.service.prediction.RecommendationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,8 @@ import java.util.Optional;
 public class DashboardController {
 
     private final DashboardService dashboardService;
+    private final PredictionService predictionService;
+    private final RecommendationService recommendationService;
     private final UserRepository userRepository;
 
     private Long resolveSupplierId() {
@@ -102,5 +106,50 @@ public class DashboardController {
     @Operation(summary = "Get Delayed Shipments Report", description = "Generates report of delayed shipments")
     public ResponseEntity<java.util.List<ShipmentTrackingResponse>> getDelayedShipments() {
         return ResponseEntity.ok(dashboardService.getDelayedShipmentsReport(resolveSupplierId()));
+    }
+
+    // Phase 15: Predictive Analytics Endpoints
+
+    @GetMapping("/prediction/daily")
+    @PreAuthorize("hasRole('SUPPLIER')")
+    @Operation(summary = "Get Daily Forecast", description = "Generates daily shipment volume forecast")
+    public ResponseEntity<PredictionDTO> getDailyForecast() {
+        return ResponseEntity.ok(predictionService.getDailyForecast(resolveSupplierId()));
+    }
+
+    @GetMapping("/prediction/weekly")
+    @PreAuthorize("hasRole('SUPPLIER')")
+    @Operation(summary = "Get Weekly Forecast", description = "Generates weekly shipment volume forecast")
+    public ResponseEntity<PredictionDTO> getWeeklyForecast() {
+        return ResponseEntity.ok(predictionService.getWeeklyForecast(resolveSupplierId()));
+    }
+
+    @GetMapping("/prediction/delay-probability")
+    @PreAuthorize("hasRole('SUPPLIER')")
+    @Operation(summary = "Get Delay Probability", description = "Calculates overall delay probability for the supplier")
+    public ResponseEntity<PredictionDTO> getDelayProbability() {
+        return ResponseEntity.ok(predictionService.getDelayProbability(resolveSupplierId()));
+    }
+
+    @GetMapping("/risk-analysis/{orderId}")
+    @PreAuthorize("hasRole('SUPPLIER')")
+    @Operation(summary = "Get Shipment Risk Analysis", description = "Analyzes risk level for a specific shipment")
+    public ResponseEntity<ShipmentRiskDTO> getRiskAnalysis(
+            @org.springframework.web.bind.annotation.PathVariable Long orderId) {
+        return ResponseEntity.ok(predictionService.calculateShipmentRisk(resolveSupplierId(), orderId));
+    }
+
+    @GetMapping("/trends")
+    @PreAuthorize("hasRole('SUPPLIER')")
+    @Operation(summary = "Get Performance Trends", description = "Yields historical analytic trends")
+    public ResponseEntity<TrendAnalysisDTO> getPerformanceTrends() {
+        return ResponseEntity.ok(predictionService.getTrendAnalysis(resolveSupplierId()));
+    }
+
+    @GetMapping("/recommendations")
+    @PreAuthorize("hasRole('SUPPLIER')")
+    @Operation(summary = "Get Smart Recommendations", description = "Generates system recommendations for operational improvement")
+    public ResponseEntity<java.util.List<RecommendationDTO>> getRecommendations() {
+        return ResponseEntity.ok(recommendationService.getRecommendations(resolveSupplierId()));
     }
 }

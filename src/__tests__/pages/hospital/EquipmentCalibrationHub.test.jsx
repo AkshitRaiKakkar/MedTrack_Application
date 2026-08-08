@@ -31,7 +31,7 @@ describe("EquipmentCalibrationHub Component", () => {
   it("filters records by status button clicks", () => {
     renderWithProviders(<EquipmentCalibrationHub onNavigate={() => {}} />);
 
-    const expiringButton = screen.getByText("Expiring Soon");
+    const expiringButton = screen.getByRole("button", { name: /^Expiring Soon$/i });
     fireEvent.click(expiringButton);
 
     expect(screen.getByText("Philips IntelliVue Patient Monitor")).toBeInTheDocument();

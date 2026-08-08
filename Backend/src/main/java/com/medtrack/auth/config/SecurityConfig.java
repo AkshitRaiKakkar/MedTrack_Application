@@ -327,6 +327,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/procurement/**").hasRole("HOSPITAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/procurement/**").hasRole("HOSPITAL")
 
+                // Multi-supplier tender / e-auction workflow boundaries:
+                // Reads (tenders, bids, audit): authorized users, with per-record visibility
+                // enforced in TenderService. Bid submission/withdrawal: suppliers only.
+                // Publish, rounds, award, and cancel: Hospital admins only.
+                .requestMatchers(HttpMethod.GET, "/api/tenders/**").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/tenders/*/bids").hasRole("SUPPLIER")
+                .requestMatchers(HttpMethod.POST, "/api/tenders/*/bids/*/withdraw").hasRole("SUPPLIER")
+                .requestMatchers(HttpMethod.POST, "/api/tenders/**").hasRole("HOSPITAL")
+
                 // Maintenance schedules boundaries:
                 // GET requests: Authorized users.
                 // Write/Modify: Restricted to Hospital admins.

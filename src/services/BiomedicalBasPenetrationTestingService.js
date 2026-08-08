@@ -2,93 +2,94 @@ import API from "./HttpService";
 
 /**
  * BiomedicalBasPenetrationTestingService
- * Service layer for Continuous Breach & Attack Simulation (BAS), Automated Penetration Testing,
- * MITRE ATT&CK for Healthcare Mapping, Zero-Day Exploit Validation, and Remediation SLA Tracking.
+ * Service layer for Automated Breach & Attack Simulation (BAS), Continuous Penetration Testing,
+ * MITRE ATT&CK for Healthcare Mapping, Automated Attack Vector Execution, Threat Vector Resilience Auditing, and NIST SP 800-115 Standards.
  */
 
-// Fetch Active Attack Simulations & Automated PenTest Vector Inventory
-export const getPenetrationTestingInventory = async () => {
+// Fetch Active BAS Attack Simulation Scenarios & Vulnerability Vectors
+export const getBasPenetrationTestingInventory = async () => {
   try {
-    const response = await API.get("/api/auth/bas-pentest/simulations");
+    const response = await API.get("/api/auth/bas-pentest/scenarios");
     return response.data;
   } catch (error) {
     console.warn("Using fallback Biomedical BAS Penetration Testing registry:", error.message);
     return [
       {
-        simulationId: "BAS-SIM-601",
-        vectorName: "FHIR API OAuth 2.1 Token Hijacking & Replay Attack",
-        mitreTechniqueId: "T1550.001 (Use Alternate Authentication Credentials)",
-        simulationStatus: "SIMULATION_EXPLOIT_DEFENDED",
-        attackPathSeverity: "CRITICAL",
-        targetComponent: "FHIR Gateway Interoperability Service",
-        remediationSlaDays: 0,
-        lastSimulatedAt: "2026-08-05T16:15:00Z"
-      },
-      {
-        simulationId: "BAS-SIM-602",
-        vectorName: "DICOM PACS Server Remote Code Execution (RCE) Probe",
+        scenarioId: "BAS-SCEN-2101",
+        scenarioName: "DICOM Medical Imaging PACS Lateral Movement Attack Vector",
         mitreTechniqueId: "T1210 (Exploitation of Remote Services)",
-        simulationStatus: "SIMULATION_EXPLOIT_DEFENDED",
-        attackPathSeverity: "HIGH",
-        targetComponent: "Imaging PACS Data Storage Server",
-        remediationSlaDays: 0,
-        lastSimulatedAt: "2026-08-05T15:40:00Z"
+        targetSubsystem: "PACS Imaging Server & DICOM Routers",
+        attackSeverity: "HIGH",
+        simulationStatus: "SIMULATION_BLOCKED_DEFENDED",
+        detectionTimeSeconds: 1.4,
+        lastSimulatedAt: "2026-08-07T06:10:00Z"
       },
       {
-        simulationId: "BAS-SIM-603",
-        vectorName: "RPM IoT Telemetry Device Man-in-the-Middle (MitM) Spoof",
-        mitreTechniqueId: "T1557 (Adversary-in-the-Middle)",
-        simulationStatus: "REMEDIATION_ACTION_REQUIRED",
-        attackPathSeverity: "MEDIUM",
-        targetComponent: "Remote Patient Monitoring Edge Hub",
-        remediationSlaDays: 3,
-        lastSimulatedAt: "2026-08-05T14:10:00Z"
+        scenarioId: "BAS-SCEN-2102",
+        scenarioName: "HL7 FHIR v4 API Credential Stuffing & Token Hijacking",
+        mitreTechniqueId: "T1110.004 (Credential Stuffing)",
+        targetSubsystem: "FHIR API Gateway & OAuth Auth Server",
+        attackSeverity: "CRITICAL",
+        simulationStatus: "SIMULATION_BLOCKED_DEFENDED",
+        detectionTimeSeconds: 0.8,
+        lastSimulatedAt: "2026-08-07T05:25:00Z"
+      },
+      {
+        scenarioId: "BAS-SCEN-2103",
+        scenarioName: "ICU Patient Telemetry Quantum Key Exfiltration Simulation",
+        mitreTechniqueId: "T1041 (Exfiltration Over C2 Channel)",
+        targetSubsystem: "QKD / Post-Quantum IPsec Tunnel Endpoints",
+        attackSeverity: "CRITICAL",
+        simulationStatus: "SIMULATION_BLOCKED_DEFENDED",
+        detectionTimeSeconds: 2.1,
+        lastSimulatedAt: "2026-08-07T03:50:00Z"
       }
     ];
   }
 };
 
-// Launch Automated Penetration Test Campaign
-export const launchPenetrationTestCampaign = async (campaignData) => {
+// Launch Automated BAS Breach Simulation Campaign
+export const launchBasSimulation = async (scenarioData) => {
   try {
-    const response = await API.post("/api/auth/bas-pentest/simulations", campaignData);
+    const response = await API.post("/api/auth/bas-pentest/launch", scenarioData);
     return response.data;
   } catch (error) {
     return {
-      simulationId: `BAS-SIM-${Math.floor(604 + Math.random() * 200)}`,
-      vectorName: campaignData.vectorName || "Genomic Vault Side-Channel Leakage Test",
-      mitreTechniqueId: "T1005 (Data from Local System)",
-      simulationStatus: "SIMULATION_EXPLOIT_DEFENDED",
-      attackPathSeverity: "HIGH",
-      targetComponent: "Genomic Data Vault",
-      remediationSlaDays: 0,
+      scenarioId: `BAS-SCEN-${Math.floor(2104 + Math.random() * 200)}`,
+      scenarioName: scenarioData.scenarioName || "Pharmacy Dispensing System SQLi Probe",
+      mitreTechniqueId: "T1190 (Exploit Public-Facing Application)",
+      targetSubsystem: "Automated Medication Dispensing Subsystem",
+      attackSeverity: "HIGH",
+      simulationStatus: "SIMULATION_BLOCKED_DEFENDED",
+      detectionTimeSeconds: 1.1,
       lastSimulatedAt: new Date().toISOString()
     };
   }
 };
 
-// Execute Exploit Payload Validation & Attack Path Assessment
-export const runExploitValidation = async (simulationId) => {
+// Execute MITRE ATT&CK Healthcare Coverage Audit & Resilience Diagnostic
+export const auditMitreCoverage = async (scenarioId) => {
   try {
-    const response = await API.post(`/api/auth/bas-pentest/simulations/${simulationId}/execute`);
+    const response = await API.post(`/api/auth/bas-pentest/scenarios/${scenarioId}/audit`);
     return response.data;
   } catch (error) {
     return {
-      simulationId,
-      exploitBlocked: true,
-      defenseMechanism: "WAF & eBPF Kernel Security Enforcer",
-      attackPathBlockedAtStep: "Step 2/5 (Payload Inspection Failure)",
-      executionLatencyMs: 24,
+      scenarioId,
+      mitreCoveragePercent: 96.5,
+      zeroTrustDefendedCount: 42,
+      preventedLateralMovements: 18,
+      resilienceScore: "HEALTHCARE_GRADE_MAXIMUM",
+      auditLatencyMs: 16,
       timestamp: new Date().toISOString()
     };
   }
 };
 
-// Fetch BAS & MITRE ATT&CK for Healthcare Standards
-export const getPenetrationTestingStandards = async () => {
+// Fetch BAS & PenTesting Standards
+export const getBasPenetrationTestingStandards = async () => {
   return [
-    { standard: "MITRE ATT&CK Matrix for Healthcare Enterprise", detail: "Tactics, techniques, and procedures (TTPs) tailored to biomedical IT and medical device threat actors" },
-    { standard: "NIST SP 800-115 Technical Guide to Information Security Testing", detail: "Framework for automated vulnerability scanning, penetration testing, and breach attack simulation" },
-    { standard: "OWASP Automated Threat Handbook & API Security Top 10", detail: "Coverage of automated threat vectors against FHIR, HL7, and healthcare web applications" }
+    { standard: "NIST SP 800-115 Technical Guide to Information Security Testing and Assessment", detail: "Federal guidelines for automated penetration testing, vulnerability scanning, and attack simulation" },
+    { standard: "MITRE ATT&CK Matrix for Enterprise (Healthcare Threat Model)", detail: "Comprehensive knowledge base of adversary tactics, techniques, and procedures (TTPs) targeting medical infrastructure" },
+    { standard: "PTES (Penetration Testing Execution Standard)", detail: "Standardized framework for threat modeling, exploitation testing, and post-exploitation breach verification" }
   ];
 };

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
+import { renderWithProviders } from '../../__tests__/utils/renderWithProviders';
 import EquipmentLifecyclePredictor from '../../pages/hospital/EquipmentLifecyclePredictor';
 
 describe('EquipmentLifecyclePredictor Component', () => {
   it('renders summary metrics and equipment list', () => {
-    render(<EquipmentLifecyclePredictor />);
+    renderWithProviders(<EquipmentLifecyclePredictor />);
 
     expect(screen.getByText('Equipment Lifecycle & Predictive Failure Analytics')).toBeInTheDocument();
     expect(screen.getByText('Monitored Fleet')).toBeInTheDocument();
@@ -14,7 +15,7 @@ describe('EquipmentLifecyclePredictor Component', () => {
   });
 
   it('filters equipment list by risk tier selector', () => {
-    render(<EquipmentLifecyclePredictor />);
+    renderWithProviders(<EquipmentLifecyclePredictor />);
 
     const select = screen.getByDisplayValue('All Risk Tiers');
     fireEvent.change(select, { target: { value: 'CRITICAL' } });
@@ -24,7 +25,7 @@ describe('EquipmentLifecyclePredictor Component', () => {
   });
 
   it('opens inspect modal on row click', () => {
-    render(<EquipmentLifecyclePredictor />);
+    renderWithProviders(<EquipmentLifecyclePredictor />);
 
     const rowItem = screen.getByText('MRI Scanner 3T Signature');
     fireEvent.click(rowItem);

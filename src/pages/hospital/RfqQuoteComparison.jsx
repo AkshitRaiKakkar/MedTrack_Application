@@ -74,6 +74,12 @@ const RfqQuoteComparison = ({ requestId, onNavigate }) => {
             <p className="text-sm text-secondary mt-1">Request: {requestId}</p>
           </div>
           <button
+            onClick={() => onNavigate('tenders')}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Multi-Supplier Tenders
+          </button>
+          <button
             onClick={() => onNavigate('dashboard')}
             className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
           >

@@ -1752,6 +1752,16 @@ public class EquipmentService {
             throw new IllegalStateException("Equipment cannot be permanently deleted until 90 days after archival");
         }
 
+        equipmentAuditService.logAction(
+                equipment,
+                hospital,
+                username,
+                "DELETE",
+                "ALL",
+                "Equipment existed",
+                "Deleted"
+        );
+
         equipmentRepository.delete(equipment);
 
         logger.info(
