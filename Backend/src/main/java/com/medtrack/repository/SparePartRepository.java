@@ -16,6 +16,10 @@ public interface SparePartRepository extends JpaRepository<SparePart, Long> {
 
     Optional<SparePart> findByIdAndHospitalId(Long id, Long hospitalId);
 
-    @Query("SELECT s FROM SparePart s WHERE s.hospitalId = :hospitalId AND s.stockLevel <= s.reorderPoint")
+    Optional<SparePart> findByHospitalIdAndPartNumberAndDeletedFalse(Long hospitalId, String partNumber);
+
+    boolean existsByHospitalIdAndPartNumberAndDeletedFalse(Long hospitalId, String partNumber);
+
+    @Query("SELECT s FROM SparePart s WHERE s.hospitalId = :hospitalId AND s.deleted = false AND s.stockLevel <= s.reorderPoint")
     List<SparePart> findLowStockPartsByHospitalId(@Param("hospitalId") Long hospitalId);
 }
