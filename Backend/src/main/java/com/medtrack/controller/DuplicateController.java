@@ -54,6 +54,9 @@ public class DuplicateController {
             @RequestParam(required = false) String equipmentCode,
             @RequestParam(required = false) Long excludeId,
             Principal principal) {
+        if (excludeId != null) {
+            validateId(excludeId);
+        }
         return ResponseEntity.ok(duplicateDetectionService.checkForDuplicates(
                 principal.getName(), excludeId, name, model, serialNumber, equipmentCode));
     }
@@ -68,6 +71,17 @@ public class DuplicateController {
             @RequestParam Long keepId,
             @RequestParam Long mergeId,
             Principal principal) {
+        validateId(keepId);
+        validateId(mergeId);
+        if (keepId.equals(mergeId)) {
+            throw new IllegalArgumentException("Cannot merge an asset into itself.");
+        }
         return ResponseEntity.ok(duplicateDetectionService.mergeDuplicates(keepId, mergeId, principal.getName()));
+    }
+
+    private void validateId(Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("Invalid resource ID.");
+        }
     }
 }
