@@ -5,6 +5,7 @@ import com.medtrack.model.Equipment;
 import com.medtrack.model.EquipmentLocationHistory;
 import com.medtrack.model.FacilityLocation;
 import com.medtrack.service.LocationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,13 +37,14 @@ public class LocationController {
     private final LocationService locationService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'TECHNICIAN')")
     public ResponseEntity<List<FacilityLocation>> getLocationTree(Principal principal) {
         return ResponseEntity.ok(locationService.getLocationTree(principal.getName()));
     }
 
     @PostMapping
     @PreAuthorize("hasRole('HOSPITAL')")
-    public ResponseEntity<FacilityLocation> createLocation(@RequestBody FacilityLocation location,
+    public ResponseEntity<FacilityLocation> createLocation(@Valid @RequestBody FacilityLocation location,
                                                            Principal principal) {
         return ResponseEntity.ok(locationService.createLocation(location, principal.getName()));
     }
@@ -50,14 +52,16 @@ public class LocationController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<FacilityLocation> updateLocation(@PathVariable Long id,
-                                                           @RequestBody FacilityLocation location,
+                                                           @Valid @RequestBody FacilityLocation location,
                                                            Principal principal) {
+        validateId(id);
         return ResponseEntity.ok(locationService.updateLocation(id, location, principal.getName()));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<Void> deleteLocation(@PathVariable Long id, Principal principal) {
+        validateId(id);
         locationService.deleteLocation(id, principal.getName());
         return ResponseEntity.noContent().build();
     }
@@ -67,6 +71,7 @@ public class LocationController {
     public ResponseEntity<List<EquipmentLocationHistory>> getEquipmentLocationHistory(
             @PathVariable Long equipmentId,
             Principal principal) {
+        validateId(equipmentId);
         return ResponseEntity.ok(locationService.getEquipmentLocationHistory(equipmentId, principal.getName()));
     }
 
@@ -74,13 +79,20 @@ public class LocationController {
     @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<Equipment> assignEquipmentToLocation(
             @PathVariable Long equipmentId,
-            @RequestBody LocationAssignRequest request,
+            @Valid @RequestBody LocationAssignRequest request,
             Principal principal) {
+        validateId(equipmentId);
         return ResponseEntity.ok(locationService.assignEquipmentToLocation(
                 equipmentId,
                 request.getLocationId(),
                 request.getEffectiveDate(),
                 request.getNotes(),
                 principal.getName()));
+    }
+
+    private void validateId(Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("Invalid resource ID.");
+        }
     }
 }
